@@ -6,7 +6,7 @@
 
 ## Overview
 
-YubiMgr uses OpenBao for secrets management and PKI operations. OpenBao is automatically configured during Helm deployment, but manual configuration may be needed for troubleshooting.
+Kleidia uses OpenBao for secrets management and PKI operations. OpenBao is automatically configured during Helm deployment, but manual configuration may be needed for troubleshooting.
 
 ## Automatic Setup
 
@@ -25,17 +25,17 @@ Vault is automatically configured by Helm hooks during deployment:
 
 ```bash
 # Get Vault pod name
-VAULT_POD=$(kubectl get pods -l app.kubernetes.io/name=openbao -n yubimgr -o jsonpath='{.items[0].metadata.name}')
+VAULT_POD=$(kubectl get pods -l app.kubernetes.io/name=openbao -n kleidia -o jsonpath='{.items[0].metadata.name}')
 
 # Check Vault status
-kubectl exec -it $VAULT_POD -n yubimgr -- vault status
+kubectl exec -it $VAULT_POD -n kleidia -- vault status
 ```
 
 ### 2. Initialize Vault (if not initialized)
 
 ```bash
 # Initialize Vault
-kubectl exec -it $VAULT_POD -n yubimgr -- vault operator init -key-shares=3 -key-threshold=2
+kubectl exec -it $VAULT_POD -n kleidia -- vault operator init -key-shares=3 -key-threshold=2
 
 # Save unseal keys and root token securely
 ```
@@ -44,41 +44,41 @@ kubectl exec -it $VAULT_POD -n yubimgr -- vault operator init -key-shares=3 -key
 
 ```bash
 # Unseal Vault (if auto-unseal not working)
-kubectl exec -it $VAULT_POD -n yubimgr -- vault operator unseal <unseal-key-1>
-kubectl exec -it $VAULT_POD -n yubimgr -- vault operator unseal <unseal-key-2>
+kubectl exec -it $VAULT_POD -n kleidia -- vault operator unseal <unseal-key-1>
+kubectl exec -it $VAULT_POD -n kleidia -- vault operator unseal <unseal-key-2>
 ```
 
 ### 4. Enable KV v2 Secrets Engine
 
 ```bash
 # Login with root token
-kubectl exec -it $VAULT_POD -n yubimgr -- vault login <root-token>
+kubectl exec -it $VAULT_POD -n kleidia -- vault login <root-token>
 
 # Enable KV v2 at yubikeys path
-kubectl exec -it $VAULT_POD -n yubimgr -- vault secrets enable -path=yubikeys kv-v2
+kubectl exec -it $VAULT_POD -n kleidia -- vault secrets enable -path=yubikeys kv-v2
 ```
 
 ### 5. Enable PKI Secrets Engine
 
 ```bash
 # Enable PKI
-kubectl exec -it $VAULT_POD -n yubimgr -- vault secrets enable pki
+kubectl exec -it $VAULT_POD -n kleidia -- vault secrets enable pki
 
 # Configure TTL (CA lifetime window)
-kubectl exec -it $VAULT_POD -n yubimgr -- vault secrets tune -max-lease-ttl=87600h pki
+kubectl exec -it $VAULT_POD -n kleidia -- vault secrets tune -max-lease-ttl=87600h pki
 
 # Generate root CA (10 years)
-kubectl exec -it $VAULT_POD -n yubimgr -- vault write pki/root/generate/internal \
-    common_name="YubiMgr Root CA" \
+kubectl exec -it $VAULT_POD -n kleidia -- vault write pki/root/generate/internal \
+    common_name="Kleidia Root CA" \
     ttl=87600h
 
 # Configure URLs
-kubectl exec -it $VAULT_POD -n yubimgr -- vault write pki/config/urls \
-    issuing_certificates="http://yubimgr-platform-openbao:8200/v1/pki/ca" \
-    crl_distribution_points="http://yubimgr-platform-openbao:8200/v1/pki/crl"
+kubectl exec -it $VAULT_POD -n kleidia -- vault write pki/config/urls \
+    issuing_certificates="http://kleidia-platform-openbao:8200/v1/pki/ca" \
+    crl_distribution_points="http://kleidia-platform-openbao:8200/v1/pki/crl"
 
 # Create PKI role (1-year leaf certificates)
-kubectl exec -it $VAULT_POD -n yubimgr -- vault write pki/roles/yubimgr \
+kubectl exec -it $VAULT_POD -n kleidia -- vault write pki/roles/kleidia \
     allow_any_name=true \
     enforce_hostnames=false \
     allow_subdomains=true \
@@ -95,10 +95,10 @@ kubectl exec -it $VAULT_POD -n yubimgr -- vault write pki/roles/yubimgr \
 
 ```bash
 # Enable AppRole
-kubectl exec -it $VAULT_POD -n yubimgr -- vault auth enable approle
+kubectl exec -it $VAULT_POD -n kleidia -- vault auth enable approle
 
 # Create backend policy
-kubectl exec -it $VAULT_POD -n yubimgr -- vault policy write yubimgr-backend - <<EOF
+kubectl exec -it $VAULT_POD -n kleidia -- vault policy write kleidia-backend - <<EOF
 path "pki/sign/*" {
   capabilities = ["create", "read", "update"]
 }
@@ -125,19 +125,19 @@ path "yubikeys/metadata/*" {
 EOF
 
 # Create AppRole
-kubectl exec -it $VAULT_POD -n yubimgr -- vault write auth/approle/role/yubimgr-backend \
-    token_policies="yubimgr-backend" \
+kubectl exec -it $VAULT_POD -n kleidia -- vault write auth/approle/role/kleidia-backend \
+    token_policies="kleidia-backend" \
     token_ttl=1h \
     token_max_ttl=4h
 
 # Get Role ID
-ROLE_ID=$(kubectl exec -it $VAULT_POD -n yubimgr -- vault read -field=role_id auth/approle/role/yubimgr-backend/role-id)
+ROLE_ID=$(kubectl exec -it $VAULT_POD -n kleidia -- vault read -field=role_id auth/approle/role/kleidia-backend/role-id)
 
 # Generate Secret ID
-SECRET_ID=$(kubectl exec -it $VAULT_POD -n yubimgr -- vault write -field=secret_id -f auth/approle/role/yubimgr-backend/secret-id)
+SECRET_ID=$(kubectl exec -it $VAULT_POD -n kleidia -- vault write -field=secret_id -f auth/approle/role/kleidia-backend/secret-id)
 
 # Store in Kubernetes secret
-kubectl create secret generic vault-approle -n yubimgr \
+kubectl create secret generic vault-approle -n kleidia \
     --from-literal=role-id=$ROLE_ID \
     --from-literal=secret-id=$SECRET_ID \
     --dry-run=client -o yaml | kubectl apply -f -
@@ -149,7 +149,7 @@ kubectl create secret generic vault-approle -n yubimgr \
 
 ```bash
 # Check Vault is unsealed
-kubectl exec -it $VAULT_POD -n yubimgr -- vault status
+kubectl exec -it $VAULT_POD -n kleidia -- vault status
 
 # Expected output:
 # Key             Value
@@ -164,7 +164,7 @@ kubectl exec -it $VAULT_POD -n yubimgr -- vault status
 
 ```bash
 # List secrets engines
-kubectl exec -it $VAULT_POD -n yubimgr -- vault secrets list
+kubectl exec -it $VAULT_POD -n kleidia -- vault secrets list
 
 # Should show:
 # Path          Type         Accessor              Description
@@ -177,27 +177,27 @@ kubectl exec -it $VAULT_POD -n yubimgr -- vault secrets list
 
 ```bash
 # Check PKI role
-kubectl exec -it $VAULT_POD -n yubimgr -- vault read pki/roles/yubimgr
+kubectl exec -it $VAULT_POD -n kleidia -- vault read pki/roles/kleidia
 
 # Check CA certificate
-kubectl exec -it $VAULT_POD -n yubimgr -- vault read pki/cert/ca
+kubectl exec -it $VAULT_POD -n kleidia -- vault read pki/cert/ca
 ```
 
 ### Test Secret Storage
 
 ```bash
 # Store test secret
-kubectl exec -it $VAULT_POD -n yubimgr -- vault kv put yubikeys/data/test \
+kubectl exec -it $VAULT_POD -n kleidia -- vault kv put yubikeys/data/test \
     pin="123456" \
     puk="12345678"
 
 # Read test secret
-kubectl exec -it $VAULT_POD -n yubimgr -- vault kv get yubikeys/data/test
+kubectl exec -it $VAULT_POD -n kleidia -- vault kv get yubikeys/data/test
 ```
 
 ## Auto-Unseal Configuration
 
-YubiMgr uses static key auto-unseal (OpenBao 2.4.0+):
+Kleidia uses static key auto-unseal (OpenBao 2.4.0+):
 
 - **Configuration**: Automatic via Helm chart
 - **Key Storage**: Kubernetes secret (`openbao-unseal-key`)
@@ -207,7 +207,7 @@ YubiMgr uses static key auto-unseal (OpenBao 2.4.0+):
 
 ```bash
 # Check Vault logs for auto-unseal
-kubectl logs yubimgr-platform-openbao-0 -n yubimgr | grep -i unseal
+kubectl logs kleidia-platform-openbao-0 -n kleidia | grep -i unseal
 
 # Should show:
 # [INFO]  core: vault is unsealed
@@ -219,20 +219,20 @@ kubectl logs yubimgr-platform-openbao-0 -n yubimgr | grep -i unseal
 
 ```bash
 # Check Vault status
-kubectl exec -it $VAULT_POD -n yubimgr -- vault status
+kubectl exec -it $VAULT_POD -n kleidia -- vault status
 
 # If sealed, check auto-unseal configuration
-kubectl get secret openbao-unseal-key -n yubimgr
+kubectl get secret openbao-unseal-key -n kleidia
 
 # Manual unseal (if auto-unseal fails)
-kubectl exec -it $VAULT_POD -n yubimgr -- vault operator unseal <unseal-key>
+kubectl exec -it $VAULT_POD -n kleidia -- vault operator unseal <unseal-key>
 ```
 
 ### PKI Not Configured
 
 ```bash
 # Check if PKI is enabled
-kubectl exec -it $VAULT_POD -n yubimgr -- vault secrets list | grep pki
+kubectl exec -it $VAULT_POD -n kleidia -- vault secrets list | grep pki
 
 # If not enabled, enable it (see manual setup above)
 ```
@@ -241,13 +241,13 @@ kubectl exec -it $VAULT_POD -n yubimgr -- vault secrets list | grep pki
 
 ```bash
 # Check AppRole is enabled
-kubectl exec -it $VAULT_POD -n yubimgr -- vault auth list | grep approle
+kubectl exec -it $VAULT_POD -n kleidia -- vault auth list | grep approle
 
 # Check backend secret exists
-kubectl get secret vault-approle -n yubimgr
+kubectl get secret vault-approle -n kleidia
 
 # Test authentication
-kubectl exec -it $VAULT_POD -n yubimgr -- vault write auth/approle/login \
+kubectl exec -it $VAULT_POD -n kleidia -- vault write auth/approle/login \
     role_id=<role-id> \
     secret_id=<secret-id>
 ```
@@ -258,20 +258,20 @@ kubectl exec -it $VAULT_POD -n yubimgr -- vault write auth/approle/login \
 
 ```bash
 # Create snapshot
-kubectl exec -it $VAULT_POD -n yubimgr -- vault operator raft snapshot save /tmp/vault-backup.snap
+kubectl exec -it $VAULT_POD -n kleidia -- vault operator raft snapshot save /tmp/vault-backup.snap
 
 # Copy snapshot locally
-kubectl cp yubimgr-platform-openbao-0:/tmp/vault-backup.snap ./vault-backup-$(date +%Y%m%d).snap -n yubimgr
+kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap ./vault-backup-$(date +%Y%m%d).snap -n kleidia
 ```
 
 ### Restore Vault Data
 
 ```bash
 # Copy snapshot to pod
-kubectl cp ./vault-backup.snap yubimgr-platform-openbao-0:/tmp/vault-backup.snap -n yubimgr
+kubectl cp ./vault-backup.snap kleidia-platform-openbao-0:/tmp/vault-backup.snap -n kleidia
 
 # Restore snapshot
-kubectl exec -it $VAULT_POD -n yubimgr -- vault operator raft snapshot restore /tmp/vault-backup.snap
+kubectl exec -it $VAULT_POD -n kleidia -- vault operator raft snapshot restore /tmp/vault-backup.snap
 ```
 
 ## Related Documentation

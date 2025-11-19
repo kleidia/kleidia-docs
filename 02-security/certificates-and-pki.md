@@ -2,11 +2,11 @@
 
 **Audience**: Operations Administrators, Security Professionals  
 **Prerequisites**: Understanding of PKI and certificate management  
-**Outcome**: Understand YubiMgr's PKI architecture and certificate lifecycle
+**Outcome**: Understand Kleidia's PKI architecture and certificate lifecycle
 
 ## Overview
 
-YubiMgr uses OpenBao as a Certificate Authority (CA) or intermediate for signing YubiKey PIV certificates. The PKI system provides enterprise-grade certificate management with automatic signing and lifecycle management.
+Kleidia uses OpenBao as a Certificate Authority (CA) or intermediate for signing YubiKey PIV certificates. The PKI system provides enterprise-grade certificate management with automatic signing and lifecycle management.
 
 ## PKI Architecture
 
@@ -19,7 +19,7 @@ YubiMgr uses OpenBao as a Certificate Authority (CA) or intermediate for signing
 
 ### PKI Role Configuration
 
-The system uses a PKI role named `yubimgr` with the following settings:
+The system uses a PKI role named `kleidia` with the following settings:
 
 | Setting             | Value   | Purpose                                  |
 |---------------------|---------|------------------------------------------|
@@ -57,12 +57,12 @@ The system uses a PKI role named `yubimgr` with the following settings:
 **Process**:
 1. Frontend sends CSR to backend: `POST /api/yubikey/{serial}/sign-csr`
 2. Backend authenticates to Vault using AppRole
-3. Backend submits CSR to Vault PKI: `POST /v1/pki/sign/yubimgr`
+3. Backend submits CSR to Vault PKI: `POST /v1/pki/sign/kleidia`
 4. Vault signs CSR using root CA
 5. Backend receives signed certificate
 
 **Certificate Properties**:
-- **Issuer**: YubiMgr Root CA
+- **Issuer**: Kleidia Root CA
 - **Validity**: 1 year (8760h, configurable via PKI role)
 - **Key Usage**: Digital signature, key encipherment
 - **Extended Key Usage**: Client authentication, email protection
@@ -106,7 +106,7 @@ PKI is automatically configured during Helm deployment:
 2. **Configure TTL**: `vault secrets tune -max-lease-ttl=8760h pki`
 3. **Generate Root CA**: Create self-signed root certificate
 4. **Configure URLs**: Set issuing certificate and CRL URLs
-5. **Create PKI Role**: Create `yubimgr` role with appropriate settings
+5. **Create PKI Role**: Create `kleidia` role with appropriate settings
 
 ## Certificate Operations
 

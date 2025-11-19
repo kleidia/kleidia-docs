@@ -1,12 +1,12 @@
 # Monitoring and Logs
 
 **Audience**: Operations Administrators  
-**Prerequisites**: YubiMgr deployed  
+**Prerequisites**: Kleidia deployed  
 **Outcome**: Understand monitoring and log management
 
 ## Monitoring Overview
 
-YubiMgr provides multiple monitoring points for system health, performance, and security.
+Kleidia provides multiple monitoring points for system health, performance, and security.
 
 ## Health Monitoring
 
@@ -16,7 +16,7 @@ YubiMgr provides multiple monitoring points for system health, performance, and 
 
 ```bash
 # Health check endpoint
-curl https://yubimgr.example.com/api/health
+curl https://kleidia.example.com/api/health
 
 # Response:
 {
@@ -32,26 +32,26 @@ curl https://yubimgr.example.com/api/health
 
 ```bash
 # Database health
-curl https://yubimgr.example.com/api/admin/system/database
+curl https://kleidia.example.com/api/admin/system/database
 
 # Vault health
-curl https://yubimgr.example.com/api/admin/system/vault
+curl https://kleidia.example.com/api/admin/system/vault
 
 # System health (all components)
-curl https://yubimgr.example.com/api/admin/system/health
+curl https://kleidia.example.com/api/admin/system/health
 ```
 
 ### Kubernetes Health
 
 ```bash
 # Pod health
-kubectl get pods -n yubimgr
+kubectl get pods -n kleidia
 
 # Service health
-kubectl get services -n yubimgr
+kubectl get services -n kleidia
 
 # Resource health
-kubectl top pods -n yubimgr
+kubectl top pods -n kleidia
 kubectl top nodes
 ```
 
@@ -70,16 +70,16 @@ kubectl top nodes
 
 ```bash
 # Backend logs
-kubectl logs -f deployment/yubimgr-services-backend -n yubimgr
+kubectl logs -f deployment/kleidia-services-backend -n kleidia
 
 # Frontend logs
-kubectl logs -f deployment/yubimgr-services-frontend -n yubimgr
+kubectl logs -f deployment/kleidia-services-frontend -n kleidia
 
 # Database logs
-kubectl logs -f yubimgr-data-postgres-cluster-0 -n yubimgr
+kubectl logs -f kleidia-data-postgres-cluster-0 -n kleidia
 
 # OpenBao logs
-kubectl logs -f yubimgr-platform-openbao-0 -n yubimgr
+kubectl logs -f kleidia-platform-openbao-0 -n kleidia
 ```
 
 ### Log Levels
@@ -94,16 +94,16 @@ kubectl logs -f yubimgr-platform-openbao-0 -n yubimgr
 
 ```bash
 # Filter by level
-kubectl logs deployment/yubimgr-services-backend -n yubimgr | grep -i error
+kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i error
 
 # Filter by time
-kubectl logs deployment/yubimgr-services-backend -n yubimgr --since=1h
+kubectl logs deployment/kleidia-services-backend -n kleidia --since=1h
 
 # Filter by component
-kubectl logs deployment/yubimgr-services-backend -n yubimgr | grep -i vault
+kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i vault
 
 # Filter by user
-kubectl logs deployment/yubimgr-services-backend -n yubimgr | grep "user_id=123"
+kubectl logs deployment/kleidia-services-backend -n kleidia | grep "user_id=123"
 ```
 
 ## Audit Logging
@@ -115,11 +115,11 @@ kubectl logs deployment/yubimgr-services-backend -n yubimgr | grep "user_id=123"
 # Navigate to Admin → Audit Logs
 
 # Via API
-curl https://yubimgr.example.com/api/admin/audit \
+curl https://kleidia.example.com/api/admin/audit \
   -H "Authorization: Bearer <admin-token>"
 
 # Filter by date range
-curl "https://yubimgr.example.com/api/admin/audit?start=2025-01-01&end=2025-01-31" \
+curl "https://kleidia.example.com/api/admin/audit?start=2025-01-01&end=2025-01-31" \
   -H "Authorization: Bearer <admin-token>"
 ```
 
@@ -136,7 +136,7 @@ curl "https://yubimgr.example.com/api/admin/audit?start=2025-01-01&end=2025-01-3
 
 ```bash
 # CPU and memory usage
-kubectl top pods -n yubimgr
+kubectl top pods -n kleidia
 
 # Node resources
 kubectl top nodes
@@ -168,7 +168,7 @@ docker system df
 
 ### Setting Up Alerts
 
-While YubiMgr doesn't include built-in alerting, you can:
+While Kleidia doesn't include built-in alerting, you can:
 
 1. **Use Kubernetes monitoring**: Prometheus, Grafana
 2. **External monitoring**: Nagios, Zabbix, Datadog
@@ -203,11 +203,11 @@ While YubiMgr doesn't include built-in alerting, you can:
 
 ```bash
 # Count errors in last hour
-kubectl logs deployment/yubimgr-services-backend -n yubimgr --since=1h | \
+kubectl logs deployment/kleidia-services-backend -n kleidia --since=1h | \
   grep -i error | wc -l
 
 # Group errors by type
-kubectl logs deployment/yubimgr-services-backend -n yubimgr --since=1h | \
+kubectl logs deployment/kleidia-services-backend -n kleidia --since=1h | \
   grep -i error | sort | uniq -c
 ```
 
@@ -215,8 +215,8 @@ kubectl logs deployment/yubimgr-services-backend -n yubimgr --since=1h | \
 
 ```bash
 # Check PostgreSQL slow queries
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "
     SELECT query, calls, total_time, mean_time
     FROM pg_stat_statements
     ORDER BY mean_time DESC
@@ -228,7 +228,7 @@ kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
 
 ```bash
 # Check failed login attempts
-curl "https://yubimgr.example.com/api/admin/audit?action=login&status=failed" \
+curl "https://kleidia.example.com/api/admin/audit?action=login&status=failed" \
   -H "Authorization: Bearer <admin-token>"
 ```
 

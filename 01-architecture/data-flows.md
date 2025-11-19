@@ -6,7 +6,7 @@
 
 ## Overview
 
-YubiMgr uses a frontend-mediated architecture where the browser orchestrates operations between cloud services and local agents. All sensitive operations are encrypted using RSA-OAEP encryption before transmission.
+Kleidia uses a frontend-mediated architecture where the browser orchestrates operations between cloud services and local agents. All sensitive operations are encrypted using RSA-OAEP encryption before transmission.
 
 ## Authentication Flow
 
@@ -67,7 +67,7 @@ YubiMgr uses a frontend-mediated architecture where the browser orchestrates ope
 
 **Steps**:
 1. User logs in → Frontend detects agent
-2. Frontend calls `GET http://127.0.0.1:56123/.well-known/yubimgr-agent`
+2. Frontend calls `GET http://127.0.0.1:56123/.well-known/kleidia-agent`
 3. Agent responds with status and version
 4. Frontend calls `GET http://127.0.0.1:56123/pubkey`
 5. Agent returns ephemeral RSA public key

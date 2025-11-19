@@ -2,11 +2,11 @@
 
 **Audience**: Operations Administrators  
 **Prerequisites**: Kubernetes cluster, Helm 3.8+, kubectl  
-**Outcome**: Successfully deploy YubiMgr using Helm charts
+**Outcome**: Successfully deploy Kleidia using Helm charts
 
 ## Overview
 
-YubiMgr uses Helm charts as the primary deployment method. The Helm charts provide complete infrastructure-as-code deployment with automatic configuration of all components.
+Kleidia uses Helm charts as the primary deployment method. The Helm charts provide complete infrastructure-as-code deployment with automatic configuration of all components.
 
 ## Prerequisites
 
@@ -27,8 +27,8 @@ See [Prerequisites](prerequisites.md) for detailed requirements.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/yubimgr.git
-cd yubimgr
+git clone https://github.com/your-org/kleidia.git
+cd kleidia
 ```
 
 ### 2. Configure Values
@@ -37,8 +37,8 @@ Create a `values.yaml` file or use command-line overrides:
 
 ```yaml
 global:
-  domain: yubimgr.example.com
-  namespace: yubimgr
+  domain: kleidia.example.com
+  namespace: kleidia
 
 backend:
   replicas: 2
@@ -53,16 +53,16 @@ frontend:
 
 ### 3. Install Helm Charts
 
-YubiMgr uses multiple Helm charts that must be installed in order:
+Kleidia uses multiple Helm charts that must be installed in order:
 
 #### Step 1: Install Platform (OpenBao, Storage)
 
 ```bash
-helm install yubimgr-platform ./helm/yubimgr-platform \
-  --namespace yubimgr \
+helm install kleidia-platform ./helm/kleidia-platform \
+  --namespace kleidia \
   --create-namespace \
-  --set global.domain=yubimgr.example.com \
-  --set global.namespace=yubimgr
+  --set global.domain=kleidia.example.com \
+  --set global.namespace=kleidia
 ```
 
 **What this installs**:
@@ -76,10 +76,10 @@ helm install yubimgr-platform ./helm/yubimgr-platform \
 #### Step 2: Install Data Layer (PostgreSQL)
 
 ```bash
-helm install yubimgr-data ./helm/yubimgr-data \
-  --namespace yubimgr \
-  --set global.domain=yubimgr.example.com \
-  --set global.namespace=yubimgr
+helm install kleidia-data ./helm/kleidia-data \
+  --namespace kleidia \
+  --set global.domain=kleidia.example.com \
+  --set global.namespace=kleidia
 ```
 
 **What this installs**:
@@ -92,10 +92,10 @@ helm install yubimgr-data ./helm/yubimgr-data \
 #### Step 3: Install Services (Backend, Frontend)
 
 ```bash
-helm install yubimgr-services ./helm/yubimgr-services \
-  --namespace yubimgr \
-  --set global.domain=yubimgr.example.com \
-  --set global.namespace=yubimgr
+helm install kleidia-services ./helm/kleidia-services \
+  --namespace kleidia \
+  --set global.domain=kleidia.example.com \
+  --set global.namespace=kleidia
 ```
 
 **What this installs**:
@@ -109,16 +109,16 @@ helm install yubimgr-services ./helm/yubimgr-services \
 
 ```bash
 # Check all pods are running
-kubectl get pods -n yubimgr
+kubectl get pods -n kleidia
 
 # Check services
-kubectl get services -n yubimgr
+kubectl get services -n kleidia
 
 # Check persistent volumes
-kubectl get pvc -n yubimgr
+kubectl get pvc -n kleidia
 
 # Check OpenBao status
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
 ```
 
 ### 5. Configure External Load Balancer
@@ -131,27 +131,27 @@ Your external load balancer should route HTTPS traffic to the Kubernetes NodePor
 
 ```bash
 # All pods should be Running
-kubectl get pods -n yubimgr
+kubectl get pods -n kleidia
 
 # Expected output:
 # NAME                                    READY   STATUS    RESTARTS   AGE
-# yubimgr-platform-openbao-0              1/1     Running   0          5m
-# yubimgr-data-postgres-cluster-0         1/1     Running   0          3m
-# yubimgr-services-backend-xxx            1/1     Running   0          2m
-# yubimgr-services-frontend-xxx           1/1     Running   0          2m
+# kleidia-platform-openbao-0              1/1     Running   0          5m
+# kleidia-data-postgres-cluster-0         1/1     Running   0          3m
+# kleidia-services-backend-xxx            1/1     Running   0          2m
+# kleidia-services-frontend-xxx           1/1     Running   0          2m
 ```
 
 ### Check Services
 
 ```bash
 # Check NodePort services
-kubectl get services -n yubimgr
+kubectl get services -n kleidia
 
 # Expected output:
 # NAME                        TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)
 # backend-service             NodePort    10.x.x.x       <none>        8080:32570/TCP
 # frontend-service            NodePort    10.x.x.x       <none>        3000:30805/TCP
-# yubimgr-platform-openbao    ClusterIP   10.x.x.x       <none>        8200/TCP
+# kleidia-platform-openbao    ClusterIP   10.x.x.x       <none>        8200/TCP
 # postgres-cluster            ClusterIP   10.x.x.x       <none>        5432/TCP
 ```
 
@@ -162,17 +162,17 @@ kubectl get services -n yubimgr
 curl http://localhost:32570/api/health
 
 # Test frontend (via external load balancer)
-curl -I https://yubimgr.example.com
+curl -I https://kleidia.example.com
 
 # Test SSL certificate
-openssl s_client -connect yubimgr.example.com:443 -servername yubimgr.example.com
+openssl s_client -connect kleidia.example.com:443 -servername kleidia.example.com
 ```
 
 ## Post-Installation
 
 ### 1. Access Web Interface
 
-Open browser to: `https://yubimgr.example.com`
+Open browser to: `https://kleidia.example.com`
 
 ### 2. Default Credentials
 
@@ -192,10 +192,10 @@ Open browser to: `https://yubimgr.example.com`
 
 ```bash
 # Check pod logs
-kubectl logs -f <pod-name> -n yubimgr
+kubectl logs -f <pod-name> -n kleidia
 
 # Check pod events
-kubectl describe pod <pod-name> -n yubimgr
+kubectl describe pod <pod-name> -n kleidia
 
 # Common issues:
 # - Image pull errors: Check registry configuration
@@ -207,20 +207,20 @@ kubectl describe pod <pod-name> -n yubimgr
 
 ```bash
 # Check OpenBao status
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
 
 # If sealed, check auto-unseal configuration
-kubectl logs yubimgr-platform-openbao-0 -n yubimgr | grep -i unseal
+kubectl logs kleidia-platform-openbao-0 -n kleidia | grep -i unseal
 ```
 
 ### Database Connection Issues
 
 ```bash
 # Check PostgreSQL logs
-kubectl logs -f yubimgr-data-postgres-cluster-0 -n yubimgr
+kubectl logs -f kleidia-data-postgres-cluster-0 -n kleidia
 
 # Check backend logs for connection errors
-kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i postgres
+kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i postgres
 ```
 
 ## Upgrading
@@ -229,37 +229,37 @@ To upgrade an existing installation:
 
 ```bash
 # Upgrade platform
-helm upgrade yubimgr-platform ./helm/yubimgr-platform \
-  --namespace yubimgr \
-  --set global.domain=yubimgr.example.com
+helm upgrade kleidia-platform ./helm/kleidia-platform \
+  --namespace kleidia \
+  --set global.domain=kleidia.example.com
 
 # Upgrade data layer
-helm upgrade yubimgr-data ./helm/yubimgr-data \
-  --namespace yubimgr
+helm upgrade kleidia-data ./helm/kleidia-data \
+  --namespace kleidia
 
 # Upgrade services
-helm upgrade yubimgr-services ./helm/yubimgr-services \
-  --namespace yubimgr
+helm upgrade kleidia-services ./helm/kleidia-services \
+  --namespace kleidia
 ```
 
 See [Upgrades and Rollback](upgrades-and-rollback.md) for detailed upgrade procedures.
 
 ## Uninstallation
 
-To completely remove YubiMgr:
+To completely remove Kleidia:
 
 ```bash
 # Uninstall services
-helm uninstall yubimgr-services -n yubimgr
+helm uninstall kleidia-services -n kleidia
 
 # Uninstall data layer (WARNING: This deletes data!)
-helm uninstall yubimgr-data -n yubimgr
+helm uninstall kleidia-data -n kleidia
 
 # Uninstall platform
-helm uninstall yubimgr-platform -n yubimgr
+helm uninstall kleidia-platform -n kleidia
 
 # Delete namespace (removes all resources)
-kubectl delete namespace yubimgr
+kubectl delete namespace kleidia
 ```
 
 **⚠️ WARNING**: Uninstalling the data layer will delete all data. Ensure backups are taken before uninstallation.

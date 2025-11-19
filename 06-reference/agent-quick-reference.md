@@ -9,50 +9,50 @@
 
 ```powershell
 # Silent install with backend URL
-msiexec /i yubimgr-agent-0.4.6-unsigned.msi /qn BACKEND_URL=https://yubimgr.example.com
+msiexec /i kleidia-agent-0.4.6-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
 
 # Check service status
-Get-Service -Name "YubiMgrAgent"
+Get-Service -Name "KleidiaAgent"
 
 # Restart service
-Restart-Service -Name "YubiMgrAgent"
+Restart-Service -Name "KleidiaAgent"
 
 # Test health endpoint
 Invoke-WebRequest -Uri "http://127.0.0.1:56123/health"
 
 # View configuration
-Get-Content "C:\ProgramData\YubiMgr\agent\agent.toml"
+Get-Content "C:\ProgramData\Kleidia\agent\agent.toml"
 
 # View logs
-Get-EventLog -LogName Application -Source "YubiMgrAgent" -Newest 20
+Get-EventLog -LogName Application -Source "KleidiaAgent" -Newest 20
 
 # Uninstall
-msiexec /x yubimgr-agent-0.4.6-unsigned.msi /qn
+msiexec /x kleidia-agent-0.4.6-unsigned.msi /qn
 ```
 
 ### macOS
 
 ```bash
 # Silent install with backend URL
-BACKEND_URL="yubimgr.example.com" sudo installer -pkg yubimgr-agent-0.4.6.pkg -target /
+BACKEND_URL="kleidia.example.com" sudo installer -pkg kleidia-agent-0.4.6.pkg -target /
 
 # Check service status
-sudo launchctl list | grep com.yubimgr.agent
+sudo launchctl list | grep com.kleidia.agent
 
 # Restart service
-sudo launchctl kickstart -k system/com.yubimgr.agent
+sudo launchctl kickstart -k system/com.kleidia.agent
 
 # Test health endpoint
 curl http://127.0.0.1:56123/health
 
 # View configuration
-cat /etc/yubimgr/agent/agent.toml
+cat /etc/kleidia/agent/agent.toml
 
 # View logs
-tail -f /var/log/yubimgr-agent/stderr.log
+tail -f /var/log/kleidia-agent/stderr.log
 
 # Uninstall
-sudo /usr/local/bin/yubimgr-agent-uninstall.sh
+sudo /usr/local/bin/kleidia-agent-uninstall.sh
 ```
 
 ---
@@ -62,32 +62,32 @@ sudo /usr/local/bin/yubimgr-agent-uninstall.sh
 ### Windows (agent.toml)
 ```toml
 port = 56123
-name = "YubiMgr Agent"
-backend_url = "https://yubimgr.example.com"
+name = "Kleidia Agent"
+backend_url = "https://kleidia.example.com"
 allowed_origins = [
-    "https://yubimgr.example.com"
+    "https://kleidia.example.com"
 ]
 
 [logging]
 level = "info"
 ```
 
-**Location:** `C:\ProgramData\YubiMgr\agent\agent.toml`
+**Location:** `C:\ProgramData\Kleidia\agent\agent.toml`
 
 ### macOS (agent.toml)
 ```toml
 port = 56123
-name = "YubiMgr Agent"
-backend_url = "https://yubimgr.example.com"
+name = "Kleidia Agent"
+backend_url = "https://kleidia.example.com"
 allowed_origins = [
-    "https://yubimgr.example.com"
+    "https://kleidia.example.com"
 ]
 
 [logging]
 level = "info"
 ```
 
-**Location:** `/etc/yubimgr/agent/agent.toml`
+**Location:** `/etc/kleidia/agent/agent.toml`
 
 **Note:** Both platforms use identical configuration format. The `allowed_origins` field is required for CORS security and must match your backend URL.
 
@@ -97,17 +97,17 @@ level = "info"
 
 ### Windows Install Command
 ```powershell
-msiexec /i yubimgr-agent-0.4.6-unsigned.msi /qn BACKEND_URL=https://yubimgr.example.com
+msiexec /i kleidia-agent-0.4.6-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
 ```
 
 ### Windows Uninstall Command
 ```powershell
-msiexec /x yubimgr-agent-0.4.6-unsigned.msi /qn
+msiexec /x kleidia-agent-0.4.6-unsigned.msi /qn
 ```
 
 ### Windows Detection Script
 ```powershell
-$service = Get-Service -Name "YubiMgrAgent" -ErrorAction SilentlyContinue
+$service = Get-Service -Name "KleidiaAgent" -ErrorAction SilentlyContinue
 if ($service -and $service.Status -eq "Running") {
     Write-Host "Installed"
     exit 0
@@ -118,21 +118,21 @@ exit 1
 ### macOS Configuration Script
 ```bash
 #!/bin/bash
-BACKEND_URL="https://yubimgr.example.com"
-CONFIG_FILE="/etc/yubimgr/agent/agent.toml"
+BACKEND_URL="https://kleidia.example.com"
+CONFIG_FILE="/etc/kleidia/agent/agent.toml"
 
 sleep 10
 if [ -f "$CONFIG_FILE" ]; then
     sed -i '' "s|^backend_url.*|backend_url = \"$BACKEND_URL\"|" "$CONFIG_FILE"
-    launchctl kickstart -k system/com.yubimgr.agent
+    launchctl kickstart -k system/com.kleidia.agent
 fi
 ```
 
 ### macOS Detection Script
 ```bash
 #!/bin/bash
-if [ -f "/usr/local/bin/yubimgr-agent" ]; then
-    if launchctl list | grep -q com.yubimgr.agent; then
+if [ -f "/usr/local/bin/kleidia-agent" ]; then
+    if launchctl list | grep -q com.kleidia.agent; then
         echo "Installed"
         exit 0
     fi
@@ -144,20 +144,20 @@ exit 1
 
 ## GPO Deployment
 
-### Deployment Script (deploy-yubimgr.ps1)
+### Deployment Script (deploy-kleidia.ps1)
 ```powershell
 $ErrorActionPreference = "Stop"
 
 # Install ykman
-Start-Process msiexec.exe -ArgumentList "/i \\DC\Software\YubiMgr\yubikey-manager.msi /qn /norestart" -Wait -NoNewWindow
+Start-Process msiexec.exe -ArgumentList "/i \\DC\Software\Kleidia\yubikey-manager.msi /qn /norestart" -Wait -NoNewWindow
 
 # Copy config
-$configDir = "C:\ProgramData\YubiMgr\agent"
+$configDir = "C:\ProgramData\Kleidia\agent"
 New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-Copy-Item "\\DC\Software\YubiMgr\agent.toml" "$configDir\agent.toml" -Force
+Copy-Item "\\DC\Software\Kleidia\agent.toml" "$configDir\agent.toml" -Force
 
 # Install agent
-Start-Process msiexec.exe -ArgumentList "/i \\DC\Software\YubiMgr\yubimgr-agent-0.4.6-unsigned.msi /qn /norestart" -Wait -NoNewWindow
+Start-Process msiexec.exe -ArgumentList "/i \\DC\Software\Kleidia\kleidia-agent-0.4.6-unsigned.msi /qn /norestart" -Wait -NoNewWindow
 
 exit $LASTEXITCODE
 ```
@@ -169,8 +169,8 @@ exit $LASTEXITCODE
 ### Configuration Script
 ```bash
 #!/bin/bash
-BACKEND_URL="${4:-https://yubimgr.example.com}"
-CONFIG_FILE="/etc/yubimgr/agent/agent.toml"
+BACKEND_URL="${4:-https://kleidia.example.com}"
+CONFIG_FILE="/etc/kleidia/agent/agent.toml"
 
 sleep 10
 if [ -f "$CONFIG_FILE" ]; then
@@ -181,19 +181,19 @@ if [ -f "$CONFIG_FILE" ]; then
         in_array==1 && /^\]/ { in_array=0; next; }
         in_array==0 { print; }
     ' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
-    /bin/launchctl kickstart -k system/com.yubimgr.agent
+    /bin/launchctl kickstart -k system/com.kleidia.agent
 fi
 ```
 
 ### Extension Attribute (Monitoring)
 ```bash
 #!/bin/bash
-AGENT_BIN="/usr/local/bin/yubimgr-agent"
+AGENT_BIN="/usr/local/bin/kleidia-agent"
 RESULT="Not Installed"
 
 if [ -f "$AGENT_BIN" ]; then
     VERSION=$("$AGENT_BIN" --version 2>/dev/null | grep -o 'v[0-9.]\+' || echo "unknown")
-    if /bin/launchctl list | grep -q com.yubimgr.agent; then
+    if /bin/launchctl list | grep -q com.kleidia.agent; then
         RESULT="Installed and Running ($VERSION)"
     else
         RESULT="Installed but Not Running ($VERSION)"
@@ -209,7 +209,7 @@ echo "<result>$RESULT</result>"
 
 ### Windows
 ```powershell
-$service = Get-Service -Name "YubiMgrAgent" -ErrorAction SilentlyContinue
+$service = Get-Service -Name "KleidiaAgent" -ErrorAction SilentlyContinue
 $health = Invoke-WebRequest -Uri "http://127.0.0.1:56123/health" -UseBasicParsing -ErrorAction SilentlyContinue
 
 if ($service.Status -eq "Running" -and $health.StatusCode -eq 200) {
@@ -224,8 +224,8 @@ if ($service.Status -eq "Running" -and $health.StatusCode -eq 200) {
 ### macOS
 ```bash
 #!/bin/bash
-if [ -f "/usr/local/bin/yubimgr-agent" ] && \
-   launchctl list | grep -q com.yubimgr.agent && \
+if [ -f "/usr/local/bin/kleidia-agent" ] && \
+   launchctl list | grep -q com.kleidia.agent && \
    curl -s -f http://127.0.0.1:56123/health > /dev/null; then
     echo "✅ Healthy"
     exit 0
@@ -242,23 +242,23 @@ fi
 ### Windows
 ```powershell
 # Quick diagnostics
-Get-Service YubiMgrAgent | Format-List Status, StartType
-Test-NetConnection -ComputerName yubimgr.example.com -Port 443
-Get-EventLog -LogName Application -Source YubiMgrAgent -Newest 5 | Format-List
+Get-Service KleidiaAgent | Format-List Status, StartType
+Test-NetConnection -ComputerName kleidia.example.com -Port 443
+Get-EventLog -LogName Application -Source KleidiaAgent -Newest 5 | Format-List
 
 # Restart service
-Restart-Service YubiMgrAgent
+Restart-Service KleidiaAgent
 ```
 
 ### macOS
 ```bash
 # Quick diagnostics
-sudo launchctl print system/com.yubimgr.agent | head -20
-nc -zv yubimgr.example.com 443
-tail -20 /var/log/yubimgr-agent/stderr.log
+sudo launchctl print system/com.kleidia.agent | head -20
+nc -zv kleidia.example.com 443
+tail -20 /var/log/kleidia-agent/stderr.log
 
 # Restart service
-sudo launchctl kickstart -k system/com.yubimgr.agent
+sudo launchctl kickstart -k system/com.kleidia.agent
 ```
 
 ---
@@ -267,10 +267,10 @@ sudo launchctl kickstart -k system/com.yubimgr.agent
 
 | Item | Windows | macOS |
 |------|---------|-------|
-| **Binary** | `C:\Program Files\YubiMgr\Agent\yubimgr-agent.exe` | `/usr/local/bin/yubimgr-agent` |
-| **Config** | `C:\ProgramData\YubiMgr\agent\agent.toml` | `/etc/yubimgr/agent/agent.toml` |
-| **Service** | Windows Service: `YubiMgrAgent` | LaunchDaemon: `com.yubimgr.agent` |
-| **Logs** | Event Viewer → Application | `/var/log/yubimgr-agent/stderr.log` |
+| **Binary** | `C:\Program Files\Kleidia\Agent\kleidia-agent.exe` | `/usr/local/bin/kleidia-agent` |
+| **Config** | `C:\ProgramData\Kleidia\agent\agent.toml` | `/etc/kleidia/agent/agent.toml` |
+| **Service** | Windows Service: `KleidiaAgent` | LaunchDaemon: `com.kleidia.agent` |
+| **Logs** | Event Viewer → Application | `/var/log/kleidia-agent/stderr.log` |
 
 ---
 

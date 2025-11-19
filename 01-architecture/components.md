@@ -6,7 +6,7 @@
 
 ## Component Overview
 
-YubiMgr consists of six main components:
+Kleidia consists of six main components:
 
 1. **Frontend** - Web user interface
 2. **Backend** - API server and business logic
@@ -138,7 +138,7 @@ Local HTTP server on user workstations for executing YubiKey operations.
 ### HTTP Endpoints
 
 #### Public Endpoints (No Authentication)
-- `GET /.well-known/yubimgr-agent` - Agent discovery and status
+- `GET /.well-known/kleidia-agent` - Agent discovery and status
 - `GET /health` - Health check
 - `GET /pubkey` - Get agent's ephemeral public key
 - `GET /discover` - List connected YubiKeys
@@ -430,7 +430,7 @@ Secrets management and PKI certificate authority. Installed as CA, configurable 
 
 ### PKI Configuration
 - Root CA: 10-year self-signed certificate
-- PKI Role: `yubimgr` with flexible certificate policies
+- PKI Role: `kleidia` with flexible certificate policies
 - Certificate TTL: Configurable (default 1 year)
 
 ### Deployment
@@ -452,7 +452,7 @@ Secrets management and PKI certificate authority. Installed as CA, configurable 
 4. Frontend: Store token, redirect to dashboard
 
 ### Agent Registration Flow
-1. Frontend → Agent: GET /.well-known/yubimgr-agent
+1. Frontend → Agent: GET /.well-known/kleidia-agent
 2. Frontend → Agent: GET /pubkey
 3. Frontend → Backend: POST /api/session/{id}/register-agent
 4. Backend → PostgreSQL: Store agent_pubkey

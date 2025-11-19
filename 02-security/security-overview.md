@@ -2,11 +2,11 @@
 
 **Audience**: Security Professionals, Operations Administrators  
 **Prerequisites**: Understanding of security concepts  
-**Outcome**: Understand YubiMgr's security model and threat mitigation
+**Outcome**: Understand Kleidia's security model and threat mitigation
 
 ## Security Principles
 
-YubiMgr is designed with security-first principles:
+Kleidia is designed with security-first principles:
 
 1. **Defense in Depth**: Multiple security layers
 2. **Zero Standing Access**: No valid credentials for logged-out users

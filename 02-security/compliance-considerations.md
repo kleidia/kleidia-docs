@@ -2,11 +2,11 @@
 
 **Audience**: Security Professionals, Compliance Officers  
 **Prerequisites**: Understanding of security compliance requirements  
-**Outcome**: Understand YubiMgr's compliance features and audit capabilities
+**Outcome**: Understand Kleidia's compliance features and audit capabilities
 
 ## Overview
 
-YubiMgr provides comprehensive audit logging and compliance features to meet enterprise security and regulatory requirements. The system logs all operations, maintains complete audit trails, and provides reporting capabilities.
+Kleidia provides comprehensive audit logging and compliance features to meet enterprise security and regulatory requirements. The system logs all operations, maintains complete audit trails, and provides reporting capabilities.
 
 ## Audit Logging
 

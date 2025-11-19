@@ -2,7 +2,7 @@
 
 **Audience**: Operations Administrators  
 **Prerequisites**: Network knowledge  
-**Outcome**: Understand ports and services used by YubiMgr
+**Outcome**: Understand ports and services used by Kleidia
 
 ## External Ports
 
@@ -68,7 +68,7 @@
 
 ### Agent Endpoints
 
-- `/.well-known/yubimgr-agent` - Agent discovery
+- `/.well-known/kleidia-agent` - Agent discovery
 - `/health` - Health check
 - `/pubkey` - Public key endpoint
 - `/piv/*` - YubiKey operations

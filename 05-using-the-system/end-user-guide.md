@@ -1,8 +1,8 @@
 # End User Guide
 
 **Audience**: End Users  
-**Prerequisites**: YubiMgr account, YubiKey device  
-**Outcome**: Use YubiMgr to manage your YubiKey devices
+**Prerequisites**: Kleidia account, YubiKey device  
+**Outcome**: Use Kleidia to manage your YubiKey devices
 
 ## Getting Started
 
@@ -15,7 +15,7 @@
    - Agent runs automatically in background as system service
 
 2. **Log In**
-   - Navigate to your organization's YubiMgr URL (e.g., `https://yubimgr.example.com`)
+   - Navigate to your organization's Kleidia URL (e.g., `https://kleidia.example.com`)
    - Enter your username and password
    - Click "Log In"
 

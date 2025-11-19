@@ -2,11 +2,11 @@
 
 **Audience**: Operations Administrators, Security Professionals  
 **Prerequisites**: Understanding of secrets management  
-**Outcome**: Understand how YubiMgr uses Vault for secret storage
+**Outcome**: Understand how Kleidia uses Vault for secret storage
 
 ## Overview
 
-YubiMgr uses OpenBao as the central secrets management system. All sensitive data is stored in OpenBao, not in the database.
+Kleidia uses OpenBao as the central secrets management system. All sensitive data is stored in OpenBao, not in the database.
 
 ## Vault Architecture
 
@@ -61,7 +61,7 @@ Application secrets stored in separate Vault paths:
 
 ## Vault Policies
 
-### Backend Policy (`yubimgr-backend`)
+### Backend Policy (`kleidia-backend`)
 
 ```hcl
 # PKI operations
@@ -91,7 +91,7 @@ path "yubikeys/metadata/*" {
 }
 
 # Application secrets
-path "secret/data/yubimgr/*" {
+path "secret/data/kleidia/*" {
   capabilities = ["create", "read", "update"]
 }
 ```

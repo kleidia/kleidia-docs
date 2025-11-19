@@ -222,7 +222,7 @@
 
 ```
 1. User logs in → Frontend detects agent
-2. Frontend → Agent: GET http://127.0.0.1:56123/.well-known/yubimgr-agent
+2. Frontend → Agent: GET http://127.0.0.1:56123/.well-known/kleidia-agent
 3. Agent → Frontend: { status: "ok", version: "2.2" }
 4. Frontend → Agent: GET http://127.0.0.1:56123/pubkey
 5. Agent → Frontend: { public_key: "-----BEGIN PUBLIC KEY-----..." }

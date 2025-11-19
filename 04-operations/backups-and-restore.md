@@ -1,12 +1,12 @@
 # Backups and Restore
 
 **Audience**: Operations Administrators  
-**Prerequisites**: YubiMgr deployed  
+**Prerequisites**: Kleidia deployed  
 **Outcome**: Understand backup and restore procedures
 
 ## Overview
 
-Regular backups are essential for disaster recovery and data protection. YubiMgr requires backups of:
+Regular backups are essential for disaster recovery and data protection. Kleidia requires backups of:
 
 1. **PostgreSQL Database**: User data, device records, audit logs
 2. **OpenBao**: Secrets and PKI certificates
@@ -35,17 +35,17 @@ Set up cron job for automated backups:
 
 ```bash
 # Create backup script
-sudo nano /usr/local/bin/yubimgr-backup-db.sh
+sudo nano /usr/local/bin/kleidia-backup-db.sh
 ```
 
 ```bash
 #!/bin/bash
-BACKUP_DIR="/backups/yubimgr"
+BACKUP_DIR="/backups/kleidia"
 DATE=$(date +%Y%m%d-%H%M%S)
 mkdir -p $BACKUP_DIR
 
 # Backup database
-kubectl exec -i yubimgr-data-postgres-cluster-0 -n yubimgr -- \
+kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
   pg_dumpall -U yubiuser > $BACKUP_DIR/db-backup-$DATE.sql
 
 # Compress backup
@@ -59,11 +59,11 @@ echo "Database backup completed: $BACKUP_DIR/db-backup-$DATE.sql.gz"
 
 ```bash
 # Make executable
-sudo chmod +x /usr/local/bin/yubimgr-backup-db.sh
+sudo chmod +x /usr/local/bin/kleidia-backup-db.sh
 
 # Add to crontab (daily at 2 AM)
 sudo crontab -e
-# Add: 0 2 * * * /usr/local/bin/yubimgr-backup-db.sh
+# Add: 0 2 * * * /usr/local/bin/kleidia-backup-db.sh
 ```
 
 ### Manual Backup
@@ -73,7 +73,7 @@ sudo crontab -e
 mkdir -p backups/$(date +%Y%m%d)
 
 # Backup database
-kubectl exec -i yubimgr-data-postgres-cluster-0 -n yubimgr -- \
+kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
   pg_dumpall -U yubiuser > backups/$(date +%Y%m%d)/database.sql
 
 # Compress
@@ -88,7 +88,7 @@ ls -lh backups/$(date +%Y%m%d)/database.sql.gz
 
 # Test backup restoration (on test system)
 gunzip -c backups/$(date +%Y%m%d)/database.sql.gz | \
-  psql -U yubiuser -d yubimgr_test
+  psql -U yubiuser -d kleidia_test
 ```
 
 ## Vault Backups
@@ -97,22 +97,22 @@ gunzip -c backups/$(date +%Y%m%d)/database.sql.gz | \
 
 ```bash
 # Create backup script
-sudo nano /usr/local/bin/yubimgr-backup-vault.sh
+sudo nano /usr/local/bin/kleidia-backup-vault.sh
 ```
 
 ```bash
 #!/bin/bash
-BACKUP_DIR="/backups/yubimgr"
+BACKUP_DIR="/backups/kleidia"
 DATE=$(date +%Y%m%d-%H%M%S)
 mkdir -p $BACKUP_DIR
 
 # Create Vault snapshot
-kubectl exec -i yubimgr-platform-openbao-0 -n yubimgr -- \
+kubectl exec -i kleidia-platform-openbao-0 -n kleidia -- \
   vault operator raft snapshot save /tmp/vault-backup.snap
 
 # Copy snapshot locally
-kubectl cp yubimgr-platform-openbao-0:/tmp/vault-backup.snap \
-  $BACKUP_DIR/vault-backup-$DATE.snap -n yubimgr
+kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \
+  $BACKUP_DIR/vault-backup-$DATE.snap -n kleidia
 
 # Remove backups older than 7 days
 find $BACKUP_DIR -name "vault-backup-*.snap" -mtime +7 -delete
@@ -122,11 +122,11 @@ echo "Vault backup completed: $BACKUP_DIR/vault-backup-$DATE.snap"
 
 ```bash
 # Make executable
-sudo chmod +x /usr/local/bin/yubimgr-backup-vault.sh
+sudo chmod +x /usr/local/bin/kleidia-backup-vault.sh
 
 # Add to crontab (daily at 3 AM)
 sudo crontab -e
-# Add: 0 3 * * * /usr/local/bin/yubimgr-backup-vault.sh
+# Add: 0 3 * * * /usr/local/bin/kleidia-backup-vault.sh
 ```
 
 ### Manual Backup
@@ -136,12 +136,12 @@ sudo crontab -e
 mkdir -p backups/$(date +%Y%m%d)
 
 # Create snapshot
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
   vault operator raft snapshot save /tmp/vault-backup.snap
 
 # Copy snapshot
-kubectl cp yubimgr-platform-openbao-0:/tmp/vault-backup.snap \
-  backups/$(date +%Y%m%d)/vault-backup.snap -n yubimgr
+kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \
+  backups/$(date +%Y%m%d)/vault-backup.snap -n kleidia
 ```
 
 ## Configuration Backups
@@ -150,9 +150,9 @@ kubectl cp yubimgr-platform-openbao-0:/tmp/vault-backup.snap \
 
 ```bash
 # Backup Helm values
-helm get values yubimgr-platform -n yubimgr > backups/$(date +%Y%m%d)/platform-values.yaml
-helm get values yubimgr-data -n yubimgr > backups/$(date +%Y%m%d)/data-values.yaml
-helm get values yubimgr-services -n yubimgr > backups/$(date +%Y%m%d)/services-values.yaml
+helm get values kleidia-platform -n kleidia > backups/$(date +%Y%m%d)/platform-values.yaml
+helm get values kleidia-data -n kleidia > backups/$(date +%Y%m%d)/data-values.yaml
+helm get values kleidia-services -n kleidia > backups/$(date +%Y%m%d)/services-values.yaml
 ```
 
 ## Configuration Backups
@@ -161,63 +161,63 @@ helm get values yubimgr-services -n yubimgr > backups/$(date +%Y%m%d)/services-v
 
 ```bash
 # Backup Helm values
-helm get values yubimgr-platform -n yubimgr > backups/$(date +%Y%m%d)/platform-values.yaml
-helm get values yubimgr-data -n yubimgr > backups/$(date +%Y%m%d)/data-values.yaml
-helm get values yubimgr-services -n yubimgr > backups/$(date +%Y%m%d)/services-values.yaml
+helm get values kleidia-platform -n kleidia > backups/$(date +%Y%m%d)/platform-values.yaml
+helm get values kleidia-data -n kleidia > backups/$(date +%Y%m%d)/data-values.yaml
+helm get values kleidia-services -n kleidia > backups/$(date +%Y%m%d)/services-values.yaml
 ```
 
 ### Database Restore
 
 ```bash
 # Stop backend (to prevent data corruption)
-kubectl scale deployment/yubimgr-services-backend --replicas=0 -n yubimgr
+kubectl scale deployment/kleidia-services-backend --replicas=0 -n kleidia
 
 # Restore database
 gunzip -c backups/20250115/database.sql.gz | \
-  kubectl exec -i yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr
+  kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia
 
 # Restart backend
-kubectl scale deployment/yubimgr-services-backend --replicas=2 -n yubimgr
+kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia
 
 # Verify restoration
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "SELECT count(*) FROM users;"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "SELECT count(*) FROM users;"
 ```
 
 ### Vault Restore
 
 ```bash
 # Stop backend (to prevent secret access issues)
-kubectl scale deployment/yubimgr-services-backend --replicas=0 -n yubimgr
+kubectl scale deployment/kleidia-services-backend --replicas=0 -n kleidia
 
 # Copy snapshot to pod
 kubectl cp backups/20250115/vault-backup.snap \
-  yubimgr-platform-openbao-0:/tmp/vault-backup.snap -n yubimgr
+  kleidia-platform-openbao-0:/tmp/vault-backup.snap -n kleidia
 
 # Restore snapshot
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
   vault operator raft snapshot restore /tmp/vault-backup.snap
 
 # Verify Vault
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
 
 # Restart backend
-kubectl scale deployment/yubimgr-services-backend --replicas=2 -n yubimgr
+kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia
 ```
 
 ### Configuration Restore
 
 ```bash
 # Restore Helm values
-helm upgrade yubimgr-platform ./helm/yubimgr-platform \
-  --namespace yubimgr \
+helm upgrade kleidia-platform ./helm/kleidia-platform \
+  --namespace kleidia \
   --values backups/20250115/platform-values.yaml
 
 # Restore Helm values
-helm upgrade yubimgr-platform -n yubimgr -f backups/20250115/platform-values.yaml ./helm/yubimgr-platform
-helm upgrade yubimgr-data -n yubimgr -f backups/20250115/data-values.yaml ./helm/yubimgr-data
-helm upgrade yubimgr-services -n yubimgr -f backups/20250115/services-values.yaml ./helm/yubimgr-services
+helm upgrade kleidia-platform -n kleidia -f backups/20250115/platform-values.yaml ./helm/kleidia-platform
+helm upgrade kleidia-data -n kleidia -f backups/20250115/data-values.yaml ./helm/kleidia-data
+helm upgrade kleidia-services -n kleidia -f backups/20250115/services-values.yaml ./helm/kleidia-services
 ```
 
 ## Disaster Recovery
@@ -243,9 +243,9 @@ helm upgrade yubimgr-services -n yubimgr -f backups/20250115/services-values.yam
 4. **Restore Configuration**
    ```bash
    # Restore Helm values
-   helm upgrade yubimgr-platform -n yubimgr -f backups/20250115/platform-values.yaml ./helm/yubimgr-platform
-   helm upgrade yubimgr-data -n yubimgr -f backups/20250115/data-values.yaml ./helm/yubimgr-data
-   helm upgrade yubimgr-services -n yubimgr -f backups/20250115/services-values.yaml ./helm/yubimgr-services
+   helm upgrade kleidia-platform -n kleidia -f backups/20250115/platform-values.yaml ./helm/kleidia-platform
+   helm upgrade kleidia-data -n kleidia -f backups/20250115/data-values.yaml ./helm/kleidia-data
+   helm upgrade kleidia-services -n kleidia -f backups/20250115/services-values.yaml ./helm/kleidia-services
    ```
 
 5. **Verify System**
@@ -259,7 +259,7 @@ helm upgrade yubimgr-services -n yubimgr -f backups/20250115/services-values.yam
 
 ### Local Storage
 
-- **Location**: `/backups/yubimgr/`
+- **Location**: `/backups/kleidia/`
 - **Retention**: 7 days local, longer-term archival
 - **Security**: Encrypt backups containing sensitive data
 

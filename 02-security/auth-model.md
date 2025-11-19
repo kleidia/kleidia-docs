@@ -2,11 +2,11 @@
 
 **Audience**: Security Professionals, Operations Administrators  
 **Prerequisites**: Understanding of authentication and authorization  
-**Outcome**: Understand YubiMgr's authentication and authorization model
+**Outcome**: Understand Kleidia's authentication and authorization model
 
 ## Overview
 
-YubiMgr uses JWT-based authentication with Argon2id password hashing, session management, and role-based access control (RBAC) for secure user authentication and authorization.
+Kleidia uses JWT-based authentication with Argon2id password hashing, session management, and role-based access control (RBAC) for secure user authentication and authorization.
 
 ## Authentication Flow
 
@@ -33,7 +33,7 @@ YubiMgr uses JWT-based authentication with Argon2id password hashing, session ma
   "session_id": 123,
   "exp": 1640997000,
   "iat": 1640995200,
-  "iss": "yubimgr",
+  "iss": "kleidia",
   "sub": "1"
 }
 ```
@@ -85,7 +85,7 @@ YubiMgr uses JWT-based authentication with Argon2id password hashing, session ma
 
 ### Argon2id Hashing
 
-YubiMgr uses **Argon2id** for password hashing:
+Kleidia uses **Argon2id** for password hashing:
 
 - **Algorithm**: Argon2id (winner of Password Hashing Competition)
 - **Memory**: 64 MB

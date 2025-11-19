@@ -1,7 +1,7 @@
 # YubiKey Lifecycle Management
 
 **Audience**: End Users, Administrators  
-**Prerequisites**: YubiMgr account  
+**Prerequisites**: Kleidia account  
 **Outcome**: Understand YubiKey lifecycle from registration to retirement
 
 ## Lifecycle Overview

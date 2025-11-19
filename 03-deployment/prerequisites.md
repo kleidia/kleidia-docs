@@ -8,7 +8,7 @@
 
 ### Kubernetes Cluster
 
-YubiMgr requires an existing Kubernetes cluster (version 1.24+) with:
+Kleidia requires an existing Kubernetes cluster (version 1.24+) with:
 
 - **NodePort Services**: Support for NodePort service type
 - **Persistent Volumes**: Storage class for persistent volumes
@@ -19,7 +19,7 @@ YubiMgr requires an existing Kubernetes cluster (version 1.24+) with:
 
 ### External Load Balancer
 
-YubiMgr services are exposed via NodePort and require an external load balancer for:
+Kleidia services are exposed via NodePort and require an external load balancer for:
 
 - **SSL Termination**: TLS/HTTPS termination
 - **Load Balancing**: Distribution of traffic to NodePort services
@@ -30,7 +30,7 @@ The external load balancer configuration is customer-specific and not covered in
 ### Domain and SSL Requirements
 
 - **Domain Name**: Registered domain pointing to load balancer IP
-- **DNS Configuration**: A record for your domain (e.g., `yubimgr.example.com`)
+- **DNS Configuration**: A record for your domain (e.g., `kleidia.example.com`)
 - **SSL Certificate**: TLS certificate for your domain (managed by your load balancer)
 
 ### Operator Tools
@@ -46,7 +46,7 @@ For deployment and management, operators need:
   - Windows 10 or Windows 11
   - macOS (latest versions)
 - **Agent Installation**: Pre-built agent installer packages available
-- **Network Access**: Outbound HTTPS to YubiMgr server (no inbound ports required)
+- **Network Access**: Outbound HTTPS to Kleidia server (no inbound ports required)
 - **USB Access**: Direct USB access to YubiKey devices
 
 **Note**: The agent installer includes ykman (YubiKey Manager CLI) - no separate installation required.
@@ -63,19 +63,19 @@ Your external load balancer should:
 
 ### Agent Workstations
 - **No Inbound Ports**: Agents use localhost only (port 56123)
-- **Outbound HTTPS**: To YubiMgr server for agent operations
+- **Outbound HTTPS**: To Kleidia server for agent operations
 
 ### DNS Configuration
 
 1. **A Record**: Point domain to server IP
    ```
-   yubimgr.example.com → 192.0.2.1
+   kleidia.example.com → 192.0.2.1
    ```
 
 2. **Verification**: Verify DNS resolution
    ```bash
-   dig yubimgr.example.com
-   nslookup yubimgr.example.com
+   dig kleidia.example.com
+   nslookup kleidia.example.com
    ```
 
 ## Storage Requirements

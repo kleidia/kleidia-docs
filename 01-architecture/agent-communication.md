@@ -6,7 +6,7 @@
 
 ## Overview
 
-YubiMgr agents use a simplified HTTP-based communication model where agents run anonymously on localhost and communicate directly with the browser. All sensitive operations are encrypted using RSA-OAEP encryption.
+Kleidia agents use a simplified HTTP-based communication model where agents run anonymously on localhost and communicate directly with the browser. All sensitive operations are encrypted using RSA-OAEP encryption.
 
 ## Communication Architecture
 
@@ -38,7 +38,7 @@ Browser (Frontend)
 1. **Agent Starts**: Generates ephemeral RSA-4096 keypair stored in memory
 2. **HTTP Server**: Starts on localhost:56123
 3. **Public Key Exposure**: Available via `GET /pubkey`
-4. **Frontend Detection**: Browser detects agent via `/.well-known/yubimgr-agent`
+4. **Frontend Detection**: Browser detects agent via `/.well-known/kleidia-agent`
 5. **Key Registration**: Frontend registers public key with backend
 6. **Ready for Operations**: Agent ready to receive encrypted operations
 
@@ -51,7 +51,7 @@ Agent Startup:
   └── Expose public key via GET /pubkey
 
 User Login:
-  ├── Frontend detects agent (GET /.well-known/yubimgr-agent)
+  ├── Frontend detects agent (GET /.well-known/kleidia-agent)
   ├── Frontend gets public key (GET /pubkey)
   ├── Frontend registers key with backend (POST /api/session/{id}/register-agent)
   └── Backend stores key in user_sessions.agent_pubkey
@@ -116,7 +116,7 @@ Ready State:
 
 ### Discovery and Status
 
-- `GET /.well-known/yubimgr-agent` - Agent discovery and status
+- `GET /.well-known/kleidia-agent` - Agent discovery and status
 - `GET /health` - Health check endpoint
 - `GET /pubkey` - Get agent's ephemeral public key
 - `GET /system/info` - System information

@@ -1,12 +1,12 @@
-# YubiMgr Overview
+# Kleidia Overview
 
 **Audience**: Operations Administrators, Security Professionals, End Users  
 **Prerequisites**: None  
-**Outcome**: Understand what YubiMgr is and what it does
+**Outcome**: Understand what Kleidia is and what it does
 
-## What is YubiMgr?
+## What is Kleidia?
 
-YubiMgr is an enterprise-grade YubiKey management platform that enables centralized management of YubiKey devices across your organization. The system provides secure, web-based administration while ensuring that sensitive cryptographic operations are performed locally on user workstations.
+Kleidia is an enterprise-grade YubiKey management platform that enables centralized management of YubiKey devices across your organization. The system provides secure, web-based administration while ensuring that sensitive cryptographic operations are performed locally on user workstations.
 
 ## Key Capabilities
 
@@ -31,7 +31,7 @@ YubiMgr is an enterprise-grade YubiKey management platform that enables centrali
 
 ## System Architecture
 
-YubiMgr uses a **hybrid architecture** that combines:
+Kleidia uses a **hybrid architecture** that combines:
 
 1. **Cloud-Hosted Services**: Web frontend, API backend, database, and Vault running in Kubernetes
 2. **Local Agents**: HTTP-based agents running on user workstations for YubiKey operations

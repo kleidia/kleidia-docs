@@ -1,8 +1,8 @@
 # Administrator Guide
 
 **Audience**: System Administrators  
-**Prerequisites**: Admin account, YubiMgr deployed  
-**Outcome**: Administer YubiMgr system and users
+**Prerequisites**: Admin account, Kleidia deployed  
+**Outcome**: Administer Kleidia system and users
 
 ## Admin Dashboard
 
@@ -161,7 +161,7 @@ Configure system-wide settings:
 
 ## License Management
 
-YubiMgr uses a cryptographically-signed license system to control usage rights and system capabilities. The system starts with a 30-day trial and requires an activation license for continued use.
+Kleidia uses a cryptographically-signed license system to control usage rights and system capabilities. The system starts with a 30-day trial and requires an activation license for continued use.
 
 ### Understanding License Status
 
@@ -187,7 +187,7 @@ The system displays one of the following license statuses:
 
 ### Installation ID
 
-The **Installation ID** is a unique cryptographic hash that identifies your specific YubiMgr installation. It is:
+The **Installation ID** is a unique cryptographic hash that identifies your specific Kleidia installation. It is:
 
 - **Automatically generated** on first startup
 - **Permanently tied** to your deployment

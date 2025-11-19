@@ -16,16 +16,16 @@
 
 ```bash
 # Check pod status
-kubectl get pods -n yubimgr
+kubectl get pods -n kleidia
 
 # Check pod details
-kubectl describe pod <pod-name> -n yubimgr
+kubectl describe pod <pod-name> -n kleidia
 
 # Check pod logs
-kubectl logs -f <pod-name> -n yubimgr
+kubectl logs -f <pod-name> -n kleidia
 
 # Check events
-kubectl get events -n yubimgr --sort-by=.metadata.creationTimestamp
+kubectl get events -n kleidia --sort-by=.metadata.creationTimestamp
 ```
 
 #### Common Causes
@@ -34,7 +34,7 @@ kubectl get events -n yubimgr --sort-by=.metadata.creationTimestamp
    - **Symptom**: `ErrImagePull` or `ImagePullBackOff`
    - **Solution**: Check registry connectivity, verify image exists
    ```bash
-   kubectl describe pod <pod-name> -n yubimgr | grep -i image
+   kubectl describe pod <pod-name> -n kleidia | grep -i image
    ```
 
 2. **Resource Constraints**
@@ -49,8 +49,8 @@ kubectl get events -n yubimgr --sort-by=.metadata.creationTimestamp
    - **Symptom**: `Pending` pods, PVC not bound
    - **Solution**: Check storage class, verify disk space
    ```bash
-   kubectl get pvc -n yubimgr
-   kubectl describe pvc <pvc-name> -n yubimgr
+   kubectl get pvc -n kleidia
+   kubectl describe pvc <pvc-name> -n kleidia
    df -h
    ```
 
@@ -64,17 +64,17 @@ kubectl get events -n yubimgr --sort-by=.metadata.creationTimestamp
 
 ```bash
 # Check PostgreSQL pod status
-kubectl get pods -l app=postgres-cluster -n yubimgr
+kubectl get pods -l app=postgres-cluster -n kleidia
 
 # Check PostgreSQL logs
-kubectl logs -f yubimgr-data-postgres-cluster-0 -n yubimgr
+kubectl logs -f kleidia-data-postgres-cluster-0 -n kleidia
 
 # Test database connection
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "SELECT 1;"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "SELECT 1;"
 
 # Check backend logs
-kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i postgres
+kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i postgres
 ```
 
 #### Solutions
@@ -82,7 +82,7 @@ kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i postgre
 1. **PostgreSQL Not Ready**
    ```bash
    # Wait for PostgreSQL to be ready
-   kubectl wait --for=condition=ready pod -l app=postgres-cluster -n yubimgr --timeout=300s
+   kubectl wait --for=condition=ready pod -l app=postgres-cluster -n kleidia --timeout=300s
    ```
 
 2. **Wrong Credentials**
@@ -90,7 +90,7 @@ kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i postgre
    - Verify backend environment variables
 
 3. **Network Issues**
-   - Verify service name: `postgres-cluster.yubimgr.svc.cluster.local`
+   - Verify service name: `postgres-cluster.kleidia.svc.cluster.local`
    - Check network policies
 
 ### Vault Connection Issues
@@ -103,17 +103,17 @@ kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i postgre
 
 ```bash
 # Check Vault pod status
-kubectl get pods -l app.kubernetes.io/name=openbao -n yubimgr
+kubectl get pods -l app.kubernetes.io/name=openbao -n kleidia
 
 # Check Vault status
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
 
 # Check Vault logs
-kubectl logs -f yubimgr-platform-openbao-0 -n yubimgr
+kubectl logs -f kleidia-platform-openbao-0 -n kleidia
 
 # Test Vault connectivity
-kubectl exec -it deployment/yubimgr-services-backend -n yubimgr -- \
-  curl http://yubimgr-platform-openbao:8200/v1/sys/health
+kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
+  curl http://kleidia-platform-openbao:8200/v1/sys/health
 ```
 
 #### Solutions
@@ -121,26 +121,26 @@ kubectl exec -it deployment/yubimgr-services-backend -n yubimgr -- \
 1. **Vault Sealed**
    ```bash
    # Check auto-unseal
-   kubectl logs yubimgr-platform-openbao-0 -n yubimgr | grep -i unseal
+   kubectl logs kleidia-platform-openbao-0 -n kleidia | grep -i unseal
    
    # Manual unseal (if needed)
-   kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault operator unseal <key>
+   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault operator unseal <key>
    ```
 
 2. **AppRole Authentication Failed**
    ```bash
    # Check AppRole secret
-   kubectl get secret vault-approle -n yubimgr
+   kubectl get secret vault-approle -n kleidia
    
    # Verify backend can authenticate
-   kubectl exec -it deployment/yubimgr-services-backend -n yubimgr -- \
+   kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
      env | grep VAULT
    ```
 
 3. **Policy Issues**
    ```bash
    # Check backend policy
-   kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault policy read yubimgr-backend
+   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault policy read kleidia-backend
    ```
 
 ### SSL Certificate Issues
@@ -153,11 +153,11 @@ kubectl exec -it deployment/yubimgr-services-backend -n yubimgr -- \
 
 ```bash
 # Check certificate expiration
-echo | openssl s_client -connect yubimgr.example.com:443 -servername yubimgr.example.com 2>/dev/null | \
+echo | openssl s_client -connect kleidia.example.com:443 -servername kleidia.example.com 2>/dev/null | \
   openssl x509 -noout -dates
 
 # Test SSL connection
-curl -I https://yubimgr.example.com
+curl -I https://kleidia.example.com
 ```
 
 #### Solutions
@@ -181,15 +181,15 @@ curl -I https://yubimgr.example.com
 
 ```bash
 # Check service status
-kubectl get services -n yubimgr
+kubectl get services -n kleidia
 
 # Check NodePort accessibility
 curl http://localhost:32570/api/health
 curl http://localhost:30805/
 
 # Test external access
-curl -I https://yubimgr.example.com
-curl https://yubimgr.example.com/api/health
+curl -I https://kleidia.example.com
+curl https://kleidia.example.com/api/health
 ```
 
 #### Solutions
@@ -215,16 +215,16 @@ curl https://yubimgr.example.com/api/health
 
 ```bash
 # Check all pods
-kubectl get pods -n yubimgr
+kubectl get pods -n kleidia
 
 # Check all services
-kubectl get services -n yubimgr
+kubectl get services -n kleidia
 
 # Check persistent volumes
-kubectl get pvc -n yubimgr
+kubectl get pvc -n kleidia
 
 # Check resource usage
-kubectl top pods -n yubimgr
+kubectl top pods -n kleidia
 kubectl top nodes
 
 # Check disk space
@@ -235,33 +235,33 @@ df -h
 
 ```bash
 # Backend health
-curl https://yubimgr.example.com/api/health
+curl https://kleidia.example.com/api/health
 
 # Database health
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "SELECT 1;"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "SELECT 1;"
 
 # Vault health
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
 
 # Frontend accessibility
-curl -I https://yubimgr.example.com
+curl -I https://kleidia.example.com
 ```
 
 ### Log Analysis
 
 ```bash
 # Backend logs
-kubectl logs -f deployment/yubimgr-services-backend -n yubimgr
+kubectl logs -f deployment/kleidia-services-backend -n kleidia
 
 # Frontend logs
-kubectl logs -f deployment/yubimgr-services-frontend -n yubimgr
+kubectl logs -f deployment/kleidia-services-frontend -n kleidia
 
 # Database logs
-kubectl logs -f yubimgr-data-postgres-cluster-0 -n yubimgr
+kubectl logs -f kleidia-data-postgres-cluster-0 -n kleidia
 
 # OpenBao logs
-kubectl logs -f yubimgr-platform-openbao-0 -n yubimgr
+kubectl logs -f kleidia-platform-openbao-0 -n kleidia
 ```
 
 ## Emergency Procedures
@@ -270,24 +270,24 @@ kubectl logs -f yubimgr-platform-openbao-0 -n yubimgr
 
 ```bash
 # Restart all pods
-kubectl rollout restart deployment -n yubimgr
+kubectl rollout restart deployment -n kleidia
 ```
 
 ### Database Recovery
 
 ```bash
 # Restore from backup
-kubectl exec -i yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr < backup.sql
+kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia < backup.sql
 ```
 
 ### Vault Recovery
 
 ```bash
 # Restore Vault snapshot
-kubectl cp ./vault-backup.snap yubimgr-platform-openbao-0:/tmp/vault-backup.snap -n yubimgr
+kubectl cp ./vault-backup.snap kleidia-platform-openbao-0:/tmp/vault-backup.snap -n kleidia
 
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
   vault operator raft snapshot restore /tmp/vault-backup.snap
 ```
 
@@ -297,11 +297,11 @@ kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
 
 When reporting issues, collect:
 
-1. **Pod Status**: `kubectl get pods -n yubimgr`
-2. **Pod Logs**: `kubectl logs <pod-name> -n yubimgr`
-3. **Events**: `kubectl get events -n yubimgr`
-4. **Service Status**: `kubectl get services -n yubimgr`
-5. **Helm Status**: `helm status yubimgr-* -n yubimgr`
+1. **Pod Status**: `kubectl get pods -n kleidia`
+2. **Pod Logs**: `kubectl logs <pod-name> -n kleidia`
+3. **Events**: `kubectl get events -n kleidia`
+4. **Service Status**: `kubectl get services -n kleidia`
+5. **Helm Status**: `helm status kleidia-* -n kleidia`
 6. **System Resources**: `kubectl top nodes`
 
 ### Support Resources

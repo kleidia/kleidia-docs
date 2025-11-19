@@ -2,11 +2,11 @@
 
 **Audience**: Operations Administrators  
 **Prerequisites**: Helm installed, understanding of Kubernetes configuration  
-**Outcome**: Understand how to configure YubiMgr deployment
+**Outcome**: Understand how to configure Kleidia deployment
 
 ## Overview
 
-YubiMgr configuration is managed through Helm values files. Configuration can be provided via:
+Kleidia configuration is managed through Helm values files. Configuration can be provided via:
 
 1. **values.yaml files** (recommended for production)
 2. **Command-line overrides** (for quick changes)
@@ -18,8 +18,8 @@ YubiMgr configuration is managed through Helm values files. Configuration can be
 
 ```yaml
 global:
-  domain: yubimgr.example.com          # Your domain name
-  namespace: yubimgr                    # Kubernetes namespace
+  domain: kleidia.example.com          # Your domain name
+  namespace: kleidia                    # Kubernetes namespace
 ```
 
 ### Backend Configuration
@@ -28,7 +28,7 @@ global:
 backend:
   replicas: 2                           # Number of backend replicas
   image:
-    repository: yubimgr-backend
+    repository: kleidia-backend
     tag: latest                          # Image tag
   service:
     nodePort: 32570                     # NodePort for external load balancer
@@ -47,7 +47,7 @@ backend:
 frontend:
   replicas: 2                           # Number of frontend replicas
   image:
-    repository: yubimgr-frontend
+    repository: kleidia-frontend
     tag: latest                          # Image tag
   service:
     nodePort: 30805                     # NodePort for external load balancer
@@ -77,7 +77,7 @@ openbao:
   pki:
     mode: root                          # PKI mode (root or intermediate)
     rootCA:
-      commonName: "YubiMgr Root CA"
+      commonName: "Kleidia Root CA"
       ttl: "87600h"                     # 10 years
 ```
 
@@ -87,7 +87,7 @@ openbao:
 postgres:
   enabled: true
   version: "15"                         # PostgreSQL version
-  database: yubimgr                     # Database name
+  database: kleidia                     # Database name
   username: yubiuser                    # Database user
   storage:
     size: 10Gi                          # Storage size
@@ -99,8 +99,8 @@ postgres:
 
 ```yaml
 global:
-  domain: yubimgr.production.example.com
-  namespace: yubimgr-prod
+  domain: kleidia.production.example.com
+  namespace: kleidia-prod
   registry:
     host: registry.production.example.com:5000
 
@@ -137,8 +137,8 @@ openbao:
 
 ```yaml
 global:
-  domain: yubimgr.dev.example.com
-  namespace: yubimgr-dev
+  domain: kleidia.dev.example.com
+  namespace: kleidia-dev
 
 backend:
   replicas: 1                           # Single replica for dev
@@ -170,15 +170,15 @@ Backend configuration via environment variables (set in Helm values):
 backend:
   env:
     - name: DATABASE_URL
-      value: "postgresql://yubiuser:password@postgres-cluster:5432/yubimgr"
+      value: "postgresql://yubiuser:password@postgres-cluster:5432/kleidia"
     - name: VAULT_ADDR
-      value: "http://yubimgr-platform-openbao:8200"
+      value: "http://kleidia-platform-openbao:8200"
     - name: VAULT_AUTH_METHOD
       value: "approle"
     - name: JWT_SECRET_KEY
       valueFrom:
         secretKeyRef:
-          name: yubimgr-secrets
+          name: kleidia-secrets
           key: jwt-secret
 ```
 
@@ -188,9 +188,9 @@ backend:
 frontend:
   env:
     - name: API_BASE_URL
-      value: "https://yubimgr.example.com/api"
+      value: "https://kleidia.example.com/api"
     - name: WS_BASE_URL
-      value: "wss://yubimgr.example.com"
+      value: "wss://kleidia.example.com"
 ```
 
 ## Secrets Management
@@ -309,23 +309,23 @@ backend:
 # Create values file
 cat > my-values.yaml <<EOF
 global:
-  domain: yubimgr.example.com
+  domain: kleidia.example.com
 backend:
   replicas: 3
 EOF
 
 # Install with values file
-helm install yubimgr-services ./helm/yubimgr-services \
-  --namespace yubimgr \
+helm install kleidia-services ./helm/kleidia-services \
+  --namespace kleidia \
   --values my-values.yaml
 ```
 
 ### Using Command-Line Overrides
 
 ```bash
-helm install yubimgr-services ./helm/yubimgr-services \
-  --namespace yubimgr \
-  --set global.domain=yubimgr.example.com \
+helm install kleidia-services ./helm/kleidia-services \
+  --namespace kleidia \
+  --set global.domain=kleidia.example.com \
   --set backend.replicas=3
 ```
 
@@ -336,8 +336,8 @@ helm install yubimgr-services ./helm/yubimgr-services \
 nano my-values.yaml
 
 # Upgrade with new values
-helm upgrade yubimgr-services ./helm/yubimgr-services \
-  --namespace yubimgr \
+helm upgrade kleidia-services ./helm/kleidia-services \
+  --namespace kleidia \
   --values my-values.yaml
 ```
 
@@ -347,8 +347,8 @@ helm upgrade yubimgr-services ./helm/yubimgr-services \
 
 ```bash
 # Validate configuration without installing
-helm install yubimgr-services ./helm/yubimgr-services \
-  --namespace yubimgr \
+helm install kleidia-services ./helm/kleidia-services \
+  --namespace kleidia \
   --values my-values.yaml \
   --dry-run
 ```
@@ -357,8 +357,8 @@ helm install yubimgr-services ./helm/yubimgr-services \
 
 ```bash
 # Render templates to see final configuration
-helm template yubimgr-services ./helm/yubimgr-services \
-  --namespace yubimgr \
+helm template kleidia-services ./helm/kleidia-services \
+  --namespace kleidia \
   --values my-values.yaml
 ```
 

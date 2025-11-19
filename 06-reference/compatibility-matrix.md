@@ -8,7 +8,7 @@
 
 ### Kubernetes Cluster
 
-YubiMgr requires a Kubernetes cluster (version 1.24+) with NodePort support. The specific Kubernetes distribution is not relevant - any compatible Kubernetes cluster will work.
+Kleidia requires a Kubernetes cluster (version 1.24+) with NodePort support. The specific Kubernetes distribution is not relevant - any compatible Kubernetes cluster will work.
 
 ### Helm Versions
 
@@ -123,7 +123,7 @@ YubiMgr requires a Kubernetes cluster (version 1.24+) with NodePort support. The
 
 ## Version Compatibility
 
-### YubiMgr Versions
+### Kleidia Versions
 
 | Version | Kubernetes | PostgreSQL | OpenBao | Status     |
 |---------|------------|------------|---------|------------|

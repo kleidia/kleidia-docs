@@ -2,7 +2,7 @@
 
 **Audience**: All Users  
 **Prerequisites**: None  
-**Outcome**: Understand YubiMgr terminology
+**Outcome**: Understand Kleidia terminology
 
 ## Terms
 
@@ -22,7 +22,7 @@
 
 ### C
 
-**Certificate Authority (CA)**: Entity that issues and signs certificates. YubiMgr uses Vault PKI as CA.
+**Certificate Authority (CA)**: Entity that issues and signs certificates. Kleidia uses Vault PKI as CA.
 
 **Certificate Signing Request (CSR)**: Request for certificate signing generated on YubiKey using hardware private key.
 

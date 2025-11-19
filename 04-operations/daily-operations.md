@@ -1,22 +1,22 @@
 # Daily Operations
 
 **Audience**: Operations Administrators  
-**Prerequisites**: YubiMgr deployed and running  
+**Prerequisites**: Kleidia deployed and running  
 **Outcome**: Understand daily operational tasks and procedures
 
 ## Daily Checklist
 
 ### Morning Checks
 
-- [ ] Check system health: `curl https://yubimgr.example.com/api/health`
-- [ ] Verify all pods are running: `kubectl get pods -n yubimgr`
+- [ ] Check system health: `curl https://kleidia.example.com/api/health`
+- [ ] Verify all pods are running: `kubectl get pods -n kleidia`
 - [ ] Check disk space: `df -h`
-- [ ] Review error logs: `kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i error`
-- [ ] Check certificate expiration: `echo | openssl s_client -connect yubimgr.example.com:443 2>/dev/null | openssl x509 -noout -dates`
+- [ ] Review error logs: `kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i error`
+- [ ] Check certificate expiration: `echo | openssl s_client -connect kleidia.example.com:443 2>/dev/null | openssl x509 -noout -dates`
 
 ### Ongoing Monitoring
 
-- [ ] Monitor resource usage: `kubectl top pods -n yubimgr`
+- [ ] Monitor resource usage: `kubectl top pods -n kleidia`
 - [ ] Check audit logs for security events
 - [ ] Monitor failed login attempts
 - [ ] Review user activity patterns
@@ -28,7 +28,7 @@
 
 ```bash
 # Backend health endpoint
-curl https://yubimgr.example.com/api/health
+curl https://kleidia.example.com/api/health
 
 # Expected response:
 # {"status":"ok","version":"2.2.0","database":"connected","vault":"connected"}
@@ -38,16 +38,16 @@ curl https://yubimgr.example.com/api/health
 
 ```bash
 # Check all pods
-kubectl get pods -n yubimgr
+kubectl get pods -n kleidia
 
 # Check services
-kubectl get services -n yubimgr
+kubectl get services -n kleidia
 
 # Check persistent volumes
-kubectl get pvc -n yubimgr
+kubectl get pvc -n kleidia
 
 # Check resource usage
-kubectl top pods -n yubimgr
+kubectl top pods -n kleidia
 kubectl top nodes
 ```
 
@@ -55,19 +55,19 @@ kubectl top nodes
 
 ```bash
 # Check PostgreSQL status
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "SELECT version();"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "SELECT version();"
 
 # Check database connections
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "SELECT count(*) FROM pg_stat_activity;"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "SELECT count(*) FROM pg_stat_activity;"
 ```
 
 ### Vault Health
 
 ```bash
 # Check Vault status
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
 
 # Expected output:
 # Key             Value
@@ -84,29 +84,29 @@ kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault status
 
 ```bash
 # Backend logs
-kubectl logs -f deployment/yubimgr-services-backend -n yubimgr
+kubectl logs -f deployment/kleidia-services-backend -n kleidia
 
 # Frontend logs
-kubectl logs -f deployment/yubimgr-services-frontend -n yubimgr
+kubectl logs -f deployment/kleidia-services-frontend -n kleidia
 
 # Database logs
-kubectl logs -f yubimgr-data-postgres-cluster-0 -n yubimgr
+kubectl logs -f kleidia-data-postgres-cluster-0 -n kleidia
 
 # OpenBao logs
-kubectl logs -f yubimgr-platform-openbao-0 -n yubimgr
+kubectl logs -f kleidia-platform-openbao-0 -n kleidia
 ```
 
 ### Log Filtering
 
 ```bash
 # Filter errors
-kubectl logs deployment/yubimgr-services-backend -n yubimgr | grep -i error
+kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i error
 
 # Filter by time
-kubectl logs deployment/yubimgr-services-backend -n yubimgr --since=1h
+kubectl logs deployment/kleidia-services-backend -n kleidia --since=1h
 
 # Filter by component
-kubectl logs deployment/yubimgr-services-backend -n yubimgr | grep -i vault
+kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i vault
 ```
 
 ## User Management
@@ -118,7 +118,7 @@ kubectl logs deployment/yubimgr-services-backend -n yubimgr | grep -i vault
 # Navigate to Admin → Users → Create User
 
 # Or via API (if needed)
-curl -X POST https://yubimgr.example.com/api/admin/users \
+curl -X POST https://kleidia.example.com/api/admin/users \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -136,7 +136,7 @@ curl -X POST https://yubimgr.example.com/api/admin/users \
 # Navigate to Admin → Users → Select User → Disable
 
 # Or via API
-curl -X PATCH https://yubimgr.example.com/api/admin/users/{id} \
+curl -X PATCH https://kleidia.example.com/api/admin/users/{id} \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{"is_active": false}'
@@ -148,20 +148,20 @@ curl -X PATCH https://yubimgr.example.com/api/admin/users/{id} \
 
 ```bash
 # Restart backend
-kubectl rollout restart deployment/yubimgr-services-backend -n yubimgr
+kubectl rollout restart deployment/kleidia-services-backend -n kleidia
 
 # Restart frontend
-kubectl rollout restart deployment/yubimgr-services-frontend -n yubimgr
+kubectl rollout restart deployment/kleidia-services-frontend -n kleidia
 
 # Restart all services
-kubectl rollout restart deployment -n yubimgr
+kubectl rollout restart deployment -n kleidia
 ```
 
 ### Clean Up Resources
 
 ```bash
 # Clean up completed jobs
-kubectl delete jobs --field-selector status.successful=1 -n yubimgr
+kubectl delete jobs --field-selector status.successful=1 -n kleidia
 
 # Clean up old logs (if log rotation not configured)
 # Manual cleanup of log files if needed
@@ -173,7 +173,7 @@ kubectl delete jobs --field-selector status.successful=1 -n yubimgr
 
 ```bash
 # Check CPU and memory usage
-kubectl top pods -n yubimgr
+kubectl top pods -n kleidia
 
 # Check node resources
 kubectl top nodes
@@ -200,7 +200,7 @@ Certificates are managed by your external load balancer. Verify certificate expi
 
 ```bash
 # Check certificate expiration
-echo | openssl s_client -connect yubimgr.example.com:443 2>/dev/null | \
+echo | openssl s_client -connect kleidia.example.com:443 2>/dev/null | \
   openssl x509 -noout -dates
 ```
 
@@ -211,20 +211,20 @@ echo | openssl s_client -connect yubimgr.example.com:443 2>/dev/null | \
 # Navigate to Admin → Security → Rotate Secrets
 
 # Or manually update in Vault
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
-  vault kv put secret/yubimgr/jwt-secret secret="new-secret"
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
+  vault kv put secret/kleidia/jwt-secret secret="new-secret"
 ```
 
 ### Database Maintenance
 
 ```bash
 # Vacuum database
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "VACUUM ANALYZE;"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "VACUUM ANALYZE;"
 
 # Check database size
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "SELECT pg_size_pretty(pg_database_size('yubimgr'));"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "SELECT pg_size_pretty(pg_database_size('kleidia'));"
 ```
 
 ## Troubleshooting Common Issues
@@ -233,22 +233,22 @@ kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
 
 ```bash
 # Identify resource-heavy pods
-kubectl top pods -n yubimgr --sort-by=memory
-kubectl top pods -n yubimgr --sort-by=cpu
+kubectl top pods -n kleidia --sort-by=memory
+kubectl top pods -n kleidia --sort-by=cpu
 
 # Check for memory leaks
-kubectl logs deployment/yubimgr-services-backend -n yubimgr | grep -i "out of memory"
+kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i "out of memory"
 ```
 
 ### Slow Response Times
 
 ```bash
 # Check database query performance
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "SELECT * FROM pg_stat_statements ORDER BY total_time DESC LIMIT 10;"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "SELECT * FROM pg_stat_statements ORDER BY total_time DESC LIMIT 10;"
 
 # Check network latency
-ping yubimgr.example.com
+ping kleidia.example.com
 ```
 
 ### Connection Issues
@@ -261,7 +261,7 @@ curl http://localhost:32570/api/health
 curl http://localhost:30805/
 
 # Test external access
-curl https://yubimgr.example.com/api/health
+curl https://kleidia.example.com/api/health
 ```
 
 ## Best Practices

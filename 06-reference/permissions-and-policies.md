@@ -2,7 +2,7 @@
 
 **Audience**: Administrators, Security Professionals  
 **Prerequisites**: Understanding of RBAC  
-**Outcome**: Understand permissions and policies in YubiMgr
+**Outcome**: Understand permissions and policies in Kleidia
 
 ## Role-Based Access Control (RBAC)
 
@@ -40,7 +40,7 @@
 
 ## Vault Policies
 
-### Backend Policy (`yubimgr-backend`)
+### Backend Policy (`kleidia-backend`)
 
 **PKI Operations**:
 - `pki/sign/*` - Sign certificates

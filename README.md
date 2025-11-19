@@ -1,13 +1,13 @@
-# YubiMgr Customer Documentation
+# Kleidia Customer Documentation
 
 **Version**: 2.2.0  
 **Last Updated**: January 2025
 
 ## About This Documentation
 
-This documentation is designed for **YubiMgr customers** who need to:
+This documentation is designed for **Kleidia customers** who need to:
 
-- **Deploy and operate** YubiMgr in production environments
+- **Deploy and operate** Kleidia in production environments
 - **Understand the architecture** and security model
 - **Configure and maintain** the system
 - **Use the system** for YubiKey management
@@ -61,7 +61,7 @@ This documentation is designed for **YubiMgr customers** who need to:
 
 ## Quick Start
 
-1. **New to YubiMgr?** Start with [Overview](00-overview/index.md)
+1. **New to Kleidia?** Start with [Overview](00-overview/index.md)
 2. **Planning deployment?** Read [Deployment Guide](03-deployment/prerequisites.md)
 3. **Need to configure?** See [Configuration](03-deployment/configuration.md)
 4. **Installing agent?** Follow [Agent Installation](05-using-the-system/agent-installation.md)
@@ -71,9 +71,9 @@ This documentation is designed for **YubiMgr customers** who need to:
 
 This documentation is written for:
 
-- **Operations Administrators**: Deploying, configuring, and maintaining YubiMgr
+- **Operations Administrators**: Deploying, configuring, and maintaining Kleidia
 - **Security Professionals**: Understanding security controls, compliance, and audit requirements
-- **End Users**: Using YubiMgr to manage YubiKey devices
+- **End Users**: Using Kleidia to manage YubiKey devices
 
 ## What's Not Included
 
@@ -91,11 +91,11 @@ For technical support or questions about this documentation:
 
 - Check the troubleshooting sections in [Operations](04-operations/)
 - Review the [Reference](06-reference/) section for technical details
-- Contact your YubiMgr support representative
+- Contact your Kleidia support representative
 
 ## Documentation Version
 
-This documentation corresponds to **YubiMgr version 2.2.0**.
+This documentation corresponds to **Kleidia version 2.2.0**.
 
 For version-specific information, see [CHANGELOG](CHANGELOG.md).
 

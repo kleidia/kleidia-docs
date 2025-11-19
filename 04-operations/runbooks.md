@@ -1,7 +1,7 @@
 # Operational Runbooks
 
 **Audience**: Operations Administrators  
-**Prerequisites**: YubiMgr deployed  
+**Prerequisites**: Kleidia deployed  
 **Outcome**: Resolve common operational issues
 
 ## Runbook Overview
@@ -20,10 +20,10 @@ Users cannot pair agents with the system.
 curl http://127.0.0.1:56123/health
 
 # Check agent discovery
-curl http://127.0.0.1:56123/.well-known/yubimgr-agent
+curl http://127.0.0.1:56123/.well-known/kleidia-agent
 
 # Check backend logs
-kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i agent
+kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i agent
 ```
 
 ### Resolution
@@ -32,9 +32,9 @@ kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i agent
    ```bash
    # On user workstation
    # Start agent service
-   sudo systemctl start yubimgr-agent
+   sudo systemctl start kleidia-agent
    # Or run manually
-   ./yubimgr-agent
+   ./kleidia-agent
    ```
 
 2. **Agent Not Detected**
@@ -45,11 +45,11 @@ kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i agent
 3. **Key Registration Failed**
    ```bash
    # Check backend logs for registration errors
-   kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i register
+   kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i register
    
    # Check database for agent keys
-   kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-     psql -U yubiuser -d yubimgr -c "SELECT * FROM user_sessions WHERE agent_pubkey IS NOT NULL;"
+   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+     psql -U yubiuser -d kleidia -c "SELECT * FROM user_sessions WHERE agent_pubkey IS NOT NULL;"
    ```
 
 ## Device Revocation
@@ -69,22 +69,22 @@ Device needs to be revoked (lost, stolen, compromised, or user departure).
 2. **Verify Revocation**:
    ```bash
    # Check device status in database
-   kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-     psql -U yubiuser -d yubimgr -c \
+   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+     psql -U yubiuser -d kleidia -c \
      "SELECT id, serial, is_active, deleted_at FROM yubikeys WHERE serial = '<serial-number>';"
    ```
 
 3. **Verify Secrets Removed**:
    ```bash
    # Check Vault secrets (should be removed)
-   kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
+   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
      vault kv list yubikeys/data/ | grep <serial-number>
    ```
 
 4. **Verify Certificates Revoked**:
    ```bash
    # Check audit logs for certificate revocation
-   kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i "revoke.*certificate"
+   kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i "revoke.*certificate"
    ```
 
 ### Automatic Wipe Behavior
@@ -119,16 +119,16 @@ Backend returns 403 errors when accessing Vault.
 
 ```bash
 # Check Vault status
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
 
 # Check backend Vault authentication
-kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i vault
+kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i vault
 
 # Check AppRole credentials
-kubectl get secret vault-approle -n yubimgr
+kubectl get secret vault-approle -n kleidia
 
 # Test Vault authentication
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
   vault write auth/approle/login \
     role_id=<role-id> \
     secret_id=<secret-id>
@@ -139,12 +139,12 @@ kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
 1. **Policy Issues**
    ```bash
    # Check backend policy
-   kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
-     vault policy read yubimgr-backend
+   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
+     vault policy read kleidia-backend
    
    # Update policy if needed
-   kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
-     vault policy write yubimgr-backend - <<EOF
+   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
+     vault policy write kleidia-backend - <<EOF
    path "pki/sign/*" {
      capabilities = ["create", "read", "update"]
    }
@@ -163,7 +163,7 @@ kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
 3. **Token Expired**
    ```bash
    # Restart backend to get new token
-   kubectl rollout restart deployment/yubimgr-services-backend -n yubimgr
+   kubectl rollout restart deployment/kleidia-services-backend -n kleidia
    ```
 
 ## TLS Certificate Expiry
@@ -175,7 +175,7 @@ Browser shows certificate errors or certificate expired warnings.
 
 ```bash
 # Check certificate expiration
-echo | openssl s_client -connect yubimgr.example.com:443 2>/dev/null | \
+echo | openssl s_client -connect kleidia.example.com:443 2>/dev/null | \
   openssl x509 -noout -dates
 
 # Check Let's Encrypt certificates
@@ -205,10 +205,10 @@ Agents cannot connect or communicate with backend.
 curl http://127.0.0.1:56123/health
 
 # Check agent discovery
-curl http://127.0.0.1:56123/.well-known/yubimgr-agent
+curl http://127.0.0.1:56123/.well-known/kleidia-agent
 
 # Check backend logs
-kubectl logs -f deployment/yubimgr-services-backend -n yubimgr | grep -i agent
+kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i agent
 ```
 
 ### Resolution
@@ -254,7 +254,7 @@ kubectl top nodes
 2. **Clean Kubernetes**
    ```bash
    # Remove completed jobs
-   kubectl delete jobs --field-selector status.successful=1 -n yubimgr
+   kubectl delete jobs --field-selector status.successful=1 -n kleidia
    
    # Remove old logs (if log rotation not configured)
    ```
@@ -273,12 +273,12 @@ Slow queries, high database load.
 
 ```bash
 # Check database connections
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "SELECT count(*) FROM pg_stat_activity;"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "SELECT count(*) FROM pg_stat_activity;"
 
 # Check slow queries
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "
     SELECT query, calls, total_time, mean_time
     FROM pg_stat_statements
     ORDER BY mean_time DESC
@@ -297,12 +297,12 @@ kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
 2. **Slow Queries**
    ```bash
    # Vacuum database
-   kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-     psql -U yubiuser -d yubimgr -c "VACUUM ANALYZE;"
+   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+     psql -U yubiuser -d kleidia -c "VACUUM ANALYZE;"
    
    # Check for missing indexes
-   kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-     psql -U yubiuser -d yubimgr -c "
+   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+     psql -U yubiuser -d kleidia -c "
        SELECT schemaname, tablename, attname, n_distinct, correlation
        FROM pg_stats
        WHERE schemaname = 'public'
@@ -319,13 +319,13 @@ Pods restarting repeatedly.
 
 ```bash
 # Check pod status
-kubectl get pods -n yubimgr
+kubectl get pods -n kleidia
 
 # Check pod logs
-kubectl logs -f <pod-name> -n yubimgr
+kubectl logs -f <pod-name> -n kleidia
 
 # Check pod events
-kubectl describe pod <pod-name> -n yubimgr
+kubectl describe pod <pod-name> -n kleidia
 ```
 
 ### Resolution
@@ -338,7 +338,7 @@ kubectl describe pod <pod-name> -n yubimgr
 2. **Resource Constraints**
    ```bash
    # Check resource limits
-   kubectl describe pod <pod-name> -n yubimgr | grep -A 5 "Limits"
+   kubectl describe pod <pod-name> -n kleidia | grep -A 5 "Limits"
    
    # Increase resources if needed
    # Update Helm values and upgrade
@@ -355,39 +355,39 @@ kubectl describe pod <pod-name> -n yubimgr
 
 ```bash
 # Restart all pods
-kubectl rollout restart deployment -n yubimgr
+kubectl rollout restart deployment -n kleidia
 ```
 
 ### Database Recovery
 
 ```bash
 # Stop backend
-kubectl scale deployment/yubimgr-services-backend --replicas=0 -n yubimgr
+kubectl scale deployment/kleidia-services-backend --replicas=0 -n kleidia
 
 # Restore from backup
 gunzip -c backups/20250115/database.sql.gz | \
-  kubectl exec -i yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr
+  kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia
 
 # Restart backend
-kubectl scale deployment/yubimgr-services-backend --replicas=2 -n yubimgr
+kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia
 ```
 
 ### Vault Recovery
 
 ```bash
 # Stop backend
-kubectl scale deployment/yubimgr-services-backend --replicas=0 -n yubimgr
+kubectl scale deployment/kleidia-services-backend --replicas=0 -n kleidia
 
 # Restore Vault snapshot
 kubectl cp backups/20250115/vault-backup.snap \
-  yubimgr-platform-openbao-0:/tmp/vault-backup.snap -n yubimgr
+  kleidia-platform-openbao-0:/tmp/vault-backup.snap -n kleidia
 
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
   vault operator raft snapshot restore /tmp/vault-backup.snap
 
 # Restart backend
-kubectl scale deployment/yubimgr-services-backend --replicas=2 -n yubimgr
+kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia
 ```
 
 ## Related Documentation

@@ -1,12 +1,12 @@
 # Upgrades and Rollback
 
 **Audience**: Operations Administrators  
-**Prerequisites**: Helm installed, existing YubiMgr deployment  
-**Outcome**: Safely upgrade and rollback YubiMgr deployments
+**Prerequisites**: Helm installed, existing Kleidia deployment  
+**Outcome**: Safely upgrade and rollback Kleidia deployments
 
 ## Overview
 
-YubiMgr supports zero-downtime upgrades using Helm's rolling update capabilities. This guide covers upgrade procedures, rollback procedures, and best practices.
+Kleidia supports zero-downtime upgrades using Helm's rolling update capabilities. This guide covers upgrade procedures, rollback procedures, and best practices.
 
 ## Pre-Upgrade Checklist
 
@@ -25,20 +25,20 @@ Before upgrading:
 
 ```bash
 # Backup database
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
   pg_dumpall -U yubiuser > backup-$(date +%Y%m%d).sql
 
 # Backup Vault
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- \
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
   vault operator raft snapshot save /tmp/vault-backup.snap
 
-kubectl cp yubimgr-platform-openbao-0:/tmp/vault-backup.snap \
-  ./vault-backup-$(date +%Y%m%d).snap -n yubimgr
+kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \
+  ./vault-backup-$(date +%Y%m%d).snap -n kleidia
 
 # Save current Helm values
-helm get values yubimgr-platform -n yubimgr > platform-values-$(date +%Y%m%d).yaml
-helm get values yubimgr-data -n yubimgr > data-values-$(date +%Y%m%d).yaml
-helm get values yubimgr-services -n yubimgr > services-values-$(date +%Y%m%d).yaml
+helm get values kleidia-platform -n kleidia > platform-values-$(date +%Y%m%d).yaml
+helm get values kleidia-data -n kleidia > data-values-$(date +%Y%m%d).yaml
+helm get values kleidia-services -n kleidia > services-values-$(date +%Y%m%d).yaml
 ```
 
 ### 2. Update Helm Charts
@@ -55,47 +55,47 @@ helm repo update
 
 ```bash
 # Upgrade platform chart
-helm upgrade yubimgr-platform ./helm/yubimgr-platform \
-  --namespace yubimgr \
+helm upgrade kleidia-platform ./helm/kleidia-platform \
+  --namespace kleidia \
   --values platform-values.yaml
 
 # Wait for upgrade to complete
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=openbao -n yubimgr --timeout=300s
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=openbao -n kleidia --timeout=300s
 
 # Verify OpenBao status
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
 ```
 
 ### 4. Upgrade Data Layer (PostgreSQL)
 
 ```bash
 # Upgrade data chart
-helm upgrade yubimgr-data ./helm/yubimgr-data \
-  --namespace yubimgr \
+helm upgrade kleidia-data ./helm/kleidia-data \
+  --namespace kleidia \
   --values data-values.yaml
 
 # Wait for upgrade
-kubectl wait --for=condition=ready pod -l app=postgres-cluster -n yubimgr --timeout=300s
+kubectl wait --for=condition=ready pod -l app=postgres-cluster -n kleidia --timeout=300s
 
 # Verify database
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "SELECT version();"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "SELECT version();"
 ```
 
 ### 5. Upgrade Services (Backend, Frontend)
 
 ```bash
 # Upgrade services chart
-helm upgrade yubimgr-services ./helm/yubimgr-services \
-  --namespace yubimgr \
+helm upgrade kleidia-services ./helm/kleidia-services \
+  --namespace kleidia \
   --values services-values.yaml
 
 # Wait for rollout
-kubectl rollout status deployment/yubimgr-services-backend -n yubimgr
-kubectl rollout status deployment/yubimgr-services-frontend -n yubimgr
+kubectl rollout status deployment/kleidia-services-backend -n kleidia
+kubectl rollout status deployment/kleidia-services-frontend -n kleidia
 
 # Verify services
-curl https://yubimgr.example.com/api/health
+curl https://kleidia.example.com/api/health
 ```
 
 ## Rollback Procedures
@@ -104,23 +104,23 @@ curl https://yubimgr.example.com/api/health
 
 ```bash
 # List revisions
-helm history yubimgr-services -n yubimgr
+helm history kleidia-services -n kleidia
 
 # Rollback to previous revision
-helm rollback yubimgr-services -n yubimgr
+helm rollback kleidia-services -n kleidia
 
 # Rollback to specific revision
-helm rollback yubimgr-services 2 -n yubimgr
+helm rollback kleidia-services 2 -n kleidia
 ```
 
 ### Rollback Platform
 
 ```bash
 # Rollback platform
-helm rollback yubimgr-platform -n yubimgr
+helm rollback kleidia-platform -n kleidia
 
 # Verify OpenBao
-kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
 ```
 
 ### Rollback Data Layer
@@ -129,11 +129,11 @@ kubectl exec -it yubimgr-platform-openbao-0 -n yubimgr -- vault status
 
 ```bash
 # Rollback data layer
-helm rollback yubimgr-data -n yubimgr
+helm rollback kleidia-data -n kleidia
 
 # Verify database
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "SELECT version();"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "SELECT version();"
 ```
 
 ## Upgrade Strategies
@@ -152,8 +152,8 @@ For major upgrades:
 
 ```bash
 # Deploy new version with different release name
-helm install yubimgr-services-v2 ./helm/yubimgr-services \
-  --namespace yubimgr \
+helm install kleidia-services-v2 ./helm/kleidia-services \
+  --namespace kleidia \
   --set backend.service.nodePort=32571 \
   --set frontend.service.nodePort=30806
 
@@ -164,7 +164,7 @@ curl http://localhost:32571/api/health
 # Update load balancer configuration to point to new NodePorts
 
 # Remove old version after verification
-helm uninstall yubimgr-services -n yubimgr
+helm uninstall kleidia-services -n kleidia
 ```
 
 ## Database Migrations
@@ -181,11 +181,11 @@ Backend automatically runs migrations on startup:
 
 ```bash
 # Check migration status
-kubectl logs deployment/yubimgr-services-backend -n yubimgr | grep -i migrate
+kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i migrate
 
 # Run migrations manually (if needed)
-kubectl exec -it deployment/yubimgr-services-backend -n yubimgr -- \
-  /app/yubimgr-backend migrate
+kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
+  /app/kleidia-backend migrate
 ```
 
 ## Version Compatibility
@@ -194,14 +194,14 @@ kubectl exec -it deployment/yubimgr-services-backend -n yubimgr -- \
 
 ```bash
 # Check Helm chart versions
-helm list -n yubimgr
+helm list -n kleidia
 
 # Check application versions
-curl https://yubimgr.example.com/api/health | jq .version
+curl https://kleidia.example.com/api/health | jq .version
 
 # Check database version
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "SELECT version();"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "SELECT version();"
 ```
 
 ### Compatibility Matrix
@@ -219,34 +219,34 @@ kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
 
 ```bash
 # Check pod status
-kubectl get pods -n yubimgr
+kubectl get pods -n kleidia
 
 # Check pod logs
-kubectl logs -f <pod-name> -n yubimgr
+kubectl logs -f <pod-name> -n kleidia
 
 # Check events
-kubectl get events -n yubimgr --sort-by=.metadata.creationTimestamp
+kubectl get events -n kleidia --sort-by=.metadata.creationTimestamp
 ```
 
 ### Image Pull Errors
 
 ```bash
 # Check image availability
-kubectl describe pod <pod-name> -n yubimgr | grep -i image
+kubectl describe pod <pod-name> -n kleidia | grep -i image
 
 # Verify image pull configuration
-kubectl get pod <pod-name> -n yubimgr -o jsonpath='{.spec.containers[*].image}'
+kubectl get pod <pod-name> -n kleidia -o jsonpath='{.spec.containers[*].image}'
 ```
 
 ### Database Migration Failures
 
 ```bash
 # Check migration logs
-kubectl logs deployment/yubimgr-services-backend -n yubimgr | grep -i migration
+kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i migration
 
 # Check database connection
-kubectl exec -it yubimgr-data-postgres-cluster-0 -n yubimgr -- \
-  psql -U yubiuser -d yubimgr -c "\dt"
+kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+  psql -U yubiuser -d kleidia -c "\dt"
 ```
 
 ## Best Practices

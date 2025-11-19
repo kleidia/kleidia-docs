@@ -2,11 +2,11 @@
 
 **Audience**: Operations Administrators, Security Professionals  
 **Prerequisites**: Basic understanding of Kubernetes and security concepts  
-**Outcome**: Understand the fundamental principles that guide YubiMgr's architecture
+**Outcome**: Understand the fundamental principles that guide Kleidia's architecture
 
 ## 1. Kubernetes-First Deployment
 
-YubiMgr is designed to run in Kubernetes environments.
+Kleidia is designed to run in Kubernetes environments.
 
 ### Key Points
 - All server components run in Kubernetes (frontend, backend, database, OpenBao)
