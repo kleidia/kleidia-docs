@@ -174,17 +174,65 @@ openssl s_client -connect kleidia.example.com:443 -servername kleidia.example.co
 
 Open browser to: `https://kleidia.example.com`
 
-### 2. Default Credentials
+### 2. First-Time Setup: Create Administrator Account
 
-- **Username**: `admin`
-- **Password**: `password` (change immediately!)
+On first access, you'll see the bootstrap screen to create the initial administrator account:
 
-### 3. Initial Configuration
+1. **Create Admin Account**:
+   - Default username: `admin` (customizable)
+   - Set a strong password
+   - Confirm password
+   - Click "Create Admin"
 
-1. Change admin password
-2. Configure organization settings
-3. Review security policies
-4. Set up backup procedures
+2. **Automatic Login**: After creation, you'll be automatically logged in
+
+**Security Notes**:
+- The bootstrap screen only appears on fresh installations with no admin users
+- A race-condition lock prevents multiple simultaneous admin account creations
+- The lock expires after 10 minutes if abandoned
+
+### 3. OpenBao Bootstrap Keys Modal
+
+**⚠️ CRITICAL SECURITY STEP**
+
+Immediately after first admin login, a **non-dismissible modal** will appear displaying OpenBao initialization keys:
+
+**What You'll See**:
+- **Root Token**: Master access token for OpenBao
+- **Recovery Key 1, 2, 3**: Emergency recovery keys for OpenBao
+
+**Required Actions**:
+1. **Copy all keys** to a secure location:
+   - Use a password manager
+   - Store in encrypted storage
+   - Print and store in a safe
+   - **DO NOT** store in plain text files
+2. **Use the copy buttons** provided for each key
+3. **Check the acknowledgment checkbox**: "I have securely saved these keys..."
+4. **Click "Confirm & Delete Keys from Cluster"**
+
+**Important Notes**:
+- ⚠️ The modal **cannot be dismissed** without confirming
+- ⚠️ Keys are **permanently deleted** from Kubernetes after confirmation
+- ⚠️ **You cannot retrieve these keys later**
+- ⚠️ These keys are needed for emergency OpenBao recovery operations
+- ✅ The modal only appears **once** on first admin login
+- ✅ Subsequent logins will not show the modal
+
+**What Happens After Confirmation**:
+- Keys are deleted from the Kubernetes secret `openbao-init-keys`
+- Action is logged in audit logs
+- Dashboard loads normally
+- Keys are no longer accessible from the cluster
+
+### 4. Initial Configuration
+
+After securing the OpenBao keys, complete the initial configuration:
+
+1. Configure organization settings
+2. Review security policies
+3. Set up backup procedures
+4. Create additional admin or user accounts
 
 ## Troubleshooting
 

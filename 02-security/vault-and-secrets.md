@@ -131,9 +131,81 @@ Backend authenticates to Vault using **AppRole**:
 
 ## Vault Configuration
 
-### Initial Setup
+### OpenBao Initialization and Bootstrap
 
-Vault is automatically configured during Helm deployment:
+During initial Helm deployment, OpenBao (Vault) is automatically initialized:
+
+#### Automatic Initialization Process
+
+1. **OpenBao Pod Starts**: StatefulSet creates the OpenBao pod
+2. **Auto-Initialization**: Helm hook job initializes OpenBao:
+   - Generates root token
+   - Generates 3 recovery keys (for static seal)
+   - Stores keys temporarily in Kubernetes secret `openbao-init-keys`
+3. **Configuration Applied**: 
+   - Enables KV v2 secrets engine at `yubikeys/`
+   - Enables PKI secrets engine at `pki/`
+   - Configures Kubernetes authentication
+   - Creates backend policies
+
+#### Bootstrap Keys Security Model
+
+**Initialization Keys Generated**:
+- **Root Token**: Master administrative token
+- **Recovery Keys (3)**: Used for emergency recovery operations
+- **Unseal Key**: (Legacy compatibility, not used with static seal)
+
+**Key Storage Flow**:
+
+1. **Temporary Storage** (During Installation):
+   - Keys stored in Kubernetes secret: `openbao-init-keys` in namespace
+   - Secret contains: `root-token`, `recovery-key-1`, `recovery-key-2`, `recovery-key-3`
+   - Only accessible to backend service account with specific RBAC permissions
+
+2. **First Admin Login** (Key Retrieval):
+   - Admin user logs in for first time
+   - Backend detects `openbao-init-keys` secret exists
+   - **Modal automatically displays** keys to admin user
+   - Admin must copy and securely store keys
+   - Admin confirms keys are saved
+
+3. **Secure Deletion** (Post-Confirmation):
+   - Backend deletes `openbao-init-keys` secret from Kubernetes
+   - Keys no longer exist in cluster
+   - Action logged in audit trail
+   - Keys only exist in admin's secure storage
+
+**Security Rationale**:
+- Keys must be displayed to admin for disaster recovery scenarios
+- Keys should not remain in cluster indefinitely (reduces attack surface)
+- Manual deletion ensures admin has secured the keys
+- One-time display prevents repeated exposure
+
+#### RBAC Permissions for Bootstrap Keys
+
+Backend service account has scoped permissions:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backend-secret-reader
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["openbao-init-keys"]
+  verbs: ["get", "delete"]
+```
+
+**Security Features**:
+- Scoped to specific secret name only
+- Only `get` and `delete` verbs (no create/update)
+- Namespace-scoped (not cluster-wide)
+- Only backend pod can access
+
+### Post-Initialization Setup
+
+After bootstrap keys are handled, Vault is fully configured:
 
 1. **Enable KV v2**: `vault secrets enable -path=yubikeys kv-v2`
 2. **Enable PKI**: `vault secrets enable pki`

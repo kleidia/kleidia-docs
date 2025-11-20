@@ -4,6 +4,98 @@
 **Prerequisites**: Admin account, Kleidia deployed  
 **Outcome**: Administer Kleidia system and users
 
+## First-Time Setup
+
+### Creating the Initial Administrator Account
+
+On a fresh Kleidia installation, the first visitor will see a bootstrap screen to create the initial administrator account:
+
+1. **Navigate** to the Kleidia web interface
+2. **Enter administrator credentials**:
+   - Username (default: `admin`)
+   - Password (minimum 8 characters)
+   - Confirm password
+3. **Click "Create Admin"**
+4. **Automatic login** to the dashboard
+
+**Bootstrap Security**:
+- Only available when no admin users exist
+- Race-condition protection prevents multiple simultaneous creations
+- 10-minute timeout on abandoned bootstrap attempts
+- Full audit logging of bootstrap actions
+
+### OpenBao Bootstrap Keys - Critical First Step
+
+**⚠️ IMMEDIATE ACTION REQUIRED**
+
+After creating the admin account and logging in for the first time, you will see a **critical security modal** displaying OpenBao initialization keys.
+
+#### What Are These Keys?
+
+The OpenBao initialization keys are master credentials for your Kleidia installation's secrets management system:
+
+- **Root Token**: Master administrative access to OpenBao (Vault)
+- **Recovery Keys (3)**: Emergency recovery keys for OpenBao operations
+
+#### Why Are They Important?
+
+These keys are needed for:
+- **Emergency recovery** of OpenBao if it becomes sealed
+- **Root-level operations** that require elevated Vault access
+- **Disaster recovery** scenarios
+- **System migration** or reinstallation
+
+**Without these keys, you may lose access to all encrypted secrets if OpenBao fails.**
+
+#### Securing the Keys
+
+**The modal will display**:
+- Root Token
+- Recovery Key 1, 2, and 3
+- Unseal Key (if applicable)
+
+**Required Actions**:
+
+1. **Copy each key** using the provided copy buttons
+2. **Store keys securely** in one or more of:
+   - Enterprise password manager (1Password, LastPass, BitWarden)
+   - Encrypted vault storage
+   - Physical safe (printed and sealed)
+   - Air-gapped encrypted USB drive
+3. **Never store keys in**:
+   - Plain text files
+   - Email
+   - Cloud storage (Dropbox, Google Drive)
+   - Unencrypted locations
+4. **Check the acknowledgment checkbox**
+5. **Click "Confirm & Delete Keys from Cluster"**
+
+#### Modal Characteristics
+
+- **Non-dismissible**: Cannot close with ESC or clicking outside
+- **Copy functionality**: Each key has a copy-to-clipboard button
+- **Visual feedback**: Buttons show "Copied!" confirmation
+- **One-time display**: Keys shown only once, then permanently deleted
+- **Mandatory acknowledgment**: Checkbox must be checked before deletion
+
+#### What Happens After Confirmation
+
+1. Keys are **permanently deleted** from Kubernetes cluster
+2. Action is logged in audit trail
+3. Modal closes and dashboard loads
+4. Keys are **no longer accessible** from the system
+5. **You cannot retrieve them again** - they must be recovered from your secure storage
+
+#### If Keys Are Lost
+
+Without the OpenBao keys:
+- Normal operations continue (daily YubiKey management works)
+- Emergency recovery of OpenBao may be impossible
+- System reinstallation may be required in disaster scenarios
+- You will need to contact Kleidia support for recovery options
+
+**Best Practice**: Store keys in multiple secure locations with different access controls.
+
 ## Admin Dashboard
 
 ### Accessing Admin Panel

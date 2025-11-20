@@ -291,6 +291,173 @@ kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
   vault operator raft snapshot restore /tmp/vault-backup.snap
 ```
 
+## Bootstrap and First-Time Setup Issues
+
+### Admin Account Creation Not Available
+
+#### Symptoms
+- Cannot see "Create Admin" form on login page
+- Only regular login form is displayed
+
+#### Diagnosis
+
+```bash
+# Check if admin users exist
+kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
+  curl http://localhost:8080/api/bootstrap/status
+
+# Expected: {"pending": true} if no admin exists
+# Expected: {"pending": false} if admin already created
+```
+
+#### Solutions
+
+1. **Admin Already Exists**
+   - An admin user was already created
+   - Use existing admin credentials to log in
+   - Contact system administrator for credentials
+
+2. **Database Connection Issues**
+   - Check backend can connect to database
+   - Verify database is ready
+   ```bash
+   kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i bootstrap
+   ```
+
+### OpenBao Bootstrap Keys Modal Issues
+
+#### Symptoms
+- Modal does not appear after first admin login
+- Modal appears but keys are empty
+- Cannot confirm and delete keys
+
+#### Diagnosis
+
+```bash
+# Check if OpenBao initialization keys secret exists
+kubectl get secret openbao-init-keys -n kleidia
+
+# Check backend logs for key retrieval
+kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i "OPENBAO_KEYS"
+
+# Check backend has RBAC permissions
+kubectl get role backend-secret-reader -n kleidia -o yaml
+```
+
+#### Solutions
+
+1. **Keys Secret Already Deleted**
+   - **Symptom**: Secret not found
+   - **Meaning**: Keys were already handled on a previous login
+   - **Action**: This is normal - modal only appears once
+   - **Recovery**: If keys were not saved, see "Lost OpenBao Keys" section
+
+2. **Backend Cannot Access Secret**
+   - **Symptom**: Backend logs show permission denied
+   - **Solution**: Verify RBAC permissions
+   ```bash
+   # Check RoleBinding
+   kubectl get rolebinding backend-secret-reader -n kleidia -o yaml
+   
+   # Verify backend ServiceAccount
+   kubectl get sa backend -n kleidia
+   ```
+
+3. **Keys Not Generated During Installation**
+   - **Symptom**: Secret exists but is empty
+   - **Solution**: Check OpenBao initialization job
+   ```bash
+   # Check initialization job logs
+   kubectl logs -n kleidia -l app=openbao-init --tail=100
+   
+   # Verify OpenBao status
+   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
+   ```
+
+### Lost OpenBao Bootstrap Keys
+
+#### Symptoms
+- OpenBao keys were not saved during first-time setup
+- Need to recover access to OpenBao root token
+
+#### Impact
+- **Normal operations continue**: Daily YubiKey management works fine
+- **Limited impact**: Backend uses AppRole authentication (not root token)
+- **Emergency operations affected**: Cannot perform root-level Vault operations
+
+#### Diagnosis
+
+```bash
+# Check if keys secret still exists (unlikely after confirmation)
+kubectl get secret openbao-init-keys -n kleidia
+
+# Check audit logs for key access
+kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
+  curl http://localhost:8080/api/admin/audit-logs | grep openbao.keys
+```
+
+#### Recovery Options
+
+1. **Secret Still Exists** (Before Modal Confirmation)
+   - Get secret directly from Kubernetes
+   ```bash
+   # Extract root token
+   kubectl get secret openbao-init-keys -n kleidia -o jsonpath='{.data.root-token}' | base64 -d
+   
+   # Extract recovery keys
+   kubectl get secret openbao-init-keys -n kleidia -o jsonpath='{.data.recovery-key-1}' | base64 -d
+   kubectl get secret openbao-init-keys -n kleidia -o jsonpath='{.data.recovery-key-2}' | base64 -d
+   kubectl get secret openbao-init-keys -n kleidia -o jsonpath='{.data.recovery-key-3}' | base64 -d
+   ```
+   - **Save these keys securely** before clicking "Confirm" in the modal
+
+2. **Secret Already Deleted** (After Modal Confirmation)
+   - **Option A**: Continue normal operations (no impact on daily use)
+   - **Option B**: Contact Kleidia support for advanced recovery procedures
+   - **Option C**: If disaster recovery is required, may need system reinstallation
+
+3. **Prevention for Future**
+   - Always save keys before confirming deletion
+   - Store keys in multiple secure locations
+   - Use enterprise password manager
+   - Print and store in physical safe
+
+### Bootstrap Lock Timeout
+
+#### Symptoms
+- "Bootstrap in progress" error when trying to create admin
+- Cannot access admin creation form
+
+#### Diagnosis
+
+```bash
+# Check active bootstrap locks
+kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
+  curl http://localhost:8080/api/bootstrap/status
+
+# Check backend logs
+kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i bootstrap
+```
+
+#### Solutions
+
+1. **Wait for Lock Expiry**
+   - Bootstrap locks expire after 10 minutes
+   - Wait and retry admin creation
+
+2. **Clear Expired Locks** (Database Access)
+   ```bash
+   # Connect to database
+   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+     psql -U yubiuser -d kleidia
+   
+   # Check locks
+   SELECT * FROM bootstrap_locks WHERE expires_at > NOW();
+   
+   # Delete expired locks (if needed)
+   DELETE FROM bootstrap_locks WHERE expires_at < NOW();
+   ```
+
 ## Getting Help
 
 ### Information to Collect
