@@ -1,7 +1,7 @@
 # Kleidia Customer Documentation
 
 **Version**: 2.2.0  
-**Last Updated**: January 2025
+**Last Updated**: November 2025
 
 ## About This Documentation
 

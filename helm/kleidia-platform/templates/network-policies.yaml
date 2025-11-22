@@ -1,0 +1,174 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kleidia-internal
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector: {}  # Apply to all pods in the namespace
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow all traffic from pods in the same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+  # Allow traffic from kube-system (for DNS, metrics, etc.)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+  egress:
+  # Allow all traffic to pods in the same namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ .Values.global.namespace }}
+  # Allow DNS queries to kube-system
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow HTTPS/HTTP egress (for external services, registries, etc.)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+  # Allow all egress to cluster IPs (for service discovery)
+  - to:
+    - namespaceSelector: {}
+---
+# Allow OpenBao unrestricted egress to reach Kubernetes API server for TokenReview
+# CRITICAL: OpenBao needs to call K8s API to validate service account tokens
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openbao-api-server-access
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openbao
+  policyTypes:
+  - Egress
+  egress:
+  # Allow all egress - OpenBao needs unrestricted access to validate tokens
+  - {}
+---
+# Allow OpenBao setup/init jobs to access Kubernetes API server
+# This job needs broad network access for initialization tasks
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openbao-init-api-access
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchExpressions:
+    - key: app
+      operator: In
+      values:
+      - openbao-init
+  policyTypes:
+  - Egress
+  egress:
+  # Allow all egress - this job needs to access K8s API, OpenBao, and DNS
+  - {}
+---
+# Specific policy for backend to access OpenBao and Postgres
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-access-policy
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Egress
+  egress:
+  # Allow backend to reach Postgres
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow backend to reach OpenBao
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: openbao
+    ports:
+    - protocol: TCP
+      port: 8200
+  # Allow backend to reach license service
+  - to:
+    - podSelector:
+        matchLabels:
+          app: license-service
+    ports:
+    - protocol: TCP
+      port: 8081
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow HTTPS/HTTP egress for external services (OIDC providers, K8s API server, etc.)
+  # No 'to' selector = allow all destinations
+  - ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+---
+# Allow external traffic to frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-ingress-policy
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow traffic from anywhere (NodePort/LoadBalancer)
+  - {}
+---
+# Allow backend API access
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-ingress-policy
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow traffic from frontend
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend
+  # Allow traffic from anywhere (NodePort/LoadBalancer for direct API access)
+  - {}
+

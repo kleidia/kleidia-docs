@@ -1,0 +1,28 @@
+global:
+  namespace: kleidia          # Kubernetes namespace to install into
+  registry:
+    host: ""                  # Optional: container registry host for all images (required for air-gapped environments)
+                              # Example: "registry.example.com:5000"
+                              # When set, ALL images will be pulled from this registry
+    authSecret: ""            # Optional: docker-registry secret name for private registries
+  imagePullSecrets: []        # Optional: list of imagePullSecrets to attach to pods
+
+# Third-party image repositories (can be mirrored to private registry for air-gapped deployments)
+# When global.registry.host is set, these images will be pulled from: <registry.host>/<repository>:<tag>
+thirdPartyImages:
+  postgres: "postgres:15-alpine"     # PostgreSQL database image
+
+storage:
+  className: "nfs-client"    # Explicitly use cluster NFS StorageClass for Postgres
+
+postgres:
+  enabled: true
+  version: "15"               # PostgreSQL version
+  database: kleidia           # Database name
+  username: kleidiauser       # Database user (password is stored in a secret)
+  storage:
+    size: 10Gi               # PVC size for Postgres data
+
+# RabbitMQ removed - HTTP-based agent architecture
+# Agents now communicate via HTTPS on localhost (frontend-mediated)
+

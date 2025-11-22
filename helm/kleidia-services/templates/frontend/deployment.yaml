@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: frontend
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      {{- /* Registry authentication: prefer explicit global.imagePullSecrets, else fallback to global.registry.authSecret */}}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- else if .Values.global.registry.authSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.registry.authSecret }}
+      {{- end }}
+      {{- if .Values.global.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector | nindent 8 }}
+      {{- end }}
+      initContainers:
+      # Wait for backend to be ready
+      - name: wait-for-backend
+        image: {{ include "kleidia-services.image" (dict "repository" "curlimages/curl" "tag" "latest" "context" $) }}
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for backend..."
+          until curl -sf http://backend.{{ .Values.global.namespace }}.svc.cluster.local:8080/health >/dev/null 2>&1; do
+            echo "Backend not ready yet..."
+            sleep 5
+          done
+          echo "✅ Backend ready!"
+      
+      containers:
+      - name: frontend
+        image: "{{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        # Use relative /api path - HAProxy will route to backend
+        # This avoids mixed content errors and works from browser
+        - name: NUXT_PUBLIC_API_BASE
+          value: /api
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3
+        
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+

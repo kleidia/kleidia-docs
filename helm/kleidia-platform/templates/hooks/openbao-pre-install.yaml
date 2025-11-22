@@ -1,0 +1,31 @@
+{{- if .Values.openbao.enabled }}
+---
+# ============================================================================
+# OpenBao Pre-Install Hook - Token Secret Creation
+# ============================================================================
+#
+# This hook runs BEFORE OpenBao pod starts to create the long-lived service
+# account token that OpenBao will use for Kubernetes authentication.
+#
+# For Kubernetes 1.24+, service account tokens are no longer automatically
+# created, so we must explicitly create a Secret with the token annotation.
+#
+# This hook:
+# 1. Creates the openbao-token Secret resource
+# 2. Kubernetes automatically populates the token field
+# 3. OpenBao can then use this token for Kubernetes auth configuration
+#
+# ============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openbao-token
+  namespace: {{ .Values.global.namespace }}
+  annotations:
+    kubernetes.io/service-account.name: openbao
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+type: kubernetes.io/service-account-token
+{{- end }}
+

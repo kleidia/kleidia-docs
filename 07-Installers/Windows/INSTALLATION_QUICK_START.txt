@@ -1,0 +1,224 @@
+================================================================================
+Kleidia Agent - Windows Installation Quick Start
+================================================================================
+
+VERSION: 0.4.5+
+DATE: November 2025
+
+================================================================================
+PACKAGE CONTENTS
+================================================================================
+
+This package contains:
+
+  kleidia-agent-<version>-unsigned.msi
+    - Standalone agent MSI
+    - For enterprise deployment (GPO, Intune, SCCM)
+    - Supports silent installation
+
+================================================================================
+INSTALLATION
+================================================================================
+
+  msiexec /i yubikey-manager.msi /qn /norestart
+  msiexec /i kleidia-agent-<version>-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
+
+OPTION 3: Enterprise Deployment (IT Administrators)
+----------------------------------------------------
+
+For deployment via Group Policy, Intune, or SCCM, see:
+  ENTERPRISE_DEPLOYMENT.md
+
+================================================================================
+SYSTEM REQUIREMENTS
+================================================================================
+
+Operating System:
+  - Windows 10 (version 1607 or later)
+  - Windows 11
+  - Windows Server 2016 or later
+
+Architecture:
+  - 64-bit (x64) only
+
+Prerequisites:
+  - .NET Framework 4.5+ (included in Windows 10+)
+  - Administrator privileges for installation
+  - Network access to backend server (HTTPS)
+
+================================================================================
+POST-INSTALLATION VERIFICATION
+================================================================================
+
+After installation, verify the agent is running:
+
+1. Check Windows Services:
+   - Open Services (services.msc)
+   - Look for "KleidiaAgent" service
+   - Status should be "Running"
+
+2. Check via PowerShell:
+   Get-Service -Name "KleidiaAgent"
+
+3. Test local listener:
+   http://127.0.0.1:56123/health
+
+4. Check configuration:
+   C:\ProgramData\Kleidia\agent\agent.toml
+
+================================================================================
+CONFIGURATION
+================================================================================
+
+Configuration file location:
+  C:\ProgramData\Kleidia\agent\agent.toml
+
+Example configuration:
+
+  port = 56123
+  name = "Kleidia Agent"
+  backend_url = "https://kleidia.example.com"
+  allowed_origins = [
+      "https://kleidia.example.com"
+  ]
+  
+  [logging]
+  level = "info"
+
+To apply configuration changes:
+  1. Edit C:\ProgramData\Kleidia\agent\agent.toml
+  2. Restart service: Restart-Service -Name "KleidiaAgent"
+
+================================================================================
+UNINSTALLATION
+================================================================================
+
+Via Windows Settings:
+  Settings → Apps → Apps & features → Kleidia Agent → Uninstall
+
+Via PowerShell:
+  $app = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq "Kleidia Agent" }
+  $app.Uninstall()
+
+Via MSI (silent):
+  msiexec /x kleidia-agent-<version>-unsigned.msi /qn
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Service won't start:
+  - Check Event Viewer → Application logs
+  - Verify configuration file exists
+  - Ensure backend URL is correct
+
+Cannot connect to backend:
+  - Test connectivity: Test-NetConnection -ComputerName kleidia.example.com -Port 443
+  - Check Windows Firewall settings
+  - Verify proxy settings (if applicable)
+
+Installation fails:
+  - Check installation log: C:\Windows\Temp\kleidia-install.log
+  - Ensure running as Administrator
+  - Verify Windows Installer service is running
+
+YubiKey not detected:
+  - Ensure YubiKey Manager is installed
+  - Verify YubiKey is inserted
+  - Check Windows Device Manager for smartcard readers
+
+================================================================================
+LOGS AND DIAGNOSTICS
+================================================================================
+
+Installation logs:
+  C:\Windows\Temp\kleidia-install.log
+  C:\Windows\Temp\ykman-install.log
+
+Service logs:
+  Windows Event Viewer → Application → Source: KleidiaAgent
+
+Agent logs (if file logging configured):
+  C:\ProgramData\Kleidia\agent\agent.log
+
+Health check PowerShell script:
+  $service = Get-Service -Name "KleidiaAgent"
+  if ($service.Status -eq "Running") { 
+      Write-Host "Agent is healthy" -ForegroundColor Green
+  }
+
+================================================================================
+COMMAND-LINE REFERENCE
+================================================================================
+
+MSI Installation:
+  /i          Install
+  /x          Uninstall
+  /qn         Quiet (no UI)
+  /passive    Progress bar only
+  /norestart  Don't restart after installation
+  /L*v <file> Verbose logging to file
+
+MSI Properties:
+  BACKEND_URL=<url>           Backend server URL (required)
+  INSTALLFOLDER=<path>        Installation directory
+  INSTALLSERVICE=1            Install as service (1=yes, 0=no)
+
+Example:
+  msiexec /i kleidia-agent-0.4.5-unsigned.msi /qn /norestart /L*v install.log BACKEND_URL=https://kleidia.example.com
+
+EXE Bundle Options:
+  /quiet      Silent installation
+  /passive    Progress bar only
+  /log <file> Log to file
+  BackendURL=<url> Set backend URL
+
+Example:
+  kleidia-agent-installer-0.4.5.exe /quiet /log install.log BackendURL=https://kleidia.example.com
+
+================================================================================
+FIREWALL REQUIREMENTS
+================================================================================
+
+Outbound connections required:
+  - Backend server: TCP 443 (HTTPS)
+  - No inbound connections required
+
+Local listener (localhost only):
+  - 127.0.0.1:56123 (HTTP)
+  - Used by browser frontend to communicate with agent
+  - Not accessible from network
+
+================================================================================
+SECURITY NOTES
+================================================================================
+
+- Agent runs as Local System (required for YubiKey access)
+- Configuration files protected with NTFS permissions (SYSTEM + Administrators only)
+- All backend communication over HTTPS (TLS 1.2+)
+- Local listener bound to 127.0.0.1 only (not accessible from network)
+- No sensitive data stored in configuration (JWT tokens are temporary)
+
+================================================================================
+ENTERPRISE ADMINISTRATORS
+================================================================================
+
+For mass deployment scenarios, please refer to:
+  ENTERPRISE_DEPLOYMENT.md
+
+This comprehensive guide includes:
+  - Group Policy (GPO) deployment with startup scripts
+  - Microsoft Intune / Endpoint Manager deployment
+  - Microsoft SCCM (Configuration Manager) deployment
+  - PowerShell-based remote deployment
+  - Pre-configuration strategies using agent.toml
+  - Monitoring and health check scripts
+  - Centralized logging and reporting
+  - Best practices and troubleshooting
+
+================================================================================
+
+Copyright (c) 2025 Kleidia. All rights reserved.
+
+================================================================================
+

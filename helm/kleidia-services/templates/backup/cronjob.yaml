@@ -1,0 +1,181 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kleidia-backup
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: backup
+spec:
+  # Schedule from settings (default: daily at 2 AM)
+  # Can be overridden via values.yaml or updated via settings API
+  schedule: {{ .Values.backup.schedule | default "0 2 * * *" }}
+  # Suspend if disabled in settings
+  suspend: {{ .Values.backup.suspend | default false }}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+      template:
+        metadata:
+          labels:
+            app: backup
+        spec:
+          restartPolicy: OnFailure
+          {{- if .Values.global.imagePullSecrets }}
+          imagePullSecrets:
+          {{- range .Values.global.imagePullSecrets }}
+            - name: {{ . }}
+          {{- end }}
+          {{- else if .Values.global.registry.authSecret }}
+          imagePullSecrets:
+            - name: {{ .Values.global.registry.authSecret }}
+          {{- end }}
+          {{- if .Values.global.nodeSelector }}
+          nodeSelector:
+            {{- toYaml .Values.global.nodeSelector | nindent 12 }}
+          {{- end }}
+          containers:
+          # Database backup container
+          - name: db-backup
+            image: {{ include "kleidia-services.image" (dict "repository" "postgres" "tag" "16-alpine" "context" $) }}
+            command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "=== Starting Database Backup ==="
+              
+              # Install curl and jq
+              apk add --no-cache curl jq
+              
+              BACKEND_URL="http://backend.{{ .Values.global.namespace }}.svc.cluster.local:8080"
+              INTERNAL_TOKEN="${BACKUP_RUNNER_TOKEN}"
+              
+              # Get presigned URL for database backup
+              echo "Requesting presigned URL for database backup..."
+              PRESIGN_RESPONSE=$(curl -s -X POST "${BACKEND_URL}/api/admin/system/backup/presign?type=db" \
+                -H "X-Internal-Token: ${INTERNAL_TOKEN}")
+              
+              PRESIGNED_URL=$(echo "${PRESIGN_RESPONSE}" | jq -r '.url // empty')
+              OBJECT_KEY=$(echo "${PRESIGN_RESPONSE}" | jq -r '.key // empty')
+              
+              if [ -z "${PRESIGNED_URL}" ] || [ -z "${OBJECT_KEY}" ] || [ "${PRESIGNED_URL}" = "null" ] || [ "${OBJECT_KEY}" = "null" ]; then
+                echo "ERROR: Failed to get presigned URL"
+                echo "Response: ${PRESIGN_RESPONSE}"
+                exit 1
+              fi
+              
+              echo "Got presigned URL for: ${OBJECT_KEY}"
+              
+              # Perform database backup
+              echo "Dumping database..."
+              PGHOST="${DB_HOST}"
+              PGPORT="${DB_PORT}"
+              PGUSER="${DB_USER}"
+              PGDATABASE="${DB_NAME}"
+              export PGPASSWORD="${DB_PASSWORD}"
+              
+              pg_dump -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" | \
+                gzip | \
+                curl -X PUT --upload-file - "${PRESIGNED_URL}" \
+                  -H "Content-Type: application/gzip" \
+                  --fail --show-error
+              
+              echo "✅ Database backup uploaded successfully"
+              
+            env:
+            - name: DB_HOST
+              value: postgres.{{ .Values.global.namespace }}.svc.cluster.local
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: kleidiauser
+            - name: DB_NAME
+              value: kleidia
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: BACKUP_RUNNER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backup-runner-token
+                  key: token
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+          
+          # Vault backup container (only if enabled)
+          {{- if .Values.backup.enableVaultBackup }}
+          - name: vault-backup
+            image: {{ include "kleidia-services.image" (dict "repository" "hashicorp/vault" "tag" "latest" "context" $) }}
+            command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "=== Starting Vault Backup ==="
+              
+              # Install curl and jq
+              apk add --no-cache curl jq
+              
+              BACKEND_URL="http://backend.{{ .Values.global.namespace }}.svc.cluster.local:8080"
+              INTERNAL_TOKEN="${BACKUP_RUNNER_TOKEN}"
+              VAULT_ADDR="${VAULT_ADDR}"
+              VAULT_TOKEN="${VAULT_TOKEN}"
+              
+              # Get presigned URL for vault backup
+              echo "Requesting presigned URL for vault backup..."
+              PRESIGN_RESPONSE=$(curl -s -X POST "${BACKEND_URL}/api/admin/system/backup/presign?type=vault" \
+                -H "X-Internal-Token: ${INTERNAL_TOKEN}")
+              
+              PRESIGNED_URL=$(echo "${PRESIGN_RESPONSE}" | jq -r '.url // empty')
+              OBJECT_KEY=$(echo "${PRESIGN_RESPONSE}" | jq -r '.key // empty')
+              
+              if [ -z "${PRESIGNED_URL}" ] || [ -z "${OBJECT_KEY}" ] || [ "${PRESIGNED_URL}" = "null" ] || [ "${OBJECT_KEY}" = "null" ]; then
+                echo "ERROR: Failed to get presigned URL"
+                echo "Response: ${PRESIGN_RESPONSE}"
+                exit 1
+              fi
+              
+              echo "Got presigned URL for: ${OBJECT_KEY}"
+              
+              # Perform vault snapshot
+              echo "Creating Vault snapshot..."
+              vault operator raft snapshot save - | \
+                gzip | \
+                curl -X PUT --upload-file - "${PRESIGNED_URL}" \
+                  -H "Content-Type: application/gzip" \
+                  --fail --show-error
+              
+              echo "✅ Vault backup uploaded successfully"
+              
+            env:
+            - name: VAULT_ADDR
+              value: http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200
+            - name: VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vault-backup-token
+                  key: token
+            - name: BACKUP_RUNNER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backup-runner-token
+                  key: token
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+          {{- end }}
+

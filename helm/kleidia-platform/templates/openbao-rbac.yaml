@@ -1,0 +1,64 @@
+{{- if .Values.openbao.enabled }}
+---
+# NOTE: Service Account for OpenBao is created by pre-install hook
+# See: templates/hooks/openbao-serviceaccount-hook.yaml
+# This ensures the ServiceAccount exists before the openbao-token secret is created
+---
+# ClusterRoleBinding for OpenBao to use Kubernetes TokenReview API
+# This is CRITICAL for Kubernetes auth to work - allows OpenBao to validate service account tokens
+# The system:auth-delegator role grants the following permissions:
+#   - tokenreviews.authentication.k8s.io: create (to validate tokens from service accounts)
+# Combined with network policy allowing OpenBao to reach the K8s API server, this enables
+# Kubernetes auth method to verify backend and other service account tokens
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openbao-auth-delegator-{{ .Values.global.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: openbao
+  namespace: {{ .Values.global.namespace }}
+---
+# NOTE: openbao-token secret is now created by pre-install hook
+# to ensure it's created and populated before OpenBao pod starts
+# See: templates/hooks/openbao-pre-install.yaml
+---
+# Role for OpenBao service account to manage secrets (for init hooks)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbao-init-helper
+  namespace: {{ .Values.global.namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["serviceaccounts/token"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbao-init-helper
+  namespace: {{ .Values.global.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbao-init-helper
+subjects:
+- kind: ServiceAccount
+  name: openbao
+  namespace: {{ .Values.global.namespace }}
+{{- end }}
+
