@@ -1,0 +1,130 @@
+global:
+  namespace: kleidia          # Kubernetes namespace to install into
+  registry:
+    host: ""                  # Optional: container registry host for all images (required for air-gapped environments)
+                              # Example: "registry.example.com:5000"
+                              # When set, ALL images will be pulled from this registry
+    authSecret: ""            # Optional: docker-registry secret name for private registries
+  imagePullSecrets: []        # Optional: list of imagePullSecrets to attach to pods
+
+# Third-party image repositories (can be mirrored to private registry for air-gapped deployments)
+# When global.registry.host is set, these images will be pulled from: <registry.host>/<repository>:<tag>
+thirdPartyImages:
+  alpine: "alpine:latest"
+  kubectl: "bitnami/kubectl:latest"  # Used in hooks for Kubernetes API interactions
+  rancher:
+    localPathProvisioner: "rancher/local-path-provisioner:v0.0.24"
+  busybox: "busybox:latest"
+
+storage:
+  className: "nfs-client"    # Explicitly use NFS StorageClass provided by cluster
+  localPath:
+    enabled: false           # Disable embedded local-path-provisioner; rely on cluster storage
+    path: /opt/local-path-provisioner
+
+openbao:
+  enabled: true
+  # Configuration for official OpenBao Helm chart (v0.19.0, appVersion v2.4.1)
+  global:
+    enabled: true
+    tlsDisable: true
+  
+  # Disable injector (not needed for our use case)
+  injector:
+    enabled: false
+  
+  server:
+    enabled: true
+    image:
+      registry: ""                  # OpenBao image registry (leave empty to use global.registry.host)
+                                    # For air-gapped: set global.registry.host and mirror quay.io/openbao/openbao:2.4.1
+                                    # Default public registry: "quay.io"
+      repository: "openbao/openbao" # OpenBao repository (use "openbao/openbao" for mirrored images)
+      tag: "2.4.1"                  # OpenBao version
+      pullPolicy: IfNotPresent
+    
+    # Use standalone mode with persistent storage
+    standalone:
+      enabled: true
+      config: |
+        ui = true
+        
+        listener "tcp" {
+          tls_disable = 1
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+        }
+        
+        storage "file" {
+          path = "/openbao/data"
+        }
+        
+        # Static auto-unseal (OpenBao 2.4.0+)
+        # Eliminates need for manual unsealing after restarts
+        seal "static" {
+          current_key_id = "kleidia-1"
+          current_key = "file:///keys/unseal-kleidia-1.key"
+        }
+        
+        # Note: service_registration requires HA-capable storage (raft/consul)
+        # File storage doesn't support HA, so we don't use service_registration
+    
+    # Enable persistent storage
+    dataStorage:                 # Persistent storage for OpenBao data
+      enabled: true
+      size: 10Gi
+      storageClass: "nfs-client" # Use explicit NFS StorageClass
+      accessMode: ReadWriteOnce
+    
+    # Service account with RBAC for TokenReview API
+    # NOTE: ServiceAccount is created by pre-install hook (see templates/hooks/openbao-serviceaccount-hook.yaml)
+    # This ensures it exists before the openbao-token secret is created
+    serviceAccount:
+      create: false  # Created by hook instead
+      name: "openbao"
+      annotations: {}
+    
+    # Enable audit storage for production security compliance
+    auditStorage:                # Persistent storage for OpenBao audit logs
+      enabled: true
+      size: 10Gi
+      storageClass: "nfs-client" # Use explicit NFS StorageClass
+      accessMode: ReadWriteOnce
+    
+    # Mount unseal key for static auto-unseal
+    volumes:
+      - name: unseal-key
+        secret:
+          secretName: openbao-unseal-key
+    
+    volumeMounts:
+      - mountPath: /keys
+        name: unseal-key
+        readOnly: true
+    
+    # Resources
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+  
+  # UI disabled (using backend UI)
+  ui:
+    enabled: false
+  
+  # PKI configuration (will be handled by hooks)
+  pki:
+    mode: root              # PKI engine mode: "root" or "intermediate"
+    rootCA:
+      commonName: "Kleidia Root CA"
+      ttl: "87600h"   # 10 years
+    intermediate:
+      commonName: "Kleidia Intermediate CA"
+      ttl: "43800h"   # 5 years
+      customerRootCA: ""  # Base64-encoded customer root CA cert (required when mode=intermediate)
+
+certManager:
+  testCertificate: false     # Leave false (we do not use cert-manager for app TLS)

@@ -1,0 +1,61 @@
+global:
+  namespace: kleidia          # Kubernetes namespace to install into
+  registry:
+    host: ""                  # Optional: container registry host for all images (required for air-gapped environments)
+                              # Example: "registry.example.com:5000"
+                              # When set, ALL images will be pulled from this registry
+                              # If empty, images are pulled from the repository names below (Docker Hub or other fully qualified repos).
+    authSecret: ""            # Optional: name of a docker-registry secret for private registries (e.g. "regcred").
+                              # You can create it with:
+                              #   kubectl create secret docker-registry regcred \
+                              #     --docker-server=registry.mycorp.local:5000 \
+                              #     --docker-username=USER --docker-password=PASS -n <namespace>
+  imagePullSecrets: []        # Optional: list of imagePullSecrets to attach to pods. Example: ["regcred"]
+                             # If set, these take precedence over global.registry.authSecret.
+
+# Third-party image repositories (can be mirrored to private registry for air-gapped deployments)
+# When global.registry.host is set, these images will be pulled from: <registry.host>/<repository>:<tag>
+thirdPartyImages:
+  postgres: "postgres:16-alpine"     # Used for database backups
+  curl: "curlimages/curl:latest"     # Used for service health checks
+  vault: "hashicorp/vault:latest"    # Used for vault backups (if enabled)
+
+backend:
+  replicas: 2                 # Horizontal scaling for the backend API
+  image:
+    repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-backend)
+    tag: backend-latest                   # Image tag. In production pin to a version, e.g. v2.2.0
+  service:
+    nodePort: 32570             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
+  corsOrigins: "https://kleidia.smit.dev"  # CORS allowed origins (comma-separated). Example: "https://kleidia.example.com,https://frontend.example.com"
+                                # REQUIRED for production deployments with external load balancers
+                                # Leave empty for development (allows all origins)
+
+frontend:
+  replicas: 2                 # Horizontal scaling for the frontend
+  image:
+    repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-frontend)
+    tag: frontend-latest                    # Image tag. In production pin to a version, e.g. v2.2.0
+  service:
+    nodePort: 30805             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
+
+licenseService:
+  enabled: true                 # Enable the license service pod (optional, backend falls back to TRIAL if disabled)
+  replicas: 2                   # Horizontal scaling for high availability
+  image: therinn/kleidia:license-latest  # License service image (garble-obfuscated)
+  imagePullPolicy: IfNotPresent # Use IfNotPresent to avoid pull errors if image doesn't exist
+  resources:
+    requests:
+      memory: "32Mi"            # Minimal memory footprint
+      cpu: "50m"                # Minimal CPU usage
+    limits:
+      memory: "128Mi"           # Memory limit
+      cpu: "200m"               # CPU limit
+  networkPolicy:
+    enabled: true               # Enable network policy to restrict access to backend only
+
+backup:
+  schedule: "0 2 * * *"        # Cron schedule for backups (default: daily at 2 AM)
+  suspend: false                # Set to true to disable scheduled backups
+  enableVaultBackup: true      # Include Vault Raft snapshot in backups
+

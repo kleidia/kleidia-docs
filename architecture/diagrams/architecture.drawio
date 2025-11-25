@@ -1,0 +1,72 @@
+<mxfile host="65bd71144e">
+    <diagram name="YubiMgr Architecture v2.2" id="architecture">
+        <mxGraphModel dx="322" dy="660" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="1654" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="workstation" value="User Workstation" style="swimlane;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="40" width="400" height="500" as="geometry"/>
+                </mxCell>
+                <mxCell id="browser" value="Browser&#10;(Frontend)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#333333;" parent="workstation" vertex="1">
+                    <mxGeometry x="100" y="60" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="agent" value="HTTP Agent&#10;localhost:56123&#10;&#10;• No Auth&#10;• No TLS&#10;• RSA Keypair&#10;• YubiKey Handler" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#333333;" parent="workstation" vertex="1">
+                    <mxGeometry x="100" y="180" width="200" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="yubikey" value="YubiKey&#10;(USB Device)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#333333;" parent="workstation" vertex="1">
+                    <mxGeometry x="100" y="340" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="connection1" value="HTTP&#10;localhost:56123" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;strokeColor=#82b366;" parent="workstation" source="browser" target="agent" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="connection2" value="USB" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;strokeColor=#d6b656;" parent="workstation" source="agent" target="yubikey" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="cluster" value="Kubernetes Cluster" style="swimlane;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="40" width="500" height="500" as="geometry"/>
+                </mxCell>
+                <mxCell id="api" value="Go/Gin API Server&#10;&#10;• Auth&#10;• Encryption&#10;• Session Mgmt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#333333;" parent="cluster" vertex="1">
+                    <mxGeometry x="150" y="60" width="200" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="frontend" value="Frontend&#10;(Nuxt.js)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#333333;" parent="cluster" vertex="1">
+                    <mxGeometry x="150" y="200" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="database" value="&lt;font color=&quot;#453b3b&quot;&gt;PostgreSQL&lt;br&gt;Database&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" parent="cluster" vertex="1">
+                    <mxGeometry x="150" y="320" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="connection4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;strokeColor=#6c8ebf;" parent="cluster" source="api" target="frontend" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="connection5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;strokeColor=#b85450;" parent="cluster" source="api" target="database" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="vault-internal" value="OpenBao&#10;Vault&#10;(Internal)&#10;Secrets" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#333333;" vertex="1" parent="cluster">
+                    <mxGeometry x="150" y="440" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="connection6-internal" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;strokeColor=#d6b656;" edge="1" parent="cluster" source="api" target="vault-internal">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="vault-external" value="External&#10;OpenBao/HashiCorp&#10;Vault&#10;(Secrets)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#333333;" vertex="1" parent="1">
+                    <mxGeometry x="1080" y="280" width="180" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="connection6-external" value="HTTPS&#10;AppRole" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;strokeColor=#d6b656;dashed=1;" edge="1" parent="1" source="api" target="vault-external">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="connection3" value="HTTPS&#10;(User JWT)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;strokeColor=#6c8ebf;dashed=1;" parent="1" source="browser" target="api" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="note1" value="Security Features:&#10;• RSA-OAEP Encryption&#10;• Ephemeral Keys&#10;• Session-Bound Access&#10;• Zero Standing Access" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="580" width="320" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="note2" value="Infrastructure:&#10;• Kubernetes Cluster&#10;• HAProxy SSL Termination&#10;• Let's Encrypt Certificates&#10;• Persistent Storage&#10;• Vault: Internal (default) or External" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="580" width="420" height="100" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
+
+
+
+
+

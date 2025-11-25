@@ -1,0 +1,158 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: backend
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      serviceAccountName: backend
+      {{- /* Registry authentication: prefer explicit global.imagePullSecrets, else fallback to global.registry.authSecret */}}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- else if .Values.global.registry.authSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.registry.authSecret }}
+      {{- end }}
+      {{- if .Values.global.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector | nindent 8 }}
+      {{- end }}
+      initContainers:
+      # Wait for PostgreSQL
+      - name: wait-for-postgres
+        image: {{ include "kleidia-services.image" (dict "repository" "postgres" "tag" "15" "context" $) }}
+        env:
+        - name: PGPASSWORD
+          value: ""
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for PostgreSQL..."
+          
+          # Wait for PostgreSQL to accept connections
+          until pg_isready -h postgres.{{ .Values.global.namespace }}.svc.cluster.local -p 5432 -U kleidiauser 2>/dev/null; do
+            echo "PostgreSQL not ready yet..."
+            sleep 2
+          done
+          
+          echo "PostgreSQL is accepting connections, verifying database exists..."
+          
+          # Verify database exists and is accessible
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          until psql -h postgres.{{ .Values.global.namespace }}.svc.cluster.local -U kleidiauser -d kleidia -c "SELECT 1" >/dev/null 2>&1; do
+            ATTEMPT=$((ATTEMPT + 1))
+            if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
+              echo "❌ Failed to connect to kleidia database after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+            echo "Database not accessible yet (attempt $ATTEMPT/$MAX_ATTEMPTS)..."
+            sleep 2
+          done
+          
+          echo "✅ PostgreSQL ready and database accessible!"
+      # Wait for OpenBao
+      - name: wait-for-openbao
+        image: {{ include "kleidia-services.image" (dict "repository" "curlimages/curl" "tag" "latest" "context" $) }}
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for OpenBao..."
+          until curl -sf http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/sys/health >/dev/null 2>&1; do
+            echo "OpenBao not ready yet..."
+            sleep 2
+          done
+          echo "✅ OpenBao ready!"
+      containers:
+      - name: backend
+        image: "{{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        # Database connection (simple password auth)
+        - name: DB_HOST
+          value: postgres.{{ .Values.global.namespace }}.svc.cluster.local
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: kleidiauser
+        - name: DB_NAME
+          value: kleidia
+        - name: DB_SSL_MODE
+          value: disable
+        
+        # OpenBao connection
+        - name: VAULT_ENABLED
+          value: "true"
+        - name: VAULT_ADDR
+          value: http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200
+        - name: VAULT_AUTH_METHOD
+          value: kubernetes
+        - name: VAULT_K8S_ROLE
+          value: kleidia-backend
+        
+        # OpenBao KV paths (each secret in its own path with "value" field)
+        - name: VAULT_KV_MOUNT
+          value: "yubikeys"
+        - name: VAULT_KV_JWT_PATH
+          value: "jwt-secret"
+        - name: VAULT_KV_ENCRYPTION_PATH
+          value: "encryption-key"
+        - name: VAULT_KV_DATABASE_PATH
+          value: "database"
+        
+        # Application config
+        - name: SERVER_PORT
+          value: "8080"
+        - name: LOG_LEVEL
+          value: info
+        {{- if .Values.backend.corsOrigins }}
+        - name: CORS_ORIGINS
+          value: {{ .Values.backend.corsOrigins | quote }}
+        {{- end }}
+        
+        # License service connection
+        - name: LICENSE_SERVICE_URL
+          value: "http://license-service.{{ .Values.global.namespace }}.svc.cluster.local:8081"
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+

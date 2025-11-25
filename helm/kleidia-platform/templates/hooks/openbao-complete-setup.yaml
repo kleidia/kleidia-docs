@@ -1,0 +1,560 @@
+{{- if .Values.openbao.enabled }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openbao-complete-setup
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: openbao-init
+    component: vault
+spec:
+  # Automatically delete job after 5 minutes (300s) of completion
+  ttlSecondsAfterFinished: 300
+  # Allow 10 minutes for the job to complete
+  activeDeadlineSeconds: 600
+  # Don't retry - let Kubernetes restart on failure with backoff
+  backoffLimit: 0
+  template:
+    metadata:
+      name: openbao-setup
+      labels:
+        app: openbao-init
+        component: vault
+    spec:
+      serviceAccountName: openbao
+      restartPolicy: OnFailure
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- else if .Values.global.registry.authSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.registry.authSecret }}
+      {{- end }}
+      {{- if .Values.global.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector | nindent 8 }}
+      {{- end }}
+      # Init container: Simple 30 second delay to let OpenBao pod start
+      initContainers:
+      - name: wait-30s
+        image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/busybox:latest{{ else }}busybox:latest{{ end }}
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting 30 seconds for OpenBao pod to start..."
+          sleep 30
+          echo "✅ 30 second delay complete, proceeding with OpenBao initialization"
+      containers:
+      - name: setup
+        image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/alpine/k8s:1.28.4{{ else }}alpine/k8s:1.28.4{{ end }}
+        command:
+        - bash
+        - -c
+        - |
+          set -e
+          
+          echo "=== OpenBao Complete Setup Script ==="
+          echo "This script will initialize and configure OpenBao"
+          echo "Note: Auto-unseal is configured, no manual unsealing needed!"
+          echo ""
+          
+          # Verify required tools are available
+          command -v kubectl >/dev/null 2>&1 || { echo "ERROR: kubectl not found"; exit 1; }
+          command -v jq >/dev/null 2>&1 || { echo "ERROR: jq not found"; exit 1; }
+          command -v curl >/dev/null 2>&1 || { echo "ERROR: curl not found"; exit 1; }
+          
+          NAMESPACE="{{ .Values.global.namespace }}"
+          OPENBAO_ADDR="http://kleidia-platform-openbao.${NAMESPACE}.svc.cluster.local:8200"
+          
+          # Use direct curl calls to OpenBao service
+          openbao_curl() {
+            # Replace 127.0.0.1:8200 with the service address for direct calls
+            local args=("$@")
+            local new_args=()
+            for arg in "${args[@]}"; do
+              new_args+=("${arg//127.0.0.1:8200/kleidia-platform-openbao.${NAMESPACE}.svc.cluster.local:8200}")
+            done
+            curl "${new_args[@]}"
+          }
+          
+          # Step 0: Skip token secret creation if API is unreachable
+          # The pod's mounted token will be used instead (see Step 3)
+          echo "Step 0: Checking if we can create openbao-token secret..."
+          echo "Note: If API server is unreachable, will use pod's mounted token (this is OK)"
+          
+          # Quick test: try to list secrets with a very short timeout
+          # If this fails, skip token creation entirely and use pod's token
+          API_REACHABLE=false
+          if kubectl get secrets -n "${NAMESPACE}" --request-timeout=2s >/dev/null 2>&1; then
+            API_REACHABLE=true
+            echo "✅ Kubernetes API is reachable"
+          else
+            echo "⚠️  Kubernetes API not reachable - will use pod's mounted token"
+            echo "✅ Step 0 complete (skipping token secret creation, will use pod's token)"
+          fi
+          
+          # Only attempt token creation if API is reachable
+          if [ "$API_REACHABLE" = "true" ]; then
+            SECRET_EXISTS=$(kubectl get secret openbao-token -n "${NAMESPACE}" --request-timeout=2s >/dev/null 2>&1 && echo "yes" || echo "no")
+            
+            if [ "$SECRET_EXISTS" = "yes" ]; then
+              echo "✅ openbao-token already exists"
+            else
+              echo "Attempting to create service account token..."
+              # Use a background process with timeout to prevent hanging
+              TOKEN_OUTPUT=$(timeout 5s kubectl create token openbao -n "${NAMESPACE}" --duration=8760h 2>&1 || echo "TIMEOUT_OR_ERROR")
+              
+              if [ "$TOKEN_OUTPUT" != "TIMEOUT_OR_ERROR" ] && [ -n "$TOKEN_OUTPUT" ] && [ "$TOKEN_OUTPUT" != "null" ] && ! echo "$TOKEN_OUTPUT" | grep -qi "error\|timeout\|Failed\|dial"; then
+                # Create secret with the token
+                kubectl create secret generic openbao-token \
+                  --namespace="${NAMESPACE}" \
+                  --from-literal=token="${TOKEN_OUTPUT}" \
+                  --dry-run=client -o yaml 2>/dev/null | kubectl apply --request-timeout=3s -f - 2>/dev/null
+                
+                if [ $? -eq 0 ]; then
+                  echo "✅ Token secret created successfully"
+                else
+                  echo "⚠️  Failed to create secret (will use pod's mounted token)"
+                fi
+              else
+                echo "⚠️  Could not create token via API (will use pod's mounted token)"
+              fi
+            fi
+            echo "✅ Step 0 complete"
+          fi
+          
+          # Wait for OpenBao to be reachable via API
+          # Init container already waited 30s for OpenBao to start
+          echo ""
+          echo "Step 1: Waiting for OpenBao API to be reachable..."
+          echo "Note: OpenBao pod will NOT show 'ready' until initialized - this is expected"
+          OPENBAO_POD="kleidia-platform-openbao-0"
+          REACHABLE=false
+          
+          # Wait up to 2 minutes for API to respond (30s init delay + up to 2 min here = 2.5 min total)
+          for i in $(seq 1 60); do
+            # Try to reach OpenBao API directly (don't use -f as sealed vault returns 503)
+            HEALTH_RESPONSE=$(curl -s -m 5 "${OPENBAO_ADDR}/v1/sys/health" 2>&1)
+            CURL_EXIT_CODE=$?
+            
+            # Check if we got a valid response (sealed vault returns 503 but with JSON)
+            # Even an uninitialized vault should respond with {"initialized":false}
+            if [ $CURL_EXIT_CODE -eq 0 ] && echo "$HEALTH_RESPONSE" | grep -q "initialized"; then
+              echo "✅ OpenBao API is reachable and responding"
+              REACHABLE=true
+              break
+            fi
+            
+            # Log progress every 10 attempts (20 seconds)
+            if [ $((i % 10)) -eq 0 ]; then
+              echo "Waiting for OpenBao API... (${i}/60)"
+            fi
+            sleep 2
+          done
+          
+          if [ "$REACHABLE" = "false" ]; then
+            echo "❌ ERROR: OpenBao API not reachable after 2.5 minutes (30s init + 2min wait)"
+            echo "   OpenBao address: ${OPENBAO_ADDR}"
+            echo "   Last curl exit code: ${CURL_EXIT_CODE}"
+            echo "   Last response: ${HEALTH_RESPONSE}"
+            echo ""
+            echo "   This job will be retried automatically by Kubernetes with exponential backoff"
+            echo "   Check OpenBao pod logs: kubectl logs kleidia-platform-openbao-0 -n {{ .Values.global.namespace }}"
+            exit 1
+          fi
+          
+          # Check if already initialized
+          echo ""
+          echo "Step 2: Checking initialization status..."
+          HEALTH=$(openbao_curl -s "http://127.0.0.1:8200/v1/sys/health" || echo '{"initialized":false}')
+          INITIALIZED=$(echo "$HEALTH" | jq -r '.initialized // false')
+          
+          if [ "$INITIALIZED" = "false" ]; then
+            echo "OpenBao is not initialized. Initializing..."
+            
+            # Initialize OpenBao with retries
+            # Note: With static seal, recovery keys may not be returned in init response
+            # We request recovery_shares but OpenBao may only return them if recovery seal is enabled
+            # Generate 3 recovery keys with threshold of 2 (any 2 keys can recover)
+            INIT_RESPONSE=""
+            for attempt in $(seq 1 5); do
+              echo "Initialization attempt ${attempt}/5..."
+              # Request both recovery_shares and key_shares to ensure we get keys
+              # Static seal may return keys in different format
+              INIT_RESPONSE=$(openbao_curl -s -X PUT "http://127.0.0.1:8200/v1/sys/init" \
+                -H "Content-Type: application/json" \
+                -d '{"recovery_shares": 3, "recovery_threshold": 2, "key_shares": 1, "key_threshold": 1}' 2>&1)
+              
+              if [ $? -eq 0 ] && [ -n "$INIT_RESPONSE" ]; then
+                # Check if response contains root_token (indicates success)
+                if echo "$INIT_RESPONSE" | jq -e '.root_token' >/dev/null 2>&1; then
+                  echo "✅ Initialization successful"
+                  break
+                fi
+              fi
+              
+              echo "⚠️  Initialization attempt failed: $INIT_RESPONSE"
+              if [ $attempt -lt 5 ]; then
+                echo "Retrying in 5 seconds..."
+                sleep 5
+              fi
+            done
+            
+            if [ -z "$INIT_RESPONSE" ] || ! echo "$INIT_RESPONSE" | jq -e '.root_token' >/dev/null 2>&1; then
+              echo "❌ Failed to initialize OpenBao after 5 attempts"
+              echo "Last response: $INIT_RESPONSE"
+              exit 1
+            fi
+            
+            echo "Initialization response received"
+            
+            # Debug: Log the full response structure (without sensitive values)
+            echo "Debug: Checking initialization response structure..."
+            echo "$INIT_RESPONSE" | jq 'keys' || echo "Failed to parse JSON response"
+            echo "$INIT_RESPONSE" | jq 'has("recovery_keys")' || echo "recovery_keys check failed"
+            echo "$INIT_RESPONSE" | jq 'has("recovery_keys_b64")' || echo "recovery_keys_b64 check failed"
+            echo "$INIT_RESPONSE" | jq 'has("keys")' || echo "keys check failed"
+            echo "$INIT_RESPONSE" | jq '.recovery_keys | length' || echo "recovery_keys length check failed"
+            
+            # Extract root token (always present)
+            ROOT_TOKEN=$(echo "$INIT_RESPONSE" | jq -r '.root_token')
+            
+            # For static seal with recovery_shares, OpenBao returns recovery keys
+            # Check all possible field names that OpenBao might use
+            # OpenBao/Vault can return: recovery_keys, recovery_keys_b64, or keys_b64
+            RECOVERY_KEY_1=$(echo "$INIT_RESPONSE" | jq -r '.recovery_keys[0] // .recovery_keys_b64[0] // .keys_b64[0] // ""')
+            RECOVERY_KEY_2=$(echo "$INIT_RESPONSE" | jq -r '.recovery_keys[1] // .recovery_keys_b64[1] // .keys_b64[1] // ""')
+            RECOVERY_KEY_3=$(echo "$INIT_RESPONSE" | jq -r '.recovery_keys[2] // .recovery_keys_b64[2] // .keys_b64[2] // ""')
+            
+            # Debug: Log what we extracted
+            echo "Debug: Extracted recovery keys:"
+            echo "  RECOVERY_KEY_1 length: ${#RECOVERY_KEY_1}"
+            echo "  RECOVERY_KEY_2 length: ${#RECOVERY_KEY_2}"
+            echo "  RECOVERY_KEY_3 length: ${#RECOVERY_KEY_3}"
+            
+            # Legacy unseal key (will be empty for static seal, but kept for compatibility)
+            UNSEAL_KEY=$(echo "$INIT_RESPONSE" | jq -r '.keys[0] // ""')
+            
+            if [ -z "$ROOT_TOKEN" ]; then
+              echo "❌ Failed to extract root token from initialization response"
+              exit 1
+            fi
+            
+            echo "Storing initialization keys..."
+            # Store in Kubernetes secret
+            kubectl create secret generic openbao-init-keys \
+              --namespace="${NAMESPACE}" \
+              --from-literal=root-token="${ROOT_TOKEN}" \
+              --from-literal=unseal-key="${UNSEAL_KEY}" \
+              --from-literal=recovery-key-1="${RECOVERY_KEY_1}" \
+              --from-literal=recovery-key-2="${RECOVERY_KEY_2}" \
+              --from-literal=recovery-key-3="${RECOVERY_KEY_3}" \
+              --dry-run=client -o yaml | kubectl apply -f -
+            
+            echo "✅ OpenBao initialized and keys stored"
+            echo "   Recovery keys: $([ -n "$RECOVERY_KEY_1" ] && echo "stored" || echo "none")"
+          else
+            echo "✅ OpenBao is already initialized"
+            
+            # Get existing root token from secret
+            if ! kubectl get secret openbao-init-keys -n "${NAMESPACE}" &>/dev/null; then
+              echo "❌ OpenBao is initialized but openbao-init-keys secret not found"
+              echo "   Please manually create the secret with the root token"
+              exit 1
+            fi
+            
+            ROOT_TOKEN=$(kubectl get secret openbao-init-keys -n "${NAMESPACE}" -o jsonpath='{.data.root-token}' | base64 -d 2>/dev/null || echo "")
+            
+            if [ -z "$ROOT_TOKEN" ]; then
+              echo "❌ Failed to retrieve root token from openbao-init-keys secret"
+              exit 1
+            fi
+            
+            echo "   Root token retrieved from existing secret"
+          fi
+          
+          # Configure Kubernetes Authentication (auto-unseal handles unsealing)
+          echo ""
+          echo "Step 3: Configuring Kubernetes authentication..."
+          
+          # Enable Kubernetes auth method (idempotent)
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/sys/auth/kubernetes" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"kubernetes"}' 2>/dev/null || echo "Auth method already enabled"
+          
+          # Get service account token and CA cert
+          # For Kubernetes 1.24+, use the explicitly created token secret
+          # Fall back to pod's token if secret doesn't exist (older K8s versions)
+          if kubectl get secret openbao-token -n "${NAMESPACE}" >/dev/null 2>&1; then
+            echo "Using long-lived token from openbao-token secret (K8s 1.24+)"
+            SA_TOKEN=$(kubectl get secret openbao-token -n "${NAMESPACE}" -o jsonpath='{.data.token}' | base64 -d)
+            
+            # Verify token was retrieved
+            if [ -z "$SA_TOKEN" ] || [ "$SA_TOKEN" = "null" ]; then
+              echo "❌ ERROR: Failed to retrieve token from openbao-token secret"
+              echo "   Secret exists but token field is empty or null"
+              exit 1
+            fi
+            echo "✅ Token retrieved successfully (length: ${#SA_TOKEN} chars)"
+          else
+            echo "⚠️  openbao-token secret not found, using pod's token (K8s <1.24)"
+            SA_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+          fi
+          K8S_CA=$(cat /var/run/secrets/kubernetes.io/serviceaccount/ca.crt)
+          
+          # Configure with proper settings for k0s 1.34.1
+          # CRITICAL: disable_local_ca_jwt: false uses LOCAL JWT verification
+          #           disable_local_ca_jwt: true forces OIDC discovery (causes TLS errors)
+          #           disable_iss_validation: true allows tokens from different issuers
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/kubernetes/config" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"kubernetes_host\": \"https://kubernetes.default.svc\",
+              \"kubernetes_ca_cert\": \"$(echo "$K8S_CA" | sed ':a;N;$!ba;s/\n/\\n/g')\",
+              \"token_reviewer_jwt\": \"$SA_TOKEN\",
+              \"issuer\": \"https://kubernetes.default.svc\",
+              \"disable_local_ca_jwt\": false,
+              \"disable_iss_validation\": true
+            }"
+          
+          echo "✅ Kubernetes auth configured with long-lived token"
+          
+          # Create backend policy
+          echo ""
+          echo "Step 4: Creating kleidia-backend policy..."
+          openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/kleidia-backend" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"policy": "# PKI certificate signing\npath \"pki/sign/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/issue/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/cert/ca\" { capabilities = [\"read\"] }\n\n# PKI CA management (for intermediate CA reconfiguration)\npath \"pki/issuers/generate/intermediate/existing\" { capabilities = [\"create\", \"update\"] }\npath \"pki/intermediate/set-signed\" { capabilities = [\"create\", \"update\"] }\npath \"pki/config/urls\" { capabilities = [\"read\", \"update\"] }\npath \"pki/config/issuers\" { capabilities = [\"read\"] }\npath \"pki/issuer/*\" { capabilities = [\"read\"] }\n\n# KV v2 secrets (application secrets)\npath \"yubikeys/data/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"] }\npath \"yubikeys/metadata/*\" { capabilities = [\"list\", \"read\"] }\n\n# System endpoints (for health checks)\npath \"sys/auth\" { capabilities = [\"read\"] }\n\n# Token renewal\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }"}'
+          
+          echo "✅ Policy created"
+          
+          # Create backend Kubernetes role
+          echo ""
+          echo "Step 5: Creating kleidia-backend Kubernetes role..."
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/kubernetes/role/kleidia-backend" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"bound_service_account_names": ["backend"], "bound_service_account_namespaces": ["{{ .Values.global.namespace }}"], "policies": ["kleidia-backend"], "ttl": "24h"}'
+          
+          echo "✅ Backend role created"
+          
+          # Create license-service policy and role
+          echo ""
+          echo "Step 5a: Creating license-service policy and role..."
+          openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/license-service" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"policy": "# Allow full access to license data paths\npath \"yubikeys/data/license/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"] }\npath \"yubikeys/metadata/license/*\" { capabilities = [\"read\", \"list\"] }\n\n# Deny access to other yubikeys paths (defense in depth)\npath \"yubikeys/data/yubikeys/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/data/devices/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/data/certs/*\" { capabilities = [\"deny\"] }\n\n# Token renewal\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }"}'
+          
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/kubernetes/role/license-service" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"bound_service_account_names": ["license-service"], "bound_service_account_namespaces": ["{{ .Values.global.namespace }}"], "policies": ["license-service"], "ttl": "24h"}'
+          
+          echo "✅ License-service policy and role created"
+          
+          # Create cert-manager policy and role (for infrastructure certificates)
+          echo ""
+          echo "Step 5b: Creating cert-manager policy and role..."
+          openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/cert-manager" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"policy": "path \"pki/sign/kleidia-component\" { capabilities = [\"create\", \"update\"] }\npath \"pki/issue/kleidia-component\" { capabilities = [\"create\", \"update\"] }"}'
+          
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/kubernetes/role/cert-manager" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"bound_service_account_names": ["cert-manager"], "bound_service_account_namespaces": ["cert-manager"], "policies": ["cert-manager"], "ttl": "1h"}'
+          
+          echo "✅ Cert-manager policy and role created"
+          
+          # Enable KV v2 secrets engine
+          echo ""
+          echo "Step 6: Enabling KV v2 secrets engine..."
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/sys/mounts/yubikeys" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"type": "kv-v2"}' 2>/dev/null || echo "KV v2 already enabled"
+          
+          echo "✅ KV v2 enabled"
+          
+          # Enable PKI secrets engine
+          echo ""
+          echo "Step 7: Enabling PKI secrets engine..."
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/sys/mounts/pki" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"pki","config":{"max_lease_ttl":"87600h"}}' 2>/dev/null || echo "PKI already enabled"
+          
+          echo "✅ PKI enabled"
+          
+          # Generate root CA (if not exists)
+          echo ""
+          echo "Step 8: Generating root CA..."
+          ROOT_CA=$(openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/root/generate/internal" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"common_name":"{{ .Values.openbao.pki.rootCA.commonName }}","ttl":"{{ .Values.openbao.pki.rootCA.ttl }}","key_type":"rsa","key_bits":2048}' 2>&1)
+          
+          if echo "$ROOT_CA" | grep -q "certificate"; then
+            echo "✅ Root CA generated"
+          else
+            echo "Root CA might already exist (this is OK)"
+          fi
+          
+          # Configure PKI URLs
+          echo ""
+          echo "Step 9: Configuring PKI URLs..."
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/config/urls" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"issuing_certificates":["http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/pki/ca"],"crl_distribution_points":["http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/pki/crl"]}'
+          
+          echo "✅ PKI URLs configured"
+          
+          # Create PKI roles
+          echo ""
+          echo "Step 10: Creating PKI roles..."
+          
+          # agent-session role
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/agent-session" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"allowed_domains":["agent.kleidia.local","*.agent.kleidia.local"],"allow_glob_domains":true,"allow_subdomains":true,"allow_any_name":true,"enforce_hostnames":false,"server_flag":true,"client_flag":true,"key_type":"rsa","key_bits":2048,"ttl":"12h","max_ttl":"24h"}'
+          echo "  ✅ agent-session role created"
+          
+          # yubikey-piv role (legacy - kept for backwards compatibility)
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":true,"client_flag":true,"key_type":"rsa","key_bits":2048,"ttl":"8760h","max_ttl":"87600h"}'
+          echo "  ✅ yubikey-piv role created"
+          
+          # yubikey-piv-auth role (for slot 9a - Authentication)
+          # NOTE: key_type="any" accepts all CSR algorithms from certificate policy
+          # OpenBao enforces minimum RSA-2048 for security (RSA-1024 not supported)
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-auth" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":true,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature"],"ext_key_usage":["ClientAuth"],"use_csr_common_name":true,"use_csr_sans":true,"key_type":"any"}'
+          echo "  ✅ yubikey-piv-auth role created"
+          
+          # yubikey-piv-code-signing role (for slot 9c - Code Signing)
+          # NOTE: key_type="any" accepts all CSR algorithms from certificate policy
+          # OpenBao enforces minimum RSA-2048 for security (RSA-1024 not supported)
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-code-signing" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":false,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature"],"ext_key_usage":["CodeSigning"],"use_csr_common_name":true,"use_csr_sans":true,"key_type":"any"}'
+          echo "  ✅ yubikey-piv-code-signing role created"
+          
+          # yubikey-piv-email-signing role (for slot 9d - Email Signing)
+          # NOTE: key_type="any" accepts all CSR algorithms from certificate policy
+          # OpenBao enforces minimum RSA-2048 for security (RSA-1024 not supported)
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-email-signing" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":false,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["EmailProtection"],"use_csr_common_name":true,"use_csr_sans":true,"key_type":"any"}'
+          echo "  ✅ yubikey-piv-email-signing role created"
+          
+          # backend-mtls role
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/backend-mtls" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"allowed_domains":["backend.kleidia.svc.cluster.local"],"allow_localhost":true,"enforce_hostnames":true,"server_flag":true,"client_flag":true,"key_type":"rsa","key_bits":2048,"ttl":"8760h","max_ttl":"87600h"}'
+          echo "  ✅ backend-mtls role created"
+          
+          # kleidia-component role (for cert-manager infrastructure certificates)
+          # IMPORTANT: allow_any_name=true and enforce_hostnames=false are needed for:
+          # - Various service names that don't fit strict hostname patterns
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/kleidia-component" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"allow_any_name":true,"enforce_hostnames":false,"allow_localhost":true,"max_ttl":"8760h","ttl":"8760h","server_flag":true,"client_flag":true,"key_type":"rsa","key_bits":2048}'
+          echo "  ✅ kleidia-component role created (flexible naming)"
+          
+          # agent-localhost-cert role (for HTTP-based agent architecture)
+          # Session-bound certificates for local agent HTTPS
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/agent-localhost-cert" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"allowed_domains":["localhost"],"allow_localhost":true,"allow_ip_sans":true,"enforce_hostnames":false,"server_flag":true,"client_flag":false,"key_type":"rsa","key_bits":2048,"ttl":"8h","max_ttl":"8h"}'
+          echo "  ✅ agent-localhost-cert role created (HTTP agent architecture)"
+          
+          # Initialize application secrets (JWT, encryption keys, etc.)
+          echo ""
+          echo "Step 11: Initializing application secrets..."
+          
+          # Check if secrets already exist
+          EXISTING_JWT=$(openbao_curl -sf "http://127.0.0.1:8200/v1/yubikeys/data/jwt-secret" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.data.value // empty')
+          
+          if [ -n "$EXISTING_JWT" ]; then
+            echo "✅ Application secrets already exist (preserving)"
+          else
+            echo "Generating new application secrets..."
+            # Generate random secrets using /dev/urandom (no openssl needed)
+            JWT_SECRET=$(head -c 32 /dev/urandom | base64)
+            ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
+            
+            # Store each secret in its own path with "value" field (backend expects this structure)
+            openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/yubikeys/data/jwt-secret" \
+              -H "X-Vault-Token: ${ROOT_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"data\":{\"value\":\"${JWT_SECRET}\"}}"
+            
+            openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/yubikeys/data/encryption-key" \
+              -H "X-Vault-Token: ${ROOT_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"data\":{\"value\":\"${ENCRYPTION_KEY}\"}}"
+            
+            echo "✅ Application secrets initialized"
+          fi
+          
+          # Create backup policy and token
+          echo ""
+          echo "Step 12: Creating backup policy and token..."
+          
+          # Create kleidia-backup policy (allows raft snapshot read)
+          openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/kleidia-backup" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"policy": "# Vault Raft snapshot for backups\npath \"sys/storage/raft/snapshot\" { capabilities = [\"read\"] }\npath \"sys/storage/raft/snapshot-force\" { capabilities = [\"read\"] }"}'
+          
+          echo "  ✅ kleidia-backup policy created"
+          
+          # Create backup token with limited scope
+          BACKUP_TOKEN_RESPONSE=$(openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/token/create" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"policies":["kleidia-backup"],"ttl":"8760h","renewable":true}' | jq -r '.auth.client_token // empty')
+          
+          if [ -n "${BACKUP_TOKEN_RESPONSE}" ] && [ "${BACKUP_TOKEN_RESPONSE}" != "null" ]; then
+            # Create Kubernetes secret for backup token
+            kubectl create secret generic vault-backup-token \
+              --from-literal=token="${BACKUP_TOKEN_RESPONSE}" \
+              --dry-run=client -o yaml | kubectl apply -f - -n "${NAMESPACE}"
+            echo "  ✅ vault-backup-token secret created"
+          else
+            echo "  ⚠️  Failed to create backup token (non-critical)"
+          fi
+          
+          # Create backup runner token (for internal API authentication)
+          BACKUP_RUNNER_TOKEN=$(head -c 32 /dev/urandom | base64)
+          kubectl create secret generic backup-runner-token \
+            --from-literal=token="${BACKUP_RUNNER_TOKEN}" \
+            --dry-run=client -o yaml | kubectl apply -f - -n "${NAMESPACE}"
+          echo "  ✅ backup-runner-token secret created"
+          
+          echo ""
+          echo "=== OpenBao Complete Setup Finished Successfully ==="
+          echo "OpenBao v2.4.1 is ready for use!"
+{{- end }}
+

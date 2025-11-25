@@ -1,0 +1,455 @@
+================================================================================
+Kleidia Agent - macOS Installation Quick Start
+================================================================================
+
+VERSION: 0.4.6+
+DATE: November 2025
+
+================================================================================
+PACKAGE CONTENTS
+================================================================================
+
+This package installs:
+
+  Kleidia Agent Binary
+    - Location: /usr/local/bin/kleidia-agent
+    - Runs as LaunchDaemon (system service)
+    - Auto-starts on boot
+
+  Configuration Files
+    - /etc/kleidia/agent/agent.toml (configuration)
+    - /Library/LaunchDaemons/com.kleidia.agent.plist (service)
+
+  Utilities
+    - /usr/local/bin/kleidia-agent-uninstall.sh (removal tool)
+
+ Dependencies
+    - YubiKey Manager (ykman) if not already installed
+
+================================================================================
+SYSTEM REQUIREMENTS
+================================================================================
+
+Operating System:
+  - macOS 10.15 (Catalina) or later
+  - macOS 11 (Big Sur)
+  - macOS 12 (Monterey)
+  - macOS 13 (Ventura)
+  - macOS 14 (Sonoma)
+  - macOS 15 (Sequoia)
+
+Architecture:
+  - Intel (x86_64)
+  - Apple Silicon (ARM64)
+
+Prerequisites:
+  - Administrator privileges for installation
+  - Network access to backend server (HTTPS)
+  - YubiKey Manager (ykman) - installed automatically if missing
+
+================================================================================
+INSTALLATION OPTIONS
+================================================================================
+
+OPTION 1: Interactive Installation (End-Users)
+-----------------------------------------------
+
+1. Download: kleidia-agent-<version>.pkg
+2. Double-click the package file
+3. Follow the installation wizard:
+   - Click Continue
+   - Accept license (if shown)
+   - Enter administrator password
+4. Enter backend URL when prompted:
+   - Example: kleidia.example.com
+   - Do NOT include https:// (added automatically)
+5. Installation completes, agent starts automatically
+
+OPTION 2: Silent Installation (Command Line)
+---------------------------------------------
+
+For scripted or remote deployment:
+
+  # Set backend URL via environment variable
+  export BACKEND_URL="kleidia.example.com"
+  
+  # Install package
+  sudo installer -pkg kleidia-agent-0.4.6.pkg -target /
+  
+  # Verify installation
+  sudo launchctl list | grep com.kleidia.agent
+
+OPTION 3: Enterprise Deployment (MDM)
+--------------------------------------
+
+For deployment via Intune, Jamf Pro, or Munki, see:
+  ENTERPRISE_DEPLOYMENT.md
+
+Supported MDM Platforms:
+  - Microsoft Intune / Endpoint Manager
+  - Jamf Pro
+  - Munki
+  - Apple Business Manager with MDM
+
+================================================================================
+POST-INSTALLATION VERIFICATION
+================================================================================
+
+After installation, verify the agent is running:
+
+1. Check service status:
+   
+   sudo launchctl list | grep com.kleidia.agent
+   
+   Should show: com.kleidia.agent (with PID)
+
+2. Check agent version:
+   
+   /usr/local/bin/kleidia-agent --version
+   
+   Should show: Kleidia Agent vX.Y.Z
+
+3. Test local listener:
+   
+   curl http://127.0.0.1:56123/health
+   
+   Should return: HTTP 200 OK
+
+4. View configuration:
+   
+   cat /etc/kleidia/agent/agent.toml
+   
+   Should show your backend URL
+
+5. Check logs (if issues):
+   
+   tail -50 /var/log/kleidia-agent/postinstall.log
+
+================================================================================
+CONFIGURATION
+================================================================================
+
+Configuration file location:
+  /etc/kleidia/agent/agent.toml
+
+Example configuration:
+
+  port = 56123
+  name = "Kleidia Agent"
+  backend_url = "https://kleidia.example.com"
+  allowed_origins = [
+      "https://kleidia.example.com"
+  ]
+  
+  [logging]
+  level = "info"
+
+Note: allowed_origins is required for CORS security
+
+To update configuration:
+
+  1. Edit file:
+     sudo nano /etc/kleidia/agent/agent.toml
+  
+  2. Restart agent:
+     sudo launchctl kickstart -k system/com.kleidia.agent
+
+================================================================================
+UNINSTALLATION
+================================================================================
+
+Using uninstall script (recommended):
+  
+  sudo /usr/local/bin/kleidia-agent-uninstall.sh
+
+Manual removal:
+
+  # Stop service
+  sudo launchctl bootout system/com.kleidia.agent
+  
+  # Remove files
+  sudo rm -f /usr/local/bin/kleidia-agent
+  sudo rm -f /Library/LaunchDaemons/com.kleidia.agent.plist
+  sudo rm -rf /etc/kleidia/agent
+  sudo rm -rf /var/log/kleidia-agent
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Service won't start:
+  
+  # Check status
+  sudo launchctl print system/com.kleidia.agent
+  
+  # Check logs
+  tail -50 /var/log/kleidia-agent/stderr.log
+  
+  # Try manual start
+  sudo launchctl kickstart system/com.kleidia.agent
+
+Cannot connect to backend:
+  
+  # Test connectivity
+  nc -zv kleidia.example.com 443
+  
+  # Test HTTPS
+  curl -v https://kleidia.example.com
+  
+  # Check configuration
+  grep backend_url /etc/kleidia/agent/agent.toml
+
+YubiKey not detected:
+  
+  # Check if ykman is installed
+  which ykman
+  ykman --version
+  
+  # Test YubiKey detection
+  ykman list
+  
+  # Check USB devices
+  system_profiler SPUSBDataType | grep -i yubico
+
+Configuration not applied:
+  
+  # Verify file exists
+  cat /etc/kleidia/agent/agent.toml
+  
+  # Check permissions
+  ls -l /etc/kleidia/agent/agent.toml
+  
+  # Restart agent
+  sudo launchctl kickstart -k system/com.kleidia.agent
+
+Installation fails:
+  
+  # Check installation log
+  grep kleidia /var/log/install.log
+  
+  # Check postinstall log
+  cat /var/log/kleidia-agent/postinstall.log
+  
+  # Verify package signature
+  pkgutil --check-signature kleidia-agent-0.4.6.pkg
+
+================================================================================
+LOGS AND DIAGNOSTICS
+================================================================================
+
+Log locations:
+
+  Installation logs:
+    /var/log/kleidia-agent/postinstall.log
+    /var/log/install.log (system-wide)
+
+  Agent logs:
+    /var/log/kleidia-agent/stdout.log
+    /var/log/kleidia-agent/stderr.log
+
+  System logs:
+    log show --predicate 'process == "kleidia-agent"' --last 1h
+
+View real-time logs:
+
+  # Agent errors
+  tail -f /var/log/kleidia-agent/stderr.log
+  
+  # Agent output
+  tail -f /var/log/kleidia-agent/stdout.log
+  
+  # Installation log
+  tail -f /var/log/install.log
+
+Health check script:
+
+  #!/bin/bash
+  if [ -f "/usr/local/bin/kleidia-agent" ]; then
+      if launchctl list | grep -q com.kleidia.agent; then
+          if pgrep -x kleidia-agent > /dev/null; then
+              echo "✅ Agent is healthy"
+              exit 0
+          fi
+      fi
+  fi
+  echo "❌ Agent has issues"
+  exit 1
+
+================================================================================
+COMMON COMMANDS
+================================================================================
+
+Service Management:
+
+  # Check status
+  sudo launchctl list | grep com.kleidia.agent
+  
+  # Start service
+  sudo launchctl kickstart system/com.kleidia.agent
+  
+  # Stop service
+  sudo launchctl kill SIGTERM system/com.kleidia.agent
+  
+  # Restart service
+  sudo launchctl kickstart -k system/com.kleidia.agent
+  
+  # View service details
+  sudo launchctl print system/com.kleidia.agent
+  
+  # Unload service
+  sudo launchctl bootout system/com.kleidia.agent
+  
+  # Load service
+  sudo launchctl bootstrap system /Library/LaunchDaemons/com.kleidia.agent.plist
+
+Agent Commands:
+
+  # Check version
+  /usr/local/bin/kleidia-agent --version
+  
+  # View help
+  /usr/local/bin/kleidia-agent --help
+  
+  # Test local listener
+  curl http://127.0.0.1:56123/health
+
+Configuration:
+
+  # View config
+  cat /etc/kleidia/agent/agent.toml
+  
+  # Edit config
+  sudo nano /etc/kleidia/agent/agent.toml
+  
+  # Validate config (restart agent, check for errors)
+  sudo launchctl kickstart -k system/com.kleidia.agent
+  tail -20 /var/log/kleidia-agent/stderr.log
+
+Diagnostics:
+
+  # Check if binary exists
+  ls -l /usr/local/bin/kleidia-agent
+  
+  # Check if service file exists
+  ls -l /Library/LaunchDaemons/com.kleidia.agent.plist
+  
+  # Check process
+  ps aux | grep kleidia-agent
+  
+  # Check network listener
+  lsof -i :56123
+  
+  # Check YubiKey Manager
+  which ykman
+  ykman list
+
+================================================================================
+FIREWALL REQUIREMENTS
+================================================================================
+
+Outbound connections required:
+  - Backend server: TCP 443 (HTTPS)
+  - No inbound connections required
+
+Local listener (localhost only):
+  - 127.0.0.1:56123 (HTTP)
+  - Used by browser frontend to communicate with agent
+  - Not accessible from network
+
+Firewall configuration:
+  - macOS Firewall: No configuration needed (outbound only)
+  - Corporate Firewall: Allow HTTPS to backend server
+
+================================================================================
+SECURITY NOTES
+================================================================================
+
+- Agent runs as root via LaunchDaemon (required for YubiKey USB access)
+- Configuration files protected with secure permissions (root:wheel, 0644)
+- All backend communication over HTTPS (TLS 1.2+)
+- Local listener bound to 127.0.0.1 only (not accessible from network)
+- No sensitive credentials stored in configuration
+- Package signed with Developer ID certificate
+- Package notarized by Apple (if built with notarization)
+
+Permissions:
+  /usr/local/bin/kleidia-agent          root:wheel  0755
+  /etc/kleidia/agent/                   root:wheel  0755
+  /etc/kleidia/agent/agent.toml         root:wheel  0644
+  /Library/LaunchDaemons/...plist       root:wheel  0644
+
+================================================================================
+SUPPORT
+================================================================================
+
+Documentation:
+  - ENTERPRISE_DEPLOYMENT.md - Enterprise deployment guide
+  - SIGNING_GUIDE.md - Code signing instructions
+  - NOTARIZATION_GUIDE.md - Apple notarization process
+  - README.md - General information
+
+For issues and support:
+  - GitHub: https://github.com/yourusername/kleidia/issues
+  - Check logs: /var/log/kleidia-agent/
+  - Include installation logs when reporting issues
+
+================================================================================
+ENTERPRISE ADMINISTRATORS
+================================================================================
+
+For mass deployment scenarios, please refer to:
+  ENTERPRISE_DEPLOYMENT.md
+
+This comprehensive guide includes:
+  - Microsoft Intune / Endpoint Manager deployment
+  - Jamf Pro deployment with policies and scripts
+  - Munki deployment with pkginfo examples
+  - Pre-configuration strategies using MDM
+  - Configuration management (Ansible, Puppet, Chef)
+  - Extension Attributes for monitoring (Jamf)
+  - Smart Groups for reporting (Jamf)
+  - Health check scripts
+  - Best practices and troubleshooting
+
+Supported MDM Platforms:
+  ✅ Microsoft Intune / Endpoint Manager
+  ✅ Jamf Pro
+  ✅ Munki
+  ✅ Apple Business Manager with MDM
+  ✅ Profile Manager (macOS Server)
+
+Configuration Options:
+  - Pre-deploy via package customization
+  - Post-install via MDM scripts
+  - Configuration profiles via MDM
+  - Ansible/Puppet/Chef templates
+
+================================================================================
+QUICK REFERENCE
+================================================================================
+
+Installation:
+  sudo installer -pkg kleidia-agent-0.4.6.pkg -target /
+
+Verify:
+  sudo launchctl list | grep com.kleidia.agent
+
+Configure:
+  sudo nano /etc/kleidia/agent/agent.toml
+  sudo launchctl kickstart -k system/com.kleidia.agent
+
+Logs:
+  tail -f /var/log/kleidia-agent/stderr.log
+
+Uninstall:
+  sudo /usr/local/bin/kleidia-agent-uninstall.sh
+
+Health Check:
+  curl http://127.0.0.1:56123/health
+
+================================================================================
+
+Copyright (c) 2025 Kleidia. All rights reserved.
+
+================================================================================
+

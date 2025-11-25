@@ -1,0 +1,23 @@
+{{- if .Values.licenseService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: license-service
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: license-service
+    app.kubernetes.io/name: kleidia-license
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: license-service
+spec:
+  selector:
+    app: license-service
+  ports:
+  - name: http
+    port: 8081
+    targetPort: 8081
+    protocol: TCP
+  type: ClusterIP
+  sessionAffinity: None
+{{- end }}
+

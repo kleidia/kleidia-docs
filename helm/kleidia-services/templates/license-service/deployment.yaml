@@ -1,0 +1,91 @@
+{{- if .Values.licenseService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: license-service
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: license-service
+    app.kubernetes.io/name: kleidia-license
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: license-service
+spec:
+  replicas: {{ .Values.licenseService.replicas }}
+  selector:
+    matchLabels:
+      app: license-service
+  template:
+    metadata:
+      labels:
+        app: license-service
+        app.kubernetes.io/name: kleidia-license
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: license-service
+    spec:
+      serviceAccountName: license-service
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- else if .Values.global.registry.authSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.registry.authSecret }}
+      {{- end }}
+      {{- if .Values.global.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: license-service
+        image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}{{ .Values.licenseService.image }}
+        imagePullPolicy: {{ .Values.licenseService.imagePullPolicy | default "Always" }}
+        ports:
+        - name: http
+          containerPort: 8081
+          protocol: TCP
+        env:
+        - name: VAULT_ADDR
+          value: "http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200"
+        - name: VAULT_ROLE
+          value: "license-service"
+        - name: PORT
+          value: "8081"
+        resources:
+          requests:
+            memory: {{ .Values.licenseService.resources.requests.memory | default "32Mi" }}
+            cpu: {{ .Values.licenseService.resources.requests.cpu | default "50m" }}
+          limits:
+            memory: {{ .Values.licenseService.resources.limits.memory | default "128Mi" }}
+            cpu: {{ .Values.licenseService.resources.limits.cpu | default "200m" }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop: ["ALL"]
+{{- end }}
+

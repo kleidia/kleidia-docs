@@ -1,0 +1,66 @@
+<mxfile host="65bd71144e">
+    <diagram name="YubiMgr Component Architecture" id="component">
+        <mxGraphModel dx="322" dy="660" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="1654" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="frontend-pkg" value="Frontend (Nuxt.js 4)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="40" width="350" height="400" as="geometry"/>
+                </mxCell>
+                <mxCell id="dashboard" value="Dashboard" style="rounded=1;whiteSpace=wrap;html=1;fontColor=#333333;" parent="frontend-pkg" vertex="1">
+                    <mxGeometry x="50" y="60" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="piv-mgmt" value="PIV Management" style="rounded=1;whiteSpace=wrap;html=1;fontColor=#333333;" parent="frontend-pkg" vertex="1">
+                    <mxGeometry x="190" y="60" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="agent-card" value="Local Agent Card" style="rounded=1;whiteSpace=wrap;html=1;fontColor=#333333;" parent="frontend-pkg" vertex="1">
+                    <mxGeometry x="50" y="120" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="admin" value="Admin Panel" style="rounded=1;whiteSpace=wrap;html=1;fontColor=#333333;" parent="frontend-pkg" vertex="1">
+                    <mxGeometry x="190" y="120" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="backend-pkg" value="Backend (Go/Gin)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="420" y="40" width="350" height="400" as="geometry"/>
+                </mxCell>
+                <mxCell id="auth-api" value="Auth API" style="rounded=1;whiteSpace=wrap;html=1;fontColor=#333333;" parent="backend-pkg" vertex="1">
+                    <mxGeometry x="50" y="60" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="yk-api" value="YubiKey API" style="rounded=1;whiteSpace=wrap;html=1;fontColor=#333333;" parent="backend-pkg" vertex="1">
+                    <mxGeometry x="190" y="60" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="vault-svc" value="Vault Service" style="rounded=1;whiteSpace=wrap;html=1;fontColor=#333333;" parent="backend-pkg" vertex="1">
+                    <mxGeometry x="50" y="120" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="encrypt-svc" value="Encryption Service" style="rounded=1;whiteSpace=wrap;html=1;fontColor=#333333;" parent="backend-pkg" vertex="1">
+                    <mxGeometry x="190" y="120" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="agent-pkg" value="Local Agent (Go)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="40" width="300" height="400" as="geometry"/>
+                </mxCell>
+                <mxCell id="http-server" value="HTTP Server" style="rounded=1;whiteSpace=wrap;html=1;fontColor=#333333;" parent="agent-pkg" vertex="1">
+                    <mxGeometry x="50" y="60" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="discovery" value="Device Discovery" style="rounded=1;whiteSpace=wrap;html=1;fontColor=#333333;" parent="agent-pkg" vertex="1">
+                    <mxGeometry x="50" y="120" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="piv-ops" value="PIV Operations" style="rounded=1;whiteSpace=wrap;html=1;fontColor=#333333;" parent="agent-pkg" vertex="1">
+                    <mxGeometry x="50" y="180" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="conn1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;" parent="1" source="dashboard" target="auth-api" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="conn2" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;" parent="1" source="piv-mgmt" target="yk-api" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="conn3" value="HTTP&#10;localhost:56123" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=0;" parent="1" source="agent-card" target="http-server" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
+
+
+
+
+

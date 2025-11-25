@@ -1,0 +1,8 @@
+# Large installer packages - should not be in git
+07-Installers/**/*.pkg
+07-Installers/**/*.msi
+07-Installers/**/*.exe
+*.pkg
+*.msi
+*.exe
+.DS_Store
