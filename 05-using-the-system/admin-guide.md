@@ -245,11 +245,109 @@ Configure system-wide settings:
    - **Email**: SMTP host, port, from address, username, TLS settings
    - **Security**: Feature toggles (device binding, token rotation)
    - **Backup**: Database and Vault backup schedules (cron expressions), retention days
-   - **OIDC Provider**: OpenID Connect authentication configuration
+   - **OIDC Provider**: OpenID Connect authentication configuration (see next section)
    - **OpenBao CA**: Certificate Authority configuration
 3. Click "Save" for each settings category
 
 **Note**: Settings are persisted in the database and take effect immediately. All setting changes are logged to audit logs.
+
+### OIDC Provider Configuration
+
+Kleidia can use an external OpenID Connect (OIDC) provider for single sign-on (SSO).  
+Configuration is done from **Admin Panel → System Settings → OIDC Provider**.
+
+#### Prerequisites
+
+- An OIDC provider that supports the standard discovery document (`.well-known/openid-configuration`)
+- A confidential client (application) registered in the provider
+- HTTPS enabled for the Kleidia frontend
+
+#### 1. Register Kleidia as an OIDC client
+
+In your OIDC provider:
+
+1. Create a new **confidential client/application**
+2. Configure the **Redirect URI**:
+   - Recommended SPA callback:  
+     `https://<your-kleidia-domain>/oidc/callback`
+   - (Legacy API-style callback, only if you intentionally use it):  
+     `https://<your-kleidia-domain>/api/auth/oidc/callback`
+3. Note the following values:
+   - **Client ID**
+   - **Client Secret**
+   - **Issuer URL** (often shown as the base URL for the authorization server)
+
+> Do not use any environment- or customer-specific examples here; replace `<your-kleidia-domain>` with your actual hostname.
+
+#### 2. Configure OIDC in Kleidia
+
+Navigate to **Admin Panel → System Settings → OIDC Provider** and fill in:
+
+- **Issuer URL** (required)  
+  - Base URL of your OIDC provider, e.g. `https://auth.example.com`  
+  - For some providers this may include an additional path segment (e.g. `/realms/<realm>`).
+
+- **Discovery URL Override** (optional)  
+  - Full URL to the discovery document:  
+    `https://auth.example.com/.well-known/openid-configuration`  
+  - Only required for non-standard providers where the discovery document is not at the default path.
+  - If left empty, Kleidia derives it from the Issuer URL.
+
+- **Redirect URI** (required)  
+  - Must exactly match one of the redirect URIs registered in your OIDC client.
+  - Recommended: `https://<your-kleidia-domain>/oidc/callback`
+
+- **Client ID** (required)  
+  - The client identifier from your OIDC provider.
+
+- **Client Secret** (usually required)  
+  - The client secret for the application.  
+  - For security reasons, the stored secret is **not shown** again in the UI; leaving the field empty on later edits keeps the existing secret.
+
+- **Scopes**  
+  - Space-separated list, default: `openid profile email`.
+
+- **Admin Roles**  
+  - Comma-separated list of OIDC roles that should be treated as Kleidia admins.
+
+- **Enable OIDC**  
+  - Turns on OIDC login. When enabled, users can authenticate via SSO.
+
+- **Disable Local Login** (optional)  
+  - When enabled, only OIDC authentication is allowed; local username/password login is disabled.
+
+Click **Save** to persist settings.
+
+#### 3. Test OIDC configuration
+
+Use the **Test Configuration** button in the OIDC Provider panel:
+
+1. Ensure **Issuer URL**, **Redirect URI**, **Client ID**, and (if required) **Client Secret** are filled.
+2. Click **Test Configuration**.
+3. Kleidia will:
+   - Fetch the discovery document
+   - Validate the authorization/token/userinfo endpoints
+   - Attempt to generate an authorization URL
+4. A success message indicates the configuration is valid from Kleidia’s perspective.
+
+If the test fails, the error message usually indicates whether:
+
+- The discovery URL is unreachable or misconfigured
+- The client credentials are invalid
+- The redirect URI does not match any registered value
+
+#### 4. User experience and OIDC‑managed accounts
+
+- When OIDC is enabled, users see a **“Sign in with SSO”** button on the login screen.
+- On first successful OIDC sign-in:
+  - Kleidia creates a corresponding local user record (using the OIDC email and name).
+  - These users are marked as **OIDC‑managed** in the **Admin → Users** table.
+- For **OIDC‑managed users**:
+  - Local account actions such as **Edit**, **Reset Password**, and **Disable User** are hidden.
+  - A badge labeled **“OIDC‑managed”** is shown instead.
+  - User lifecycle (activation, password policies, etc.) is controlled by the OIDC provider.
+
+Local users (created via the Kleidia admin UI with a password) remain fully manageable through the existing user management actions.
 
 ## License Management
 
