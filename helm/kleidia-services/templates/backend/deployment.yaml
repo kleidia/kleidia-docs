@@ -134,7 +134,17 @@ spec:
         - name: LOG_LEVEL
           value: info
         - name: CORS_ORIGINS
-          value: {{ .Values.backend.corsOrigins | default .Values.global.siteUrl | quote }}
+          {{- $corsOrigins := .Values.backend.corsOrigins }}
+          {{- if not $corsOrigins }}
+            {{- if .Values.global.siteUrl }}
+              {{- $corsOrigins = .Values.global.siteUrl }}
+            {{- else if .Values.global.domain }}
+              {{- $corsOrigins = printf "https://%s" .Values.global.domain }}
+            {{- else }}
+              {{- $corsOrigins = "https://kleidia.example.com" }}
+            {{- end }}
+          {{- end }}
+          value: {{ $corsOrigins | quote }}
         
         # License service connection
         - name: LICENSE_SERVICE_URL
