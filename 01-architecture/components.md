@@ -176,7 +176,6 @@ Cryptographically-signed license validation and management service for controlli
 
 ### Technology
 - **Language**: Go 1.25+
-- **Obfuscation**: Garble v0.15.0 for binary protection
 - **Storage**: OpenBao Vault KV v2 for license storage
 - **Cryptography**: Ed25519 digital signatures
 
@@ -193,7 +192,6 @@ Cryptographically-signed license validation and management service for controlli
 - **Installation ID Binding**: Licenses tied to specific deployments
 - **Trial Mode**: Automatic 30-day trial on first installation
 - **Vault Storage**: Licenses stored encrypted in Vault KV v2
-- **Garble Obfuscation**: Binary obfuscated to protect public key
 - **Stateless Operation**: No database dependencies
 - **Fallback Behavior**: Falls back to TRIAL mode if service unavailable
 
@@ -231,16 +229,7 @@ Cryptographically-signed license validation and management service for controlli
 #### Cryptographic Protection
 - **Ed25519 Signatures**: Licenses signed with private key held by vendor
 - **Public Key Embedding**: Public key compiled into binary for verification
-- **Garble Obfuscation**: Binary obfuscated to prevent public key extraction
 - **Installation ID**: Cryptographic hash binds license to specific deployment
-
-#### Binary Obfuscation
-The license service binary is built with garble:
-- `-literals`: Encrypts string literals (public key, error messages)
-- `-tiny`: Minimizes binary size and obfuscates control flow
-- `-seed=random`: Each build is unique to prevent pattern matching
-
-This prevents reverse engineering of the public key from the binary.
 
 #### Vault Integration
 - **Kubernetes Auth**: Authenticates using ServiceAccount token

@@ -16,8 +16,40 @@ Vault is automatically configured by Helm hooks during deployment:
 2. **Auto-Unseal**: Static key unsealing (no manual unseal needed)
 3. **PKI Configuration**: PKI engine and roles configured
 4. **KV v2 Setup**: Secrets engine enabled at `yubikeys/` path
-5. **AppRole Authentication**: Backend authentication configured
-6. **Policies**: Backend and admin policies created
+5. **AppRole Authentication**: Dedicated AppRoles for each component
+6. **Policies**: Least-privilege policies for backend, license service, and Helm admin
+7. **Audit Logging**: File-based audit device enabled
+
+## AppRole Architecture
+
+After installation, three AppRoles are created for different components:
+
+| AppRole | Kubernetes Secret | Purpose |
+|---------|------------------|---------|
+| `helm-admin` | `openbao-helm-approle` | Helm chart upgrades and configuration |
+| `backend-openbao` | `openbao-backend-approle` | Backend service operations |
+| `license-openbao` | `openbao-license-approle` | License service operations |
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Fresh Installation                            │
+│                                                                  │
+│  1. OpenBao initialized with root token                         │
+│  2. Root token used to configure everything                     │
+│  3. AppRoles created with scoped permissions                    │
+│  4. Root token displayed to admin, then deleted                 │
+│  5. Future operations use AppRoles only                         │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    Helm Upgrades                                 │
+│                                                                  │
+│  • Uses helm-admin AppRole (no root token needed)               │
+│  • Can update policies and PKI roles                            │
+│  • Cannot read secrets                                          │
+│  • Cannot create new secrets engines                            │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Manual Setup (if needed)
 
@@ -28,14 +60,14 @@ Vault is automatically configured by Helm hooks during deployment:
 VAULT_POD=$(kubectl get pods -l app.kubernetes.io/name=openbao -n kleidia -o jsonpath='{.items[0].metadata.name}')
 
 # Check Vault status
-kubectl exec -it $VAULT_POD -n kleidia -- vault status
+kubectl exec -it $VAULT_POD -n kleidia -- bao status
 ```
 
 ### 2. Initialize Vault (if not initialized)
 
 ```bash
 # Initialize Vault
-kubectl exec -it $VAULT_POD -n kleidia -- vault operator init -key-shares=3 -key-threshold=2
+kubectl exec -it $VAULT_POD -n kleidia -- bao operator init -key-shares=3 -key-threshold=2
 
 # Save unseal keys and root token securely
 ```
@@ -44,41 +76,41 @@ kubectl exec -it $VAULT_POD -n kleidia -- vault operator init -key-shares=3 -key
 
 ```bash
 # Unseal Vault (if auto-unseal not working)
-kubectl exec -it $VAULT_POD -n kleidia -- vault operator unseal <unseal-key-1>
-kubectl exec -it $VAULT_POD -n kleidia -- vault operator unseal <unseal-key-2>
+kubectl exec -it $VAULT_POD -n kleidia -- bao operator unseal <unseal-key-1>
+kubectl exec -it $VAULT_POD -n kleidia -- bao operator unseal <unseal-key-2>
 ```
 
 ### 4. Enable KV v2 Secrets Engine
 
 ```bash
 # Login with root token
-kubectl exec -it $VAULT_POD -n kleidia -- vault login <root-token>
+kubectl exec -it $VAULT_POD -n kleidia -- bao login <root-token>
 
 # Enable KV v2 at yubikeys path
-kubectl exec -it $VAULT_POD -n kleidia -- vault secrets enable -path=yubikeys kv-v2
+kubectl exec -it $VAULT_POD -n kleidia -- bao secrets enable -path=yubikeys kv-v2
 ```
 
 ### 5. Enable PKI Secrets Engine
 
 ```bash
 # Enable PKI
-kubectl exec -it $VAULT_POD -n kleidia -- vault secrets enable pki
+kubectl exec -it $VAULT_POD -n kleidia -- bao secrets enable pki
 
 # Configure TTL (CA lifetime window)
-kubectl exec -it $VAULT_POD -n kleidia -- vault secrets tune -max-lease-ttl=87600h pki
+kubectl exec -it $VAULT_POD -n kleidia -- bao secrets tune -max-lease-ttl=87600h pki
 
 # Generate root CA (10 years)
-kubectl exec -it $VAULT_POD -n kleidia -- vault write pki/root/generate/internal \
+kubectl exec -it $VAULT_POD -n kleidia -- bao write pki/root/generate/internal \
     common_name="Kleidia Root CA" \
     ttl=87600h
 
 # Configure URLs
-kubectl exec -it $VAULT_POD -n kleidia -- vault write pki/config/urls \
+kubectl exec -it $VAULT_POD -n kleidia -- bao write pki/config/urls \
     issuing_certificates="http://kleidia-platform-openbao:8200/v1/pki/ca" \
     crl_distribution_points="http://kleidia-platform-openbao:8200/v1/pki/crl"
 
 # Create PKI role (1-year leaf certificates)
-kubectl exec -it $VAULT_POD -n kleidia -- vault write pki/roles/kleidia \
+kubectl exec -it $VAULT_POD -n kleidia -- bao write pki/roles/kleidia \
     allow_any_name=true \
     enforce_hostnames=false \
     allow_subdomains=true \
@@ -95,10 +127,10 @@ kubectl exec -it $VAULT_POD -n kleidia -- vault write pki/roles/kleidia \
 
 ```bash
 # Enable AppRole
-kubectl exec -it $VAULT_POD -n kleidia -- vault auth enable approle
+kubectl exec -it $VAULT_POD -n kleidia -- bao auth enable approle
 
 # Create backend policy
-kubectl exec -it $VAULT_POD -n kleidia -- vault policy write kleidia-backend - <<EOF
+kubectl exec -it $VAULT_POD -n kleidia -- bao policy write kleidia-backend - <<EOF
 path "pki/sign/*" {
   capabilities = ["create", "read", "update"]
 }
@@ -120,27 +152,58 @@ path "yubikeys/data/*" {
 }
 
 path "yubikeys/metadata/*" {
-  capabilities = ["list", "read"]
+  capabilities = ["list", "read", "delete"]
+}
+
+path "secret/data/kleidia/jwt-secret" {
+  capabilities = ["create", "read", "update"]
+}
+
+path "secret/data/kleidia/encryption-key" {
+  capabilities = ["create", "read", "update"]
+}
+
+path "secret/data/kleidia/database" {
+  capabilities = ["create", "read", "update"]
+}
+
+# Explicit deny for license secrets
+path "secret/data/kleidia/licenses/*" {
+  capabilities = ["deny"]
+}
+
+path "auth/token/renew-self" {
+  capabilities = ["update"]
 }
 EOF
 
-# Create AppRole
-kubectl exec -it $VAULT_POD -n kleidia -- vault write auth/approle/role/kleidia-backend \
+# Create backend AppRole
+kubectl exec -it $VAULT_POD -n kleidia -- bao write auth/approle/role/backend-openbao \
     token_policies="kleidia-backend" \
     token_ttl=1h \
     token_max_ttl=4h
 
 # Get Role ID
-ROLE_ID=$(kubectl exec -it $VAULT_POD -n kleidia -- vault read -field=role_id auth/approle/role/kleidia-backend/role-id)
+ROLE_ID=$(kubectl exec -it $VAULT_POD -n kleidia -- bao read -field=role_id auth/approle/role/backend-openbao/role-id)
 
 # Generate Secret ID
-SECRET_ID=$(kubectl exec -it $VAULT_POD -n kleidia -- vault write -field=secret_id -f auth/approle/role/kleidia-backend/secret-id)
+SECRET_ID=$(kubectl exec -it $VAULT_POD -n kleidia -- bao write -field=secret_id -f auth/approle/role/backend-openbao/secret-id)
 
 # Store in Kubernetes secret
-kubectl create secret generic vault-approle -n kleidia \
-    --from-literal=role-id=$ROLE_ID \
-    --from-literal=secret-id=$SECRET_ID \
+kubectl create secret generic openbao-backend-approle -n kleidia \
+    --from-literal=role_id=$ROLE_ID \
+    --from-literal=secret_id=$SECRET_ID \
     --dry-run=client -o yaml | kubectl apply -f -
+```
+
+### 7. Enable Audit Logging
+
+```bash
+# Enable file audit device
+kubectl exec -it $VAULT_POD -n kleidia -- bao audit enable file file_path=/openbao/audit/audit.log
+
+# Verify audit is enabled
+kubectl exec -it $VAULT_POD -n kleidia -- bao audit list
 ```
 
 ## Verification
@@ -149,7 +212,7 @@ kubectl create secret generic vault-approle -n kleidia \
 
 ```bash
 # Check Vault is unsealed
-kubectl exec -it $VAULT_POD -n kleidia -- vault status
+kubectl exec -it $VAULT_POD -n kleidia -- bao status
 
 # Expected output:
 # Key             Value
@@ -164,7 +227,7 @@ kubectl exec -it $VAULT_POD -n kleidia -- vault status
 
 ```bash
 # List secrets engines
-kubectl exec -it $VAULT_POD -n kleidia -- vault secrets list
+kubectl exec -it $VAULT_POD -n kleidia -- bao secrets list
 
 # Should show:
 # Path          Type         Accessor              Description
@@ -173,26 +236,69 @@ kubectl exec -it $VAULT_POD -n kleidia -- vault secrets list
 # yubikeys/     kv           kv_xxx               KV v2 secrets engine
 ```
 
+### Verify AppRoles
+
+```bash
+# List auth methods
+kubectl exec -it $VAULT_POD -n kleidia -- bao auth list
+
+# Check AppRoles exist
+kubectl exec -it $VAULT_POD -n kleidia -- bao list auth/approle/role
+
+# Should show:
+# Keys
+# ----
+# backend-openbao
+# helm-admin
+# license-openbao
+```
+
+### Verify Kubernetes Secrets
+
+```bash
+# Check all AppRole secrets exist
+kubectl get secret openbao-backend-approle -n kleidia
+kubectl get secret openbao-license-approle -n kleidia
+kubectl get secret openbao-helm-approle -n kleidia
+
+# View secret keys (not values)
+kubectl get secret openbao-backend-approle -n kleidia -o jsonpath='{.data}' | jq 'keys'
+# Should show: ["role_id", "secret_id"]
+```
+
 ### Verify PKI Configuration
 
 ```bash
 # Check PKI role
-kubectl exec -it $VAULT_POD -n kleidia -- vault read pki/roles/kleidia
+kubectl exec -it $VAULT_POD -n kleidia -- bao read pki/roles/kleidia
 
 # Check CA certificate
-kubectl exec -it $VAULT_POD -n kleidia -- vault read pki/cert/ca
+kubectl exec -it $VAULT_POD -n kleidia -- bao read pki/cert/ca
+```
+
+### Verify Audit Logging
+
+```bash
+# Check audit device is enabled
+kubectl exec -it $VAULT_POD -n kleidia -- bao audit list
+
+# View recent audit logs
+kubectl exec -it $VAULT_POD -n kleidia -- tail -10 /openbao/audit/audit.log
 ```
 
 ### Test Secret Storage
 
 ```bash
-# Store test secret
-kubectl exec -it $VAULT_POD -n kleidia -- vault kv put yubikeys/data/test \
+# Store test secret (requires root token or appropriate AppRole)
+kubectl exec -it $VAULT_POD -n kleidia -- bao kv put yubikeys/data/test \
     pin="123456" \
     puk="12345678"
 
 # Read test secret
-kubectl exec -it $VAULT_POD -n kleidia -- vault kv get yubikeys/data/test
+kubectl exec -it $VAULT_POD -n kleidia -- bao kv get yubikeys/data/test
+
+# Delete test secret
+kubectl exec -it $VAULT_POD -n kleidia -- bao kv delete yubikeys/data/test
 ```
 
 ## Auto-Unseal Configuration
@@ -219,20 +325,20 @@ kubectl logs kleidia-platform-openbao-0 -n kleidia | grep -i unseal
 
 ```bash
 # Check Vault status
-kubectl exec -it $VAULT_POD -n kleidia -- vault status
+kubectl exec -it $VAULT_POD -n kleidia -- bao status
 
 # If sealed, check auto-unseal configuration
 kubectl get secret openbao-unseal-key -n kleidia
 
 # Manual unseal (if auto-unseal fails)
-kubectl exec -it $VAULT_POD -n kleidia -- vault operator unseal <unseal-key>
+kubectl exec -it $VAULT_POD -n kleidia -- bao operator unseal <unseal-key>
 ```
 
 ### PKI Not Configured
 
 ```bash
 # Check if PKI is enabled
-kubectl exec -it $VAULT_POD -n kleidia -- vault secrets list | grep pki
+kubectl exec -it $VAULT_POD -n kleidia -- bao secrets list | grep pki
 
 # If not enabled, enable it (see manual setup above)
 ```
@@ -241,15 +347,47 @@ kubectl exec -it $VAULT_POD -n kleidia -- vault secrets list | grep pki
 
 ```bash
 # Check AppRole is enabled
-kubectl exec -it $VAULT_POD -n kleidia -- vault auth list | grep approle
+kubectl exec -it $VAULT_POD -n kleidia -- bao auth list | grep approle
 
 # Check backend secret exists
-kubectl get secret vault-approle -n kleidia
+kubectl get secret openbao-backend-approle -n kleidia
+
+# Decode and check role_id
+kubectl get secret openbao-backend-approle -n kleidia -o jsonpath='{.data.role_id}' | base64 -d
 
 # Test authentication
-kubectl exec -it $VAULT_POD -n kleidia -- vault write auth/approle/login \
-    role_id=<role-id> \
-    secret_id=<secret-id>
+ROLE_ID=$(kubectl get secret openbao-backend-approle -n kleidia -o jsonpath='{.data.role_id}' | base64 -d)
+SECRET_ID=$(kubectl get secret openbao-backend-approle -n kleidia -o jsonpath='{.data.secret_id}' | base64 -d)
+
+kubectl exec -it $VAULT_POD -n kleidia -- bao write auth/approle/login \
+    role_id=$ROLE_ID \
+    secret_id=$SECRET_ID
+```
+
+### Audit Log Issues
+
+```bash
+# Check audit device status
+kubectl exec -it $VAULT_POD -n kleidia -- bao audit list
+
+# Check audit log file exists and is writable
+kubectl exec -it $VAULT_POD -n kleidia -- ls -la /openbao/audit/
+
+# If audit device is missing, re-enable it
+kubectl exec -it $VAULT_POD -n kleidia -- bao audit enable file file_path=/openbao/audit/audit.log
+```
+
+### Permission Denied Errors
+
+```bash
+# Check which policy is attached to the AppRole
+kubectl exec -it $VAULT_POD -n kleidia -- bao read auth/approle/role/backend-openbao
+
+# Read the policy to see what's allowed
+kubectl exec -it $VAULT_POD -n kleidia -- bao policy read kleidia-backend
+
+# Check audit log for denied operations
+kubectl exec -it $VAULT_POD -n kleidia -- grep "permission denied" /openbao/audit/audit.log | tail -10
 ```
 
 ## Backup and Restore
@@ -258,7 +396,7 @@ kubectl exec -it $VAULT_POD -n kleidia -- vault write auth/approle/login \
 
 ```bash
 # Create snapshot
-kubectl exec -it $VAULT_POD -n kleidia -- vault operator raft snapshot save /tmp/vault-backup.snap
+kubectl exec -it $VAULT_POD -n kleidia -- bao operator raft snapshot save /tmp/vault-backup.snap
 
 # Copy snapshot locally
 kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap ./vault-backup-$(date +%Y%m%d).snap -n kleidia
@@ -271,13 +409,32 @@ kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap ./vault-backup-$(da
 kubectl cp ./vault-backup.snap kleidia-platform-openbao-0:/tmp/vault-backup.snap -n kleidia
 
 # Restore snapshot
-kubectl exec -it $VAULT_POD -n kleidia -- vault operator raft snapshot restore /tmp/vault-backup.snap
+kubectl exec -it $VAULT_POD -n kleidia -- bao operator raft snapshot restore /tmp/vault-backup.snap
 ```
+
+### Backup AppRole Credentials
+
+```bash
+# Export Kubernetes secrets (for disaster recovery)
+kubectl get secret openbao-backend-approle -n kleidia -o yaml > backup-backend-approle.yaml
+kubectl get secret openbao-license-approle -n kleidia -o yaml > backup-license-approle.yaml
+kubectl get secret openbao-helm-approle -n kleidia -o yaml > backup-helm-approle.yaml
+
+# Store these securely - they contain authentication credentials
+```
+
+## Security Best Practices
+
+1. **Delete Root Token**: After initial setup, ensure root token is removed from cluster
+2. **Rotate Secret IDs**: Periodically regenerate AppRole secret IDs
+3. **Monitor Audit Logs**: Regularly review audit logs for suspicious activity
+4. **Backup Regularly**: Schedule regular Vault backups
+5. **Test Recovery**: Periodically test backup restoration procedures
 
 ## Related Documentation
 
 - [Vault and Secrets](../02-security/vault-and-secrets.md)
+- [Permissions and Policies](../06-reference/permissions-and-policies.md)
 - [Certificates and PKI](../02-security/certificates-and-pki.md)
 - [Helm Installation](helm-install.md)
 - [Troubleshooting](troubleshooting.md)
-
