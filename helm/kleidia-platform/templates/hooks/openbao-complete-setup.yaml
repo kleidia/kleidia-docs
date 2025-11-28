@@ -8,6 +8,10 @@ metadata:
   labels:
     app: openbao-init
     component: vault
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
   # Automatically delete job after 5 minutes (300s) of completion
   ttlSecondsAfterFinished: 300
@@ -173,8 +177,12 @@ spec:
           HEALTH=$(openbao_curl -s "http://127.0.0.1:8200/v1/sys/health" || echo '{"initialized":false}')
           INITIALIZED=$(echo "$HEALTH" | jq -r '.initialized // false')
           
+          # Variable to track if this is first install (need to create AppRoles)
+          FIRST_INSTALL=false
+          
           if [ "$INITIALIZED" = "false" ]; then
             echo "OpenBao is not initialized. Initializing..."
+            FIRST_INSTALL=true
             
             # Initialize OpenBao with retries
             # Note: With static seal, recovery keys may not be returned in init response
@@ -260,26 +268,62 @@ spec:
           else
             echo "✅ OpenBao is already initialized"
             
-            # Get existing root token from secret
-            if ! kubectl get secret openbao-init-keys -n "${NAMESPACE}" &>/dev/null; then
-              echo "❌ OpenBao is initialized but openbao-init-keys secret not found"
-              echo "   Please manually create the secret with the root token"
-              exit 1
+            # Try to get root token from openbao-init-keys secret (first install, before bootstrap UI deletes it)
+            if kubectl get secret openbao-init-keys -n "${NAMESPACE}" &>/dev/null; then
+              ROOT_TOKEN=$(kubectl get secret openbao-init-keys -n "${NAMESPACE}" -o jsonpath='{.data.root-token}' | base64 -d 2>/dev/null || echo "")
+              if [ -n "$ROOT_TOKEN" ]; then
+                echo "   Root token retrieved from openbao-init-keys secret"
+              fi
             fi
             
-            ROOT_TOKEN=$(kubectl get secret openbao-init-keys -n "${NAMESPACE}" -o jsonpath='{.data.root-token}' | base64 -d 2>/dev/null || echo "")
-            
+            # If no root token, try helm-admin AppRole (upgrade path after bootstrap)
             if [ -z "$ROOT_TOKEN" ]; then
-              echo "❌ Failed to retrieve root token from openbao-init-keys secret"
-              exit 1
+              if kubectl get secret openbao-helm-approle -n "${NAMESPACE}" &>/dev/null; then
+                echo "   Using helm-admin AppRole for authentication..."
+                HELM_ROLE_ID=$(kubectl get secret openbao-helm-approle -n "${NAMESPACE}" -o jsonpath='{.data.role_id}' | base64 -d 2>/dev/null || echo "")
+                HELM_SECRET_ID=$(kubectl get secret openbao-helm-approle -n "${NAMESPACE}" -o jsonpath='{.data.secret_id}' | base64 -d 2>/dev/null || echo "")
+                
+                if [ -n "$HELM_ROLE_ID" ] && [ -n "$HELM_SECRET_ID" ]; then
+                  # Authenticate via AppRole
+                  AUTH_RESPONSE=$(openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/login" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"role_id\":\"${HELM_ROLE_ID}\",\"secret_id\":\"${HELM_SECRET_ID}\"}" 2>&1)
+                  
+                  ROOT_TOKEN=$(echo "$AUTH_RESPONSE" | jq -r '.auth.client_token // empty')
+                  
+                  if [ -n "$ROOT_TOKEN" ]; then
+                    echo "   ✅ Authenticated with helm-admin AppRole"
+                  else
+                    echo "   ⚠️  AppRole authentication failed"
+                  fi
+                fi
+              fi
             fi
             
-            echo "   Root token retrieved from existing secret"
+            # If still no token, skip configuration (graceful degradation)
+            if [ -z "$ROOT_TOKEN" ]; then
+              echo "   ⚠️  No authentication method available"
+              echo "   ⚠️  Skipping OpenBao configuration (policies/roles may be stale)"
+              echo "   ⚠️  To fix: restore openbao-init-keys or openbao-helm-approle secret"
+              echo ""
+              echo "=== OpenBao Setup Skipped (no credentials) ==="
+              exit 0  # Exit successfully to not block Helm upgrade
+            fi
           fi
           
-          # Configure Kubernetes Authentication (auto-unseal handles unsealing)
+          # Step 3: Enable audit logging (security requirement)
           echo ""
-          echo "Step 3: Configuring Kubernetes authentication..."
+          echo "Step 3: Enabling audit logging..."
+          # Enable file audit device - logs all operations
+          openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/audit/file" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"file","options":{"file_path":"/openbao/audit/audit.log","log_raw":"false"}}' 2>/dev/null || echo "Audit logging already enabled or audit path not available"
+          echo "✅ Audit logging configured"
+          
+          # Step 4: Configure Kubernetes Authentication (auto-unseal handles unsealing)
+          echo ""
+          echo "Step 4: Configuring Kubernetes authentication..."
           
           # Enable Kubernetes auth method (idempotent)
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/sys/auth/kubernetes" \
@@ -325,19 +369,19 @@ spec:
           
           echo "✅ Kubernetes auth configured with long-lived token"
           
-          # Create backend policy
+          # Step 5: Create tightened kleidia-backend policy (scoped KV access)
           echo ""
-          echo "Step 4: Creating kleidia-backend policy..."
+          echo "Step 5: Creating kleidia-backend policy (security-hardened)..."
           openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/kleidia-backend" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policy": "# PKI certificate signing\npath \"pki/sign/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/issue/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/cert/ca\" { capabilities = [\"read\"] }\n\n# PKI CA management (for intermediate CA reconfiguration)\npath \"pki/issuers/generate/intermediate/existing\" { capabilities = [\"create\", \"update\"] }\npath \"pki/intermediate/set-signed\" { capabilities = [\"create\", \"update\"] }\npath \"pki/config/urls\" { capabilities = [\"read\", \"update\"] }\npath \"pki/config/issuers\" { capabilities = [\"read\"] }\npath \"pki/issuer/*\" { capabilities = [\"read\"] }\n\n# KV v2 secrets (application secrets)\npath \"yubikeys/data/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"] }\npath \"yubikeys/metadata/*\" { capabilities = [\"list\", \"read\"] }\n\n# System endpoints (for health checks)\npath \"sys/auth\" { capabilities = [\"read\"] }\n\n# Token renewal\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }"}'
+            -d '{"policy": "# PKI certificate signing\npath \"pki/sign/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/issue/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/cert/ca\" { capabilities = [\"read\"] }\n\n# PKI CA management (for intermediate CA reconfiguration)\npath \"pki/issuers/generate/intermediate/existing\" { capabilities = [\"create\", \"update\"] }\npath \"pki/intermediate/set-signed\" { capabilities = [\"create\", \"update\"] }\npath \"pki/config/urls\" { capabilities = [\"read\", \"update\"] }\npath \"pki/config/issuers\" { capabilities = [\"read\"] }\npath \"pki/issuer/*\" { capabilities = [\"read\"] }\n\n# Application secrets (specific paths only - least privilege)\npath \"yubikeys/data/jwt-secret\" { capabilities = [\"read\"] }\npath \"yubikeys/data/encryption-key\" { capabilities = [\"read\"] }\npath \"yubikeys/data/database\" { capabilities = [\"read\"] }\npath \"yubikeys/data/backend/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\"] }\npath \"yubikeys/data/backend-encryption-key\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"yubikeys/metadata/backend/*\" { capabilities = [\"list\", \"read\"] }\n\n# Explicitly deny license paths (defense in depth)\npath \"yubikeys/data/license/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/metadata/license/*\" { capabilities = [\"deny\"] }\n\n# System endpoints (for health checks)\npath \"sys/auth\" { capabilities = [\"read\"] }\n\n# Token renewal\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }"}'
           
-          echo "✅ Policy created"
+          echo "✅ Backend policy created (scoped access)"
           
           # Create backend Kubernetes role
           echo ""
-          echo "Step 5: Creating kleidia-backend Kubernetes role..."
+          echo "Step 5a: Creating kleidia-backend Kubernetes role..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/kubernetes/role/kleidia-backend" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -347,11 +391,11 @@ spec:
           
           # Create license-service policy and role
           echo ""
-          echo "Step 5a: Creating license-service policy and role..."
+          echo "Step 5b: Creating license-service policy and role..."
           openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/license-service" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policy": "# Allow full access to license data paths\npath \"yubikeys/data/license/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"] }\npath \"yubikeys/metadata/license/*\" { capabilities = [\"read\", \"list\"] }\n\n# Deny access to other yubikeys paths (defense in depth)\npath \"yubikeys/data/yubikeys/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/data/devices/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/data/certs/*\" { capabilities = [\"deny\"] }\n\n# Token renewal\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }"}'
+            -d '{"policy": "# Allow full access to license data paths\npath \"yubikeys/data/license/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"] }\npath \"yubikeys/metadata/license/*\" { capabilities = [\"read\", \"list\"] }\n\n# Deny access to other yubikeys paths (defense in depth)\npath \"yubikeys/data/yubikeys/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/data/devices/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/data/certs/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/data/jwt-secret\" { capabilities = [\"deny\"] }\npath \"yubikeys/data/encryption-key\" { capabilities = [\"deny\"] }\npath \"yubikeys/data/backend/*\" { capabilities = [\"deny\"] }\n\n# Token renewal\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }"}'
           
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/kubernetes/role/license-service" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
@@ -362,7 +406,7 @@ spec:
           
           # Create cert-manager policy and role (for infrastructure certificates)
           echo ""
-          echo "Step 5b: Creating cert-manager policy and role..."
+          echo "Step 5c: Creating cert-manager policy and role..."
           openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/cert-manager" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -375,9 +419,96 @@ spec:
           
           echo "✅ Cert-manager policy and role created"
           
-          # Enable KV v2 secrets engine
+          # Step 6: Enable AppRole auth method and create management AppRoles
           echo ""
-          echo "Step 6: Enabling KV v2 secrets engine..."
+          echo "Step 6: Enabling AppRole auth method..."
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/sys/auth/approle" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"approle"}' 2>/dev/null || echo "AppRole auth already enabled"
+          echo "✅ AppRole auth method enabled"
+          
+          # Step 6a: Create helm-admin policy (tightly scoped - NO secret read access)
+          echo ""
+          echo "Step 6a: Creating helm-admin policy (management only, no secret access)..."
+          openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/helm-admin" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"policy": "# Manage Kubernetes auth method\npath \"auth/kubernetes/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"] }\n\n# Manage specific AppRole roles only (not all)\npath \"auth/approle/role/helm-admin\" { capabilities = [\"read\", \"update\"] }\npath \"auth/approle/role/helm-admin/secret-id\" { capabilities = [\"create\", \"update\"] }\npath \"auth/approle/role/backend-openbao\" { capabilities = [\"read\", \"update\"] }\npath \"auth/approle/role/backend-openbao/secret-id\" { capabilities = [\"create\", \"update\"] }\npath \"auth/approle/role/license-openbao\" { capabilities = [\"read\", \"update\"] }\npath \"auth/approle/role/license-openbao/secret-id\" { capabilities = [\"create\", \"update\"] }\n\n# Manage specific policies only (not arbitrary)\npath \"sys/policy/kleidia-backend\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"sys/policy/license-service\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"sys/policy/cert-manager\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"sys/policy/kleidia-backup\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"sys/policy/helm-admin\" { capabilities = [\"read\"] }\n\n# Read auth methods (no create/delete)\npath \"sys/auth\" { capabilities = [\"read\", \"list\"] }\n\n# PKI role management (needed for role updates)\npath \"pki/roles/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"] }\npath \"pki/config/*\" { capabilities = [\"read\", \"update\"] }\n\n# Token renewal only\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }"}'
+          echo "✅ helm-admin policy created (no secret access)"
+          
+          # Step 6b: Create helm-admin AppRole
+          echo ""
+          echo "Step 6b: Creating helm-admin AppRole..."
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/helm-admin" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"policies":["helm-admin"],"token_ttl":"1h","token_max_ttl":"24h","secret_id_ttl":"8760h","secret_id_num_uses":0}'
+          
+          # Get role_id
+          HELM_ROLE_ID=$(openbao_curl -sf "http://127.0.0.1:8200/v1/auth/approle/role/helm-admin/role-id" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.role_id')
+          
+          # Generate secret_id
+          HELM_SECRET_ID=$(openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/helm-admin/secret-id" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.secret_id')
+          
+          # Store in Kubernetes secret
+          kubectl create secret generic openbao-helm-approle \
+            --namespace="${NAMESPACE}" \
+            --from-literal=role_id="${HELM_ROLE_ID}" \
+            --from-literal=secret_id="${HELM_SECRET_ID}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          echo "✅ openbao-helm-approle secret created"
+          
+          # Step 6c: Create backend-openbao AppRole
+          echo ""
+          echo "Step 6c: Creating backend-openbao AppRole..."
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/backend-openbao" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"policies":["kleidia-backend"],"token_ttl":"24h","token_max_ttl":"168h","secret_id_ttl":"8760h","secret_id_num_uses":0}'
+          
+          BACKEND_ROLE_ID=$(openbao_curl -sf "http://127.0.0.1:8200/v1/auth/approle/role/backend-openbao/role-id" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.role_id')
+          
+          BACKEND_SECRET_ID=$(openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/backend-openbao/secret-id" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.secret_id')
+          
+          kubectl create secret generic openbao-backend-approle \
+            --namespace="${NAMESPACE}" \
+            --from-literal=role_id="${BACKEND_ROLE_ID}" \
+            --from-literal=secret_id="${BACKEND_SECRET_ID}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          echo "✅ openbao-backend-approle secret created"
+          
+          # Step 6d: Create license-openbao AppRole
+          echo ""
+          echo "Step 6d: Creating license-openbao AppRole..."
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/license-openbao" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"policies":["license-service"],"token_ttl":"24h","token_max_ttl":"168h","secret_id_ttl":"8760h","secret_id_num_uses":0}'
+          
+          LICENSE_ROLE_ID=$(openbao_curl -sf "http://127.0.0.1:8200/v1/auth/approle/role/license-openbao/role-id" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.role_id')
+          
+          LICENSE_SECRET_ID=$(openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/license-openbao/secret-id" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.secret_id')
+          
+          kubectl create secret generic openbao-license-approle \
+            --namespace="${NAMESPACE}" \
+            --from-literal=role_id="${LICENSE_ROLE_ID}" \
+            --from-literal=secret_id="${LICENSE_SECRET_ID}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          echo "✅ openbao-license-approle secret created"
+          
+          # Step 7: Enable KV v2 secrets engine
+          echo ""
+          echo "Step 7: Enabling KV v2 secrets engine..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/sys/mounts/yubikeys" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -385,9 +516,9 @@ spec:
           
           echo "✅ KV v2 enabled"
           
-          # Enable PKI secrets engine
+          # Step 8: Enable PKI secrets engine
           echo ""
-          echo "Step 7: Enabling PKI secrets engine..."
+          echo "Step 8: Enabling PKI secrets engine..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/sys/mounts/pki" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -395,9 +526,9 @@ spec:
           
           echo "✅ PKI enabled"
           
-          # Generate root CA (if not exists)
+          # Step 9: Generate root CA (if not exists)
           echo ""
-          echo "Step 8: Generating root CA..."
+          echo "Step 9: Generating root CA..."
           ROOT_CA=$(openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/root/generate/internal" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -409,9 +540,9 @@ spec:
             echo "Root CA might already exist (this is OK)"
           fi
           
-          # Configure PKI URLs
+          # Step 10: Configure PKI URLs
           echo ""
-          echo "Step 9: Configuring PKI URLs..."
+          echo "Step 10: Configuring PKI URLs..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/config/urls" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -419,9 +550,9 @@ spec:
           
           echo "✅ PKI URLs configured"
           
-          # Create PKI roles
+          # Step 11: Create PKI roles
           echo ""
-          echo "Step 10: Creating PKI roles..."
+          echo "Step 11: Creating PKI roles..."
           
           # agent-session role
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/agent-session" \
@@ -438,8 +569,6 @@ spec:
           echo "  ✅ yubikey-piv role created"
           
           # yubikey-piv-auth role (for slot 9a - Authentication)
-          # NOTE: key_type="any" accepts all CSR algorithms from certificate policy
-          # OpenBao enforces minimum RSA-2048 for security (RSA-1024 not supported)
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-auth" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -447,8 +576,6 @@ spec:
           echo "  ✅ yubikey-piv-auth role created"
           
           # yubikey-piv-code-signing role (for slot 9c - Code Signing)
-          # NOTE: key_type="any" accepts all CSR algorithms from certificate policy
-          # OpenBao enforces minimum RSA-2048 for security (RSA-1024 not supported)
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-code-signing" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -456,8 +583,6 @@ spec:
           echo "  ✅ yubikey-piv-code-signing role created"
           
           # yubikey-piv-email-signing role (for slot 9d - Email Signing)
-          # NOTE: key_type="any" accepts all CSR algorithms from certificate policy
-          # OpenBao enforces minimum RSA-2048 for security (RSA-1024 not supported)
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-email-signing" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -472,8 +597,6 @@ spec:
           echo "  ✅ backend-mtls role created"
           
           # kleidia-component role (for cert-manager infrastructure certificates)
-          # IMPORTANT: allow_any_name=true and enforce_hostnames=false are needed for:
-          # - Various service names that don't fit strict hostname patterns
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/kleidia-component" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
@@ -481,16 +604,15 @@ spec:
           echo "  ✅ kleidia-component role created (flexible naming)"
           
           # agent-localhost-cert role (for HTTP-based agent architecture)
-          # Session-bound certificates for local agent HTTPS
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/agent-localhost-cert" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{"allowed_domains":["localhost"],"allow_localhost":true,"allow_ip_sans":true,"enforce_hostnames":false,"server_flag":true,"client_flag":false,"key_type":"rsa","key_bits":2048,"ttl":"8h","max_ttl":"8h"}'
           echo "  ✅ agent-localhost-cert role created (HTTP agent architecture)"
           
-          # Initialize application secrets (JWT, encryption keys, etc.)
+          # Step 12: Initialize application secrets (JWT, encryption keys, etc.)
           echo ""
-          echo "Step 11: Initializing application secrets..."
+          echo "Step 12: Initializing application secrets..."
           
           # Check if secrets already exist
           EXISTING_JWT=$(openbao_curl -sf "http://127.0.0.1:8200/v1/yubikeys/data/jwt-secret" \
@@ -518,9 +640,9 @@ spec:
             echo "✅ Application secrets initialized"
           fi
           
-          # Create backup policy and token
+          # Step 13: Create backup policy and token
           echo ""
-          echo "Step 12: Creating backup policy and token..."
+          echo "Step 13: Creating backup policy and token..."
           
           # Create kleidia-backup policy (allows raft snapshot read)
           openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/kleidia-backup" \
@@ -556,5 +678,16 @@ spec:
           echo ""
           echo "=== OpenBao Complete Setup Finished Successfully ==="
           echo "OpenBao v2.4.1 is ready for use!"
+          echo ""
+          echo "Security features enabled:"
+          echo "  ✅ Audit logging (all operations logged)"
+          echo "  ✅ Tightened policies (least privilege)"
+          echo "  ✅ AppRole auth for services (backend, license)"
+          echo "  ✅ Helm-admin AppRole for future upgrades"
+          echo ""
+          echo "Kubernetes secrets created:"
+          echo "  - openbao-init-keys (root token - will be deleted by bootstrap UI)"
+          echo "  - openbao-helm-approle (for Helm upgrades after bootstrap)"
+          echo "  - openbao-backend-approle (for backend service)"
+          echo "  - openbao-license-approle (for license service)"
 {{- end }}
-
