@@ -12,8 +12,16 @@ global:
 thirdPartyImages:
   postgres: "postgres:15-alpine"     # PostgreSQL database image
 
+# =============================================================================
+# STORAGE CONFIGURATION
+# =============================================================================
+# Must match the storage.className used in kleidia-platform chart.
+# The StorageClass is created by kleidia-platform (if using local-path-provisioner)
+# or should already exist in your cluster.
+# =============================================================================
 storage:
-  className: "nfs-client"    # Explicitly use cluster NFS StorageClass for Postgres
+  className: "local-path"      # StorageClass name for PostgreSQL PVC
+                               # Must match kleidia-platform storage.className
 
 postgres:
   enabled: true
@@ -25,4 +33,3 @@ postgres:
 
 # RabbitMQ removed - HTTP-based agent architecture
 # Agents now communicate via HTTPS on localhost (frontend-mediated)
-

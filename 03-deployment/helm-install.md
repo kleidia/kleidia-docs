@@ -53,38 +53,65 @@ frontend:
 
 ### 3. Install Helm Charts
 
-Kleidia uses multiple Helm charts that must be installed in order:
+Kleidia uses multiple Helm charts that must be installed in order.
+
+> **Important**: Before installing, decide on your storage strategy. See [Storage Configuration](storage-configuration.md) for details.
 
 #### Step 1: Install Platform (OpenBao, Storage)
+
+**Option A: With Local Path Provisioner** (single-node/development):
+
+```bash
+# Ensure storage directory exists on the node
+sudo mkdir -p /opt/local-path-provisioner
+
+helm install kleidia-platform ./helm/kleidia-platform \
+  --namespace kleidia \
+  --create-namespace \
+  --set global.domain=kleidia.example.com \
+  --set global.namespace=kleidia \
+  --set storage.className=local-path \
+  --set storage.localPath.enabled=true \
+  --set openbao.server.dataStorage.storageClass=local-path \
+  --set openbao.server.auditStorage.storageClass=local-path
+```
+
+**Option B: With Existing StorageClass** (production):
 
 ```bash
 helm install kleidia-platform ./helm/kleidia-platform \
   --namespace kleidia \
   --create-namespace \
   --set global.domain=kleidia.example.com \
-  --set global.namespace=kleidia
+  --set global.namespace=kleidia \
+  --set storage.className=nfs-client \
+  --set storage.localPath.enabled=false \
+  --set openbao.server.dataStorage.storageClass=nfs-client \
+  --set openbao.server.auditStorage.storageClass=nfs-client
 ```
+
+Replace `nfs-client` with your cluster's StorageClass name (e.g., `longhorn`, `gp2`, `managed-premium`).
 
 **What this installs**:
 - OpenBao (Vault) with persistent storage
-- Local path provisioner for storage
-- cert-manager (if enabled)
-- Vault configuration hooks
+- Local path provisioner (if enabled)
+- Vault configuration hooks with AppRole authentication
 
 **Wait for**: OpenBao to be ready and unsealed (5-10 minutes)
 
 #### Step 2: Install Data Layer (PostgreSQL)
 
 ```bash
+# Use the same storage class as the platform chart
 helm install kleidia-data ./helm/kleidia-data \
   --namespace kleidia \
   --set global.domain=kleidia.example.com \
-  --set global.namespace=kleidia
+  --set global.namespace=kleidia \
+  --set storage.className=local-path  # Must match platform chart
 ```
 
 **What this installs**:
-- PostgreSQL operator
-- PostgreSQL cluster with persistent storage
+- PostgreSQL with persistent storage
 - Database initialization hooks
 
 **Wait for**: PostgreSQL to be ready (2-3 minutes)
@@ -99,8 +126,9 @@ helm install kleidia-services ./helm/kleidia-services \
 ```
 
 **What this installs**:
-- Backend API server
+- Backend API server (with AppRole authentication to OpenBao)
 - Frontend web application
+- License service
 - NodePort services for external load balancer routing
 
 **Wait for**: All pods to be ready (2-3 minutes)
