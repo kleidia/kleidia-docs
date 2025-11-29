@@ -27,7 +27,8 @@ backend:
     tag: backend-latest                   # Image tag. In production pin to a version, e.g. v2.2.0
   service:
     nodePort: 32570             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
-  corsOrigins: "https://kleidia.smit.dev"  # CORS allowed origins (comma-separated). Example: "https://kleidia.example.com,https://frontend.example.com"
+  corsOrigins: ""               # CORS allowed origins (comma-separated). If empty, uses global.siteUrl or https://<global.domain>
+                                # Example: "https://kleidia.example.com,https://frontend.example.com"
                                 # REQUIRED for production deployments with external load balancers
                                 # Leave empty for development (allows all origins)
 

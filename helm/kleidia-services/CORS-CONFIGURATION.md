@@ -15,14 +15,14 @@ Set `backend.corsOrigins` in your `values.yaml` or via `--set`:
 
 ```yaml
 backend:
-  corsOrigins: "https://kleidia.example.com,https://kleidia.smit.dev"
+  corsOrigins: "https://kleidia.example.com"
 ```
 
 Or via command line:
 
 ```bash
 helm install kleidia-services ./kleidia-services \
-  --set backend.corsOrigins="https://kleidia.example.com,https://kleidia.smit.dev"
+  --set backend.corsOrigins="https://kleidia.example.com"
 ```
 
 ### External Load Balancer Scenarios
@@ -66,11 +66,11 @@ backend:
 
 ### VIP/HAProxy Scenario
 
-For this deployment using VIP with HAProxy:
+For deployments using VIP with HAProxy:
 
 ```bash
 helm upgrade kleidia-services ./kleidia-services \
-  --set backend.corsOrigins="https://kleidia.smit.dev" \
+  --set backend.corsOrigins="https://kleidia.example.com" \
   -n kleidia
 ```
 
