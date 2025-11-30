@@ -1,5 +1,8 @@
 global:
   namespace: kleidia          # Kubernetes namespace to install into
+  domain: ""                  # Domain name (e.g., "backend.kleidia.io"). If set, siteUrl defaults to https://<domain>
+  siteUrl: ""                 # Full site URL (e.g., "https://backend.kleidia.io"). Overrides domain if set.
+                              # Used for OIDC redirects and CORS configuration
   registry:
     host: ""                  # Optional: container registry host for all images (required for air-gapped environments)
                               # Example: "registry.example.com:5000"
@@ -27,10 +30,11 @@ backend:
     tag: backend-latest                   # Image tag. In production pin to a version, e.g. v2.2.0
   service:
     nodePort: 32570             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
-  corsOrigins: ""               # CORS allowed origins (comma-separated). If empty, uses global.siteUrl or https://<global.domain>
+  corsOrigins: ""               # CORS allowed origins (comma-separated). If empty, uses global.siteUrl
                                 # Example: "https://kleidia.example.com,https://frontend.example.com"
                                 # REQUIRED for production deployments with external load balancers
-                                # Leave empty for development (allows all origins)
+  oidc:
+    skipTlsVerify: true         # Skip TLS verification for OIDC discovery (set to false in production with proper certificates)
 
 frontend:
   replicas: 2                 # Horizontal scaling for the frontend

@@ -93,20 +93,30 @@ spec:
           value: "5432"
         - name: DB_USER
           value: kleidiauser
+        - name: DB_PASSWORD
+          value: ""
         - name: DB_NAME
           value: kleidia
         - name: DB_SSL_MODE
           value: disable
         
-        # OpenBao connection
+        # OpenBao connection (AppRole auth for security isolation)
         - name: VAULT_ENABLED
           value: "true"
         - name: VAULT_ADDR
           value: http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200
         - name: VAULT_AUTH_METHOD
-          value: kubernetes
-        - name: VAULT_K8S_ROLE
-          value: kleidia-backend
+          value: approle
+        - name: VAULT_ROLE_ID
+          valueFrom:
+            secretKeyRef:
+              name: openbao-backend-approle
+              key: role_id
+        - name: VAULT_SECRET_ID
+          valueFrom:
+            secretKeyRef:
+              name: openbao-backend-approle
+              key: secret_id
         
         # OpenBao KV paths (each secret in its own path with "value" field)
         - name: VAULT_KV_MOUNT
@@ -123,14 +133,30 @@ spec:
           value: "8080"
         - name: LOG_LEVEL
           value: info
-        {{- if .Values.backend.corsOrigins }}
         - name: CORS_ORIGINS
-          value: {{ .Values.backend.corsOrigins | quote }}
-        {{- end }}
+          {{- $corsOrigins := .Values.backend.corsOrigins }}
+          {{- if not $corsOrigins }}
+            {{- if .Values.global.siteUrl }}
+              {{- $corsOrigins = .Values.global.siteUrl }}
+            {{- else if .Values.global.domain }}
+              {{- $corsOrigins = printf "https://%s" .Values.global.domain }}
+            {{- else }}
+              {{- $corsOrigins = "https://kleidia.example.com" }}
+            {{- end }}
+          {{- end }}
+          value: {{ $corsOrigins | quote }}
         
         # License service connection
         - name: LICENSE_SERVICE_URL
           value: "http://license-service.{{ .Values.global.namespace }}.svc.cluster.local:8081"
+        
+        # OIDC Configuration
+        - name: OIDC_SKIP_TLS_VERIFY
+          value: "{{ .Values.backend.oidc.skipTlsVerify | default "false" }}"
+        {{- if .Values.backend.oidc.discoveryBase }}
+        - name: OIDC_DISCOVERY_BASE
+          value: "{{ .Values.backend.oidc.discoveryBase }}"
+        {{- end }}
         
         readinessProbe:
           httpGet:

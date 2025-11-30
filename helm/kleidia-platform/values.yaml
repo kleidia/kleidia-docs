@@ -16,11 +16,34 @@ thirdPartyImages:
     localPathProvisioner: "rancher/local-path-provisioner:v0.0.24"
   busybox: "busybox:latest"
 
+# =============================================================================
+# STORAGE CONFIGURATION
+# =============================================================================
+# Kleidia requires persistent storage for OpenBao (Vault) and PostgreSQL.
+# Choose ONE of the following storage options:
+#
+# OPTION 1: Use existing cluster StorageClass (recommended for production)
+#   - Set storage.className to your existing StorageClass name
+#   - Set storage.localPath.enabled = false
+#   - Examples: "nfs-client", "longhorn", "rook-ceph-block", "gp2" (AWS), "managed-premium" (Azure)
+#
+# OPTION 2: Deploy local-path-provisioner (for single-node or development)
+#   - Set storage.localPath.enabled = true
+#   - Set storage.className = "local-path"
+#   - Ensure the node has sufficient disk space at storage.localPath.path
+#
+# OPTION 3: Use cloud provider default StorageClass
+#   - Set storage.className = "" (empty string)
+#   - Kubernetes will use the cluster's default StorageClass
+# =============================================================================
 storage:
-  className: "nfs-client"    # Explicitly use NFS StorageClass provided by cluster
+  className: "local-path"      # StorageClass name for all PVCs
+                               # Common options: "local-path", "nfs-client", "longhorn", "standard", ""
   localPath:
-    enabled: false           # Disable embedded local-path-provisioner; rely on cluster storage
-    path: /opt/local-path-provisioner
+    enabled: true              # Deploy embedded local-path-provisioner
+                               # Set to false if using existing cluster storage
+    path: /opt/local-path-provisioner  # Host path for local storage (must exist on nodes)
+    reclaimPolicy: Delete      # PV reclaim policy: Delete or Retain
 
 openbao:
   enabled: true
@@ -70,10 +93,12 @@ openbao:
         # File storage doesn't support HA, so we don't use service_registration
     
     # Enable persistent storage
+    # NOTE: storageClass is set dynamically via --set during install
+    # It should match storage.className from the parent chart
     dataStorage:                 # Persistent storage for OpenBao data
       enabled: true
       size: 10Gi
-      storageClass: "nfs-client" # Use explicit NFS StorageClass
+      storageClass: "local-path" # Must match storage.className (pass via --set)
       accessMode: ReadWriteOnce
     
     # Service account with RBAC for TokenReview API
@@ -88,7 +113,7 @@ openbao:
     auditStorage:                # Persistent storage for OpenBao audit logs
       enabled: true
       size: 10Gi
-      storageClass: "nfs-client" # Use explicit NFS StorageClass
+      storageClass: "local-path" # Must match storage.className (pass via --set)
       accessMode: ReadWriteOnce
     
     # Mount unseal key for static auto-unseal
