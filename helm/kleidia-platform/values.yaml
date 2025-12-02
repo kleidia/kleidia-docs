@@ -150,6 +150,17 @@ openbao:
       commonName: "Kleidia Intermediate CA"
       ttl: "43800h"   # 5 years
       customerRootCA: ""  # Base64-encoded customer root CA cert (required when mode=intermediate)
+    
+    # PKI URL configuration for certificate distribution
+    # Required for external systems (e.g., Bitbucket) to verify certificates and check revocation
+    # If not set, defaults to internal Kubernetes service URLs
+    urls:
+      # External base URL for PKI endpoints (e.g., "https://pki.example.com")
+      # Leave empty to use internal Kubernetes service URLs
+      externalBaseUrl: ""
+      # CRL refresh interval (default: 24h)
+      # Bitbucket checks CRL every 24 hours
+      crlExpiry: "24h"
 
 certManager:
   testCertificate: false     # Leave false (we do not use cert-manager for app TLS)

@@ -540,15 +540,34 @@ spec:
             echo "Root CA might already exist (this is OK)"
           fi
           
-          # Step 10: Configure PKI URLs
+          # Step 10: Configure PKI URLs for certificate distribution and CRL
+          # External base URL enables systems like Bitbucket to verify certificates and check revocation
           echo ""
           echo "Step 10: Configuring PKI URLs..."
+          
+          {{- if .Values.openbao.pki.urls.externalBaseUrl }}
+          # Using external URLs for CRL and issuing certificates (required for Bitbucket code signing)
+          PKI_BASE_URL="{{ .Values.openbao.pki.urls.externalBaseUrl }}"
+          echo "  Using external PKI URL: ${PKI_BASE_URL}"
+          {{- else }}
+          # Using internal Kubernetes service URLs (for in-cluster verification only)
+          PKI_BASE_URL="http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200"
+          echo "  Using internal PKI URL: ${PKI_BASE_URL}"
+          echo "  ⚠️  Note: For Bitbucket code signing, set openbao.pki.urls.externalBaseUrl in values.yaml"
+          {{- end }}
+          
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/config/urls" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"issuing_certificates":["http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/pki/ca"],"crl_distribution_points":["http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/pki/crl"]}'
+            -d "{\"issuing_certificates\":[\"${PKI_BASE_URL}/v1/pki/ca\"],\"crl_distribution_points\":[\"${PKI_BASE_URL}/v1/pki/crl\"]}"
           
-          echo "✅ PKI URLs configured"
+          # Configure CRL expiry (default: 24h - matches Bitbucket's refresh interval)
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/config/crl" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"expiry":"{{ default "24h" .Values.openbao.pki.urls.crlExpiry }}","disable":false}'
+          
+          echo "✅ PKI URLs configured (CRL expiry: {{ default "24h" .Values.openbao.pki.urls.crlExpiry }})"
           
           # Step 11: Create PKI roles
           echo ""
