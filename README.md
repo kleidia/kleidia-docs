@@ -1,3 +1,19 @@
+<p align="center">
+  <img src="assets/hero-banner.png" alt="Kleidia - Centralized YubiKey Management Platform" width="100%">
+</p>
+
+<p align="center">
+  <strong>Centralized YubiKey Management Platform</strong><br>
+  Manage thousands of YubiKeys from a single web interface.<br>
+  Enterprise-grade security. Modern technology stack.
+</p>
+
+<p align="center">
+  <a href="https://kleidia.io">🌐 kleidia.io</a>
+</p>
+
+---
+
 # Kleidia Customer Documentation
 
 **Version**: 2.2.0  

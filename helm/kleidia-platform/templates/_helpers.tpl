@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "yubimgr-platform.name" -}}
+{{- define "kleidia-platform.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "yubimgr-platform.fullname" -}}
+{{- define "kleidia-platform.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -24,15 +24,15 @@ Create a default fully qualified app name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "yubimgr-platform.chart" -}}
+{{- define "kleidia-platform.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Construct image reference with optional global registry prefix
-Usage: {{ include "yubimgr-platform.image" (dict "repository" "alpine" "tag" "latest" "context" $) }}
+Usage: {{ include "kleidia-platform.image" (dict "repository" "alpine" "tag" "latest" "context" $) }}
 */}}
-{{- define "yubimgr-platform.image" -}}
+{{- define "kleidia-platform.image" -}}
 {{- $registry := .context.Values.global.registry.host -}}
 {{- if $registry -}}
 {{- printf "%s/%s:%s" $registry .repository .tag -}}
@@ -44,9 +44,9 @@ Usage: {{ include "yubimgr-platform.image" (dict "repository" "alpine" "tag" "la
 {{/*
 Common labels
 */}}
-{{- define "yubimgr-platform.labels" -}}
-helm.sh/chart: {{ include "yubimgr-platform.chart" . }}
-{{ include "yubimgr-platform.selectorLabels" . }}
+{{- define "kleidia-platform.labels" -}}
+helm.sh/chart: {{ include "kleidia-platform.chart" . }}
+{{ include "kleidia-platform.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -56,8 +56,8 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "yubimgr-platform.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "yubimgr-platform.name" . }}
+{{- define "kleidia-platform.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "kleidia-platform.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
