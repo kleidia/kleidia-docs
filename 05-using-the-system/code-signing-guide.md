@@ -9,12 +9,12 @@ YubiKeys support multiple signing methods through different applets:
 | Method | Applet | Platforms | Managed by Kleidia |
 |--------|--------|-----------|-------------------|
 | **X.509/S/MIME** | PIV (slot 9c) | Bitbucket Data Center | ✅ Yes |
-| **GPG** | OpenPGP | GitLab, GitHub | ❌ User-managed |
+| **GPG** | OpenPGP | GitLab, GitHub | ✅ Yes (Enterprise) |
 | **SSH** | FIDO2 / PIV | GitHub | ❌ User-managed |
 
 **Important:** The PIV and OpenPGP applets are completely separate on your YubiKey. You can use both simultaneously:
 - Kleidia manages your PIV certificates (authentication, code signing, email)
-- You can also set up GPG keys on the same YubiKey for GitLab/GitHub
+- Kleidia can now manage OpenPGP keys for enterprise policy enforcement (optional)
 
 ## Platform-Specific Guides
 
@@ -38,31 +38,43 @@ User → Generate key on YubiKey → CSR → OpenBao CA signs → Certificate im
 
 **Bitbucket requires** certificates signed by a trusted CA. The CA chain must be imported into Bitbucket for verification.
 
-### OpenPGP/GPG (GitLab/GitHub) - User-Managed
+### OpenPGP/GPG (GitLab/GitHub) - Enterprise-Managed (Optional)
+
+Kleidia now supports enterprise management of OpenPGP keys on YubiKeys:
 
 ```
+Enterprise Mode (Kleidia):
+User → Kleidia UI → Generate key on YubiKey → Self-signed PGP key
+                              ↓
+                   Enterprise manages lifecycle:
+                   • Central PIN management (stored in Vault)
+                   • Touch policy enforcement
+                   • Algorithm compliance
+                   • Attestation for compliance audits
+
+Traditional Mode (User-managed):
 User → gpg --card-edit generate → Self-signed PGP key
-                                        ↓
-                              User manages key lifecycle:
-                              • No central authority required
-                              • Web of Trust model (optional)
-                              • User controls key expiry
-                              • User manages revocation
+                              ↓
+                   User manages key lifecycle:
+                   • No central authority required
+                   • Web of Trust model (optional)
+                   • User controls key expiry
 ```
 
-**GitLab/GitHub accept any valid GPG key** - they don't require enterprise CA signing. This is why GPG keys are typically user-managed rather than enterprise-managed.
+**GitLab/GitHub accept any valid GPG key** - they don't require enterprise CA signing. However, enterprises may choose to manage OpenPGP keys via Kleidia for consistent policy enforcement and PIN recovery capabilities.
 
 ### Technical Comparison
 
-| Aspect | PIV Slot 9c (Kleidia) | OpenPGP (User) |
-|--------|----------------------|----------------|
-| **Key Type** | X.509 Certificate | PGP Key |
-| **Trust Model** | Hierarchical CA | Web of Trust / Self-signed |
-| **PIN** | PIV PIN (Kleidia sets) | OpenPGP PIN (user sets) |
-| **Generation** | CSR → CA signs | Direct on device |
-| **Revocation** | CRL from CA | PGP revocation cert |
-| **Enterprise Control** | Full | None |
-| **ykman commands** | `ykman piv` | `ykman openpgp` |
+| Aspect | PIV Slot 9c (Kleidia) | OpenPGP (Kleidia) | OpenPGP (User) |
+|--------|----------------------|-------------------|----------------|
+| **Key Type** | X.509 Certificate | PGP Key | PGP Key |
+| **Trust Model** | Hierarchical CA | Self-signed | Web of Trust / Self-signed |
+| **PIN** | PIV PIN (Kleidia sets) | OpenPGP PIN (Kleidia sets) | OpenPGP PIN (user sets) |
+| **Generation** | CSR → CA signs | Direct on device via UI | Direct on device |
+| **Revocation** | CRL from CA | Key deletion | PGP revocation cert |
+| **Enterprise Control** | Full | Full (PIN, touch, algorithms) | None |
+| **Vault Storage** | PIN, PUK, Mgmt Key | User PIN, Admin PIN | None |
+| **ykman commands** | `ykman piv` | `ykman openpgp` | `ykman openpgp` |
 
 ## Quick Comparison
 
@@ -106,17 +118,18 @@ Your YubiKey contains multiple independent applications:
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
 │  │    PIV      │  │   OpenPGP   │  │   FIDO2     │     │
 │  │             │  │             │  │             │     │
-│  │ Slot 9a:Auth│  │ Signature   │  │ Passkeys    │     │
-│  │ Slot 9c:Sign│  │ Encryption  │  │ WebAuthn    │     │
-│  │ Slot 9d:Mail│  │ Auth        │  │ SSH Keys    │     │
+│  │ Slot 9a:Auth│  │ SIG: Sign   │  │ Passkeys    │     │
+│  │ Slot 9c:Sign│  │ ENC: Encrypt│  │ WebAuthn    │     │
+│  │ Slot 9d:Mail│  │ AUT: Auth   │  │ SSH Keys    │     │
 │  │             │  │             │  │             │     │
-│  │ (Kleidia)   │  │ (gpg)       │  │ (browser)   │     │
+│  │ (Kleidia)   │  │ (Kleidia/   │  │ (browser)   │     │
+│  │             │  │  gpg)       │  │             │     │
 │  └─────────────┘  └─────────────┘  └─────────────┘     │
 └─────────────────────────────────────────────────────────┘
 ```
 
 - **PIV**: Managed by Kleidia, uses X.509 certificates
-- **OpenPGP**: User-managed via `gpg --card-edit`
+- **OpenPGP**: Enterprise-managed via Kleidia UI or user-managed via `gpg --card-edit`
 - **FIDO2**: User-managed via browser or `ykman fido`
 
 ## Which Method Should I Use?
@@ -127,6 +140,48 @@ Your YubiKey contains multiple independent applications:
 | **GitLab** | GPG (OpenPGP) | Native support, well-documented |
 | **GitHub** | SSH or GPG | SSH is simpler; GPG for cross-platform |
 
+## Enterprise OpenPGP Management (New)
+
+Kleidia now provides enterprise management for OpenPGP keys on YubiKeys. This is optional - users can still use `gpg --card-edit` directly if preferred.
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Key Generation** | Generate SIG, ENC, AUT keys via Kleidia UI |
+| **Algorithm Policy** | Enforce RSA2048, RSA4096, ECCP256, Curve25519, etc. |
+| **Touch Policy** | Require physical touch for all operations |
+| **PIN Management** | User PIN (6-127 chars) and Admin PIN (8-127 chars) |
+| **Vault Storage** | PINs stored in Vault for enterprise recovery |
+| **Attestation** | Export hardware attestation certificates |
+
+### Using Kleidia-Managed OpenPGP
+
+1. **Navigate to your YubiKey** in the Kleidia dashboard
+2. **Select the OpenPGP tab**
+3. **Generate keys** for Signature, Encryption, and/or Authentication slots
+4. **Set touch policies** if required by your security policy
+5. **Change PINs** from defaults (123456 for User, 12345678 for Admin)
+
+After key generation, export your public key for use with GitLab/GitHub:
+```bash
+# List keys on the YubiKey
+gpg --card-status
+
+# Export public key
+gpg --armor --export your-email@company.com > my-key.asc
+
+# Upload to GitLab/GitHub
+```
+
+### Policy Enforcement
+
+Administrators can configure OpenPGP policies in **Admin → Security Policies → OpenPGP Policies**:
+- Require touch for all operations
+- Allowed algorithms
+- Minimum PIN/Admin PIN lengths
+- Require PIN change from default
+
 ## Security Considerations
 
 1. **PIV (Kleidia-managed)**
@@ -134,12 +189,19 @@ Your YubiKey contains multiple independent applications:
    - Centralized revocation via CRL
    - Certificate lifecycle managed by organization
 
-2. **OpenPGP (user-managed)**
+2. **OpenPGP (Kleidia-managed)**
+   - Self-signed keys (no CA required)
+   - Enterprise policy enforcement
+   - PIN recovery via Vault
+   - Touch policy enforcement
+   - Hardware attestation
+
+3. **OpenPGP (user-managed)**
    - User generates and manages keys
    - No central revocation (use key expiration)
    - Web of trust model
 
-3. **FIDO2/SSH**
+4. **FIDO2/SSH**
    - Hardware-bound keys
    - No central management
    - Per-service registration
