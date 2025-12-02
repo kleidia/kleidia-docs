@@ -9,9 +9,6 @@
 
 # Kleidia Customer Documentation
 
-**Version**: 2.2.0  
-**Last Updated**: November 2025
-
 ## About This Documentation
 
 This documentation is designed for **Kleidia customers** who need to:
