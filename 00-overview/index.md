@@ -33,9 +33,11 @@ Kleidia is an enterprise-grade YubiKey management platform that enables centrali
 
 Kleidia uses a **hybrid architecture** that combines:
 
-1. **Cloud-Hosted Services**: Web frontend, API backend, database, and Vault running in Kubernetes
+1. **Self-Hosted Platform Services**: Web frontend, API backend, database, and OpenBao running in your Kubernetes cluster (on-premises or your cloud subscription)
 2. **Local Agents**: HTTP-based agents running on user workstations for YubiKey operations
-3. **Frontend-Mediated Communication**: Browser orchestrates operations between cloud and local components
+3. **Frontend-Mediated Communication**: Browser orchestrates operations between platform services and local components
+
+> **Note**: Kleidia is always self-hosted in your infrastructure. There is no multi-tenant SaaS offering. The "managed appliance" option means Kleidia operates a dedicated cluster within your environment—not a shared cloud service.
 
 
 ## High-Level Components
@@ -103,8 +105,20 @@ Kleidia uses a **hybrid architecture** that combines:
 - Secure secret management in Vault
 - Session-based access control
 
+## Deployment Options
+
+Kleidia supports two deployment models:
+
+| Model | Description | Infrastructure |
+|-------|-------------|----------------|
+| **Self-Managed** | You deploy and operate Kleidia in your Kubernetes cluster | Your on-premises or cloud infrastructure |
+| **Managed Appliance** | Kleidia team operates a dedicated cluster for you | Dedicated cluster in your environment or cloud subscription |
+
+In both models, all data remains under your control—Kleidia never operates as a shared multi-tenant service.
+
 ## Next Steps
 
+- **Quick Evaluation**: See [POC Quickstart](poc-quickstart.md) for a hands-on first experience
 - **Understanding Architecture**: See [Architecture Overview](../01-architecture/system-overview.md)
 - **Planning Deployment**: See [Deployment Prerequisites](../03-deployment/prerequisites.md)
 - **Security Details**: See [Security Overview](../02-security/security-overview.md)

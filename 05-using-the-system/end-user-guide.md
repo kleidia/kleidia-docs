@@ -203,4 +203,3 @@ If your PIN is blocked:
 
 - [Administrator Guide](admin-guide.md)
 - [YubiKey Lifecycle](yubikey-lifecycle.md)
-

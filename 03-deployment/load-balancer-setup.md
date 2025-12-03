@@ -536,4 +536,3 @@ helm upgrade kleidia-services ./helm/kleidia-services \
 - [Helm Installation](helm-install.md)
 - [Prerequisites](prerequisites.md)
 - [Troubleshooting](troubleshooting.md)
-

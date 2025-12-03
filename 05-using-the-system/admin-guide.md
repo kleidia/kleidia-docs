@@ -516,4 +516,3 @@ Before your license expires:
 - [End User Guide](end-user-guide.md)
 - [YubiKey Lifecycle](yubikey-lifecycle.md)
 - [Operations Guide](../04-operations/)
-

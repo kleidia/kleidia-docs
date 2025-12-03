@@ -494,4 +494,3 @@ sudo rm -rf /etc/kleidia/agent
 **Version**: 0.4.6  
 **Last Updated**: 2025-11-10  
 **Platforms**: Windows 10+, macOS 10.15+
-

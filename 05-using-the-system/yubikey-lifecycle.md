@@ -127,4 +127,3 @@ When device is permanently retired:
 - [End User Guide](end-user-guide.md)
 - [Administrator Guide](admin-guide.md)
 - [Operations Guide](../04-operations/)
-

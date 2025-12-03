@@ -134,4 +134,3 @@ Kleidia requires a Kubernetes cluster (version 1.24+) with NodePort support. The
 - [Prerequisites](../03-deployment/prerequisites.md)
 - [Helm Installation](../03-deployment/helm-install.md)
 - [Upgrades and Rollback](../03-deployment/upgrades-and-rollback.md)
-

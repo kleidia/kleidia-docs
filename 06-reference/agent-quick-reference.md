@@ -278,4 +278,3 @@ sudo launchctl kickstart -k system/com.kleidia.agent
 **Last Updated**: 2025-11-10
 
 For detailed installation instructions, see [Agent Installation Guide](../05-using-the-system/agent-installation.md)
-

@@ -392,4 +392,3 @@ helm template kleidia-services ./helm/kleidia-services \
 - [Prerequisites](prerequisites.md)
 - [Vault Setup](vault-setup.md)
 - [Troubleshooting](troubleshooting.md)
-

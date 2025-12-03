@@ -483,4 +483,3 @@ When reporting issues, collect:
 - [Configuration](configuration.md)
 - [Vault Setup](vault-setup.md)
 - [Operations Guide](../04-operations/)
-

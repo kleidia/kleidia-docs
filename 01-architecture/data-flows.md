@@ -255,4 +255,3 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
 - [Components](components.md)
 - [Security Model](../02-security/security-overview.md)
 - [Agent Communication](agent-communication.md)
-

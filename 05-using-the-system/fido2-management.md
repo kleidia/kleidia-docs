@@ -1,5 +1,9 @@
 # FIDO2 Management Guide
 
+**Audience**: End Users, IT Administrators, Helpdesk  
+**Prerequisites**: YubiKey enrolled in Kleidia, Kleidia Agent installed  
+**Outcome**: Register, manage, and troubleshoot FIDO2/WebAuthn credentials
+
 This guide explains how to manage FIDO2/WebAuthn credentials on your Kleidia-managed YubiKey.
 
 ## What is FIDO2?
@@ -187,9 +191,9 @@ FIDO2 reset has strict timing requirements:
 - Verify FIDO2 authentication is allowed in your organization's policies
 - Try signing out and back in
 
-## Related Guides
+## Related Documentation
 
-- [Azure Entra ID Integration](../03-deployment/azure-entra-integration.md)
-- [YubiKey Lifecycle Management](yubikey-lifecycle.md)
-- [PIV Certificate Management](piv-management.md)
-
+- [Azure Entra Integration](../deployment/azure-entra/)
+- [YubiKey Lifecycle](yubikey-lifecycle/)
+- [Certificates & PKI](../security/certificates-and-pki/)
+- [Lost YubiKey Runbook](../operations/runbooks/#lost-or-stolen-yubikey)

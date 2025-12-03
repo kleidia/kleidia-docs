@@ -347,4 +347,3 @@ kubectl delete namespace kleidia
 - [Vault Setup](vault-setup.md)
 - [Upgrades and Rollback](upgrades-and-rollback.md)
 - [Troubleshooting](troubleshooting.md)
-

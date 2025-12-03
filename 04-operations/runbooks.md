@@ -1,399 +1,450 @@
 # Operational Runbooks
 
-**Audience**: Operations Administrators  
-**Prerequisites**: Kleidia deployed  
-**Outcome**: Resolve common operational issues
+**Audience**: IT Operations, Helpdesk, Security Operations  
+**Prerequisites**: Access to Kleidia admin interface and/or Kubernetes cluster  
+**Outcome**: Resolve incidents efficiently with documented procedures
 
 ## Runbook Overview
 
-This document provides step-by-step procedures for common operational scenarios.
+This document provides step-by-step procedures for common incidents and operational scenarios. Each runbook follows a consistent structure:
 
-## Agent Pairing Issues
+- **Trigger**: What initiates this procedure
+- **Roles Involved**: Who participates
+- **Actions**: Step-by-step procedure
+- **Expected Outcome**: What success looks like
+- **Related Docs**: Links to additional information
 
-### Symptom
-Users cannot pair agents with the system.
+---
 
-### Diagnosis
+## Lost or Stolen YubiKey
 
-```bash
-# Check agent is running
-curl http://127.0.0.1:56123/health
+### Trigger
 
-# Check agent discovery
-curl http://127.0.0.1:56123/.well-known/kleidia-agent
+User reports their YubiKey as lost, stolen, or potentially compromised.
 
-# Check backend logs
-kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i agent
-```
+### Roles Involved
 
-### Resolution
+| Role | Responsibility |
+|------|----------------|
+| **End User** | Reports incident to helpdesk |
+| **Helpdesk** | Verifies identity, initiates revocation |
+| **Security Team** | Reviews for signs of compromise, approves replacement |
 
-1. **Agent Not Running**
-   ```bash
-   # On user workstation
-   # Start agent service
-   sudo systemctl start kleidia-agent
-   # Or run manually
-   ./kleidia-agent
-   ```
+### Actions
 
-2. **Agent Not Detected**
-   - Verify agent is running on localhost:56123
-   - Check browser console for CORS errors
-   - Verify user is logged in
+#### 1. Verify User Identity
 
-3. **Key Registration Failed**
-   ```bash
-   # Check backend logs for registration errors
-   kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i register
-   
-   # Check database for agent keys
-   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-     psql -U yubiuser -d kleidia -c "SELECT * FROM user_sessions WHERE agent_pubkey IS NOT NULL;"
-   ```
+Before taking any action, verify the reporter's identity using your organization's verification policy (e.g., callback, manager confirmation, security questions).
 
-## Device Revocation
+#### 2. Locate Device in Kleidia
 
-### Symptom
-Device needs to be revoked (lost, stolen, compromised, or user departure).
+1. Log into Kleidia admin interface
+2. Navigate to **Admin** → **YubiKeys**
+3. Search for the user's device by:
+   - User name/email
+   - Device serial number (if known)
 
-### Procedure
+#### 3. Revoke All Certificates
 
-1. **Via Admin UI**:
-   - Navigate to Admin Panel → YubiKeys
-   - Select device to revoke
-   - Click "Revoke Device"
-   - Review confirmation dialog (shows device serial, owner, warning)
-   - Confirm revocation
+1. Select the lost YubiKey
+2. Click **Revoke All Certificates**
+3. Confirm the revocation
+4. Certificates are added to CRL immediately
 
-2. **Verify Revocation**:
-   ```bash
-   # Check device status in database
-   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-     psql -U yubiuser -d kleidia -c \
-     "SELECT id, serial, is_active, deleted_at FROM yubikeys WHERE serial = '<serial-number>';"
-   ```
+#### 4. Disable Device
 
-3. **Verify Secrets Removed**:
-   ```bash
-   # Check Vault secrets (should be removed)
-   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-     vault kv list yubikeys/data/ | grep <serial-number>
-   ```
+1. Select **Mark as Lost/Stolen**
+2. Device status changes to disabled
+3. Document the incident in the notes field
 
-4. **Verify Certificates Revoked**:
-   ```bash
-   # Check audit logs for certificate revocation
-   kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i "revoke.*certificate"
-   ```
+#### 5. Disable FIDO2 Credentials
 
-### Automatic Wipe Behavior
+1. Navigate to **FIDO2 Credentials** for the user
+2. Remove/disable all credentials associated with the lost device
+3. Verify removal in the credential list
 
-**Important**: When a revoked device is connected to an admin workstation (where an agent is running), the system automatically attempts to wipe the PIV application. This ensures the device cannot be used even if physically recovered.
+#### 6. Document in Audit Log
 
-**To verify wipe attempt**:
-- Check backend logs for PIV reset attempts
-- Check agent logs (if available) for reset operations
-- Verify device PIV status if device is accessible
+1. Navigate to **Audit Logs**
+2. Verify revocation and disable events are logged
+3. Add incident reference number if applicable
 
-### Troubleshooting
+#### 7. Issue Replacement (Optional)
 
-**Device Not Wiped Automatically**:
-- Verify agent is running on admin workstation
-- Check device is actually connected to admin workstation
-- Review backend logs for PIV reset errors
-- Manually reset PIV if needed (via agent or ykman CLI)
+If user needs a replacement:
 
-**Revocation Failed**:
-- Check backend logs for errors
-- Verify database connectivity
-- Verify Vault connectivity
-- Check user permissions (admin role required)
+1. Obtain new YubiKey from inventory
+2. Navigate to **YubiKeys** → **Register New Device**
+3. Follow enrollment wizard for the user
+4. Generate new certificates
+5. Register new FIDO2 credentials
 
-## Vault 403 Errors
+### Expected Outcome
 
-### Symptom
-Backend returns 403 errors when accessing Vault.
+- ✅ All certificates on lost device are revoked
+- ✅ Device is marked as lost/disabled in system
+- ✅ FIDO2 credentials are removed
+- ✅ Audit log documents all actions
+- ✅ User has replacement device (if applicable)
 
-### Diagnosis
+### Time to Resolution
 
-```bash
-# Check Vault status
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
+| Priority | Target |
+|----------|--------|
+| Lost (no suspected theft) | 4 hours |
+| Stolen/Compromised | 1 hour |
 
-# Check backend Vault authentication
-kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i vault
+### Related Docs
 
-# Check AppRole credentials
-kubectl get secret vault-approle -n kleidia
+- [YubiKey Lifecycle](../user-guides/yubikey-lifecycle/)
+- [FIDO2 Management](../05-using-the-system/fido2-management.md)
+- [Security for Auditors](../security/for-auditors/)
 
-# Test Vault authentication
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  vault write auth/approle/login \
-    role_id=<role-id> \
-    secret_id=<secret-id>
-```
+---
 
-### Resolution
+## User Leaves Company
 
-1. **Policy Issues**
-   ```bash
-   # Check backend policy
-   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-     vault policy read kleidia-backend
-   
-   # Update policy if needed
-   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-     vault policy write kleidia-backend - <<EOF
-   path "pki/sign/*" {
-     capabilities = ["create", "read", "update"]
-   }
-   path "yubikeys/data/*" {
-     capabilities = ["create", "read", "update", "delete", "list"]
-   }
-   EOF
-   ```
+### Trigger
 
-2. **AppRole Credentials**
-   ```bash
-   # Regenerate AppRole credentials
-   # See Vault Setup documentation
-   ```
+HR notifies IT that a user is leaving the organization (voluntary or involuntary).
 
-3. **Token Expired**
-   ```bash
-   # Restart backend to get new token
-   kubectl rollout restart deployment/kleidia-services-backend -n kleidia
-   ```
+### Roles Involved
 
-## TLS Certificate Expiry
+| Role | Responsibility |
+|------|----------------|
+| **HR** | Initiates departure notification |
+| **Helpdesk/IT Admin** | Executes credential revocation |
+| **User's Manager** | Confirms departure, coordinates handoff |
+| **Security Team** | Verifies complete revocation (high-risk departures) |
 
-### Symptom
-Browser shows certificate errors or certificate expired warnings.
+### Actions
 
-### Diagnosis
+#### 1. Receive Departure Notification
 
-```bash
-# Check certificate expiration
-echo | openssl s_client -connect kleidia.example.com:443 2>/dev/null | \
-  openssl x509 -noout -dates
+Document receipt of notification including:
+- User name/email
+- Last working day
+- Priority (standard vs. immediate termination)
 
-# Check Let's Encrypt certificates
-sudo certbot certificates
-```
+#### 2. Identify User's YubiKey(s)
 
-### Resolution
+1. Log into Kleidia admin interface
+2. Navigate to **Admin** → **Users**
+3. Search for departing user
+4. List all assigned YubiKeys
 
-1. **Certificate Expired**
-   - Renew certificate through your external load balancer
-   - Verify certificate is properly configured
+#### 3. Revoke All Certificates
 
-2. **Certificate Not Renewing**
-   - Check certificate renewal configuration in your load balancer
-   - Verify DNS records are correct
-   - Test certificate renewal manually
+For each YubiKey:
 
-## Agent Connection Issues
+1. Select the device
+2. Click **Revoke All Certificates**
+3. Confirm revocation
+4. Verify certificates added to CRL
 
-### Symptom
-Agents cannot connect or communicate with backend.
+#### 4. Disable FIDO2 Credentials
 
-### Diagnosis
+1. Navigate to **FIDO2 Credentials** for the user
+2. Remove all registered credentials
+3. Verify removal complete
 
-```bash
-# Check agent is running on workstation
-curl http://127.0.0.1:56123/health
+#### 5. Disable or Retire Devices
 
-# Check agent discovery
-curl http://127.0.0.1:56123/.well-known/kleidia-agent
+Based on your organization's policy:
 
-# Check backend logs
-kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i agent
-```
+**Option A: Retire Device**
+- Mark device as retired
+- Physical device collected and securely disposed
 
-### Resolution
+**Option B: Reassign Device**
+- Mark device as available
+- Wipe PIV certificates and keys
+- Reset PIN/PUK to defaults
+- Re-enroll to new user
 
-1. **Agent Not Running**
-   - Verify agent is installed on workstation
-   - Start agent service or run manually
-   - Check agent logs for errors
+#### 6. Disable User Account
 
-2. **Connection Refused**
-   - Verify agent is running on localhost:56123
-   - Check browser console for CORS errors
-   - Verify user is logged in
-   - Check backend is accessible
+1. Navigate to **Admin** → **Users**
+2. Select the departing user
+3. Click **Disable Account**
+4. User can no longer log in
 
-## High Disk Usage
+#### 7. Generate Departure Report
 
-### Symptom
-System running out of disk space.
+1. Navigate to **Audit Logs**
+2. Filter by user
+3. Export log for compliance records
+4. Attach to HR departure file
 
-### Diagnosis
+### Expected Outcome
+
+- ✅ All user certificates revoked
+- ✅ All FIDO2 credentials removed
+- ✅ User account disabled
+- ✅ Devices collected or reassigned
+- ✅ Audit trail documented
+- ✅ Report generated for HR/compliance
+
+### Time to Resolution
+
+| Departure Type | Target |
+|----------------|--------|
+| Standard (2+ weeks notice) | Before last day |
+| Immediate termination | Within 1 hour of notification |
+
+### Related Docs
+
+- [Administrator Guide](../user-guides/admin-guide/)
+- [YubiKey Lifecycle](../user-guides/yubikey-lifecycle/)
+- [Compliance Considerations](../security/compliance/)
+
+---
+
+## OpenBao/Vault Failure
+
+### Trigger
+
+OpenBao (Vault) is unavailable, sealed, or returning errors.
+
+### Roles Involved
+
+| Role | Responsibility |
+|------|----------------|
+| **Operations/DevOps** | Diagnose and restore service |
+| **Security Team** | Provide unseal keys if needed |
+| **Management** | Authorize data restoration if needed |
+
+### Actions
+
+#### 1. Identify the Issue
+
+Check Vault status:
 
 ```bash
-# Check disk usage
-df -h
-
-# Check Docker disk usage
-docker system df
-
-# Check Kubernetes disk usage
-kubectl top nodes
+kubectl exec -it kleidia-openbao-0 -n kleidia -- vault status
 ```
 
-### Resolution
+Common states:
+- **Sealed**: Vault needs to be unsealed
+- **Standby**: HA replica, not primary
+- **Active**: Should be working
+- **Pod not running**: Container issue
 
-1. **Clean Docker**
-   ```bash
-   # Remove unused containers, images, volumes
-   docker system prune -af
-   docker image prune -af
-   ```
+#### 2. If Vault is Sealed
 
-2. **Clean Kubernetes**
-   ```bash
-   # Remove completed jobs
-   kubectl delete jobs --field-selector status.successful=1 -n kleidia
-   
-   # Remove old logs (if log rotation not configured)
-   ```
-
-3. **Expand Storage**
-   - Add additional disk
-   - Expand persistent volumes
-   - Archive old data
-
-## Database Performance Issues
-
-### Symptom
-Slow queries, high database load.
-
-### Diagnosis
+Unseal using your organization's procedure:
 
 ```bash
-# Check database connections
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT count(*) FROM pg_stat_activity;"
-
-# Check slow queries
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "
-    SELECT query, calls, total_time, mean_time
-    FROM pg_stat_statements
-    ORDER BY mean_time DESC
-    LIMIT 10;
-  "
+# Unseal with key shares (repeat for each key holder)
+kubectl exec -it kleidia-openbao-0 -n kleidia -- \
+  vault operator unseal <key-share>
 ```
 
-### Resolution
+> **Note**: Your organization should have a documented key ceremony procedure. Never store unseal keys in the same location.
 
-1. **Too Many Connections**
-   ```bash
-   # Check connection pool settings
-   # Reduce connection pool size if needed
-   ```
+#### 3. If Pod is Crashing
 
-2. **Slow Queries**
-   ```bash
-   # Vacuum database
-   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-     psql -U yubiuser -d kleidia -c "VACUUM ANALYZE;"
-   
-   # Check for missing indexes
-   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-     psql -U yubiuser -d kleidia -c "
-       SELECT schemaname, tablename, attname, n_distinct, correlation
-       FROM pg_stats
-       WHERE schemaname = 'public'
-       ORDER BY abs(correlation) DESC;
-     "
-   ```
-
-## Pod CrashLoopBackOff
-
-### Symptom
-Pods restarting repeatedly.
-
-### Diagnosis
+Check pod logs:
 
 ```bash
-# Check pod status
-kubectl get pods -n kleidia
-
-# Check pod logs
-kubectl logs -f <pod-name> -n kleidia
-
-# Check pod events
-kubectl describe pod <pod-name> -n kleidia
+kubectl logs kleidia-openbao-0 -n kleidia --previous
+kubectl describe pod kleidia-openbao-0 -n kleidia
 ```
 
-### Resolution
+Common issues:
+- **Storage full**: Expand PVC or clean up
+- **Memory limits**: Increase resource limits
+- **Network issues**: Check service connectivity
 
-1. **Application Errors**
-   - Check application logs for errors
-   - Verify configuration
-   - Check dependencies
+#### 4. If Data Corruption Suspected
 
-2. **Resource Constraints**
-   ```bash
-   # Check resource limits
-   kubectl describe pod <pod-name> -n kleidia | grep -A 5 "Limits"
-   
-   # Increase resources if needed
-   # Update Helm values and upgrade
-   ```
-
-3. **Configuration Errors**
-   - Verify environment variables
-   - Check secrets exist
-   - Verify service connectivity
-
-## Emergency Procedures
-
-### Complete System Restart
+Stop dependent services first:
 
 ```bash
-# Restart all pods
-kubectl rollout restart deployment -n kleidia
+# Scale down backend
+kubectl scale deployment/kleidia-backend --replicas=0 -n kleidia
 ```
 
-### Database Recovery
+Restore from backup:
 
 ```bash
-# Stop backend
-kubectl scale deployment/kleidia-services-backend --replicas=0 -n kleidia
+# Copy backup to pod
+kubectl cp backups/vault-snapshot.snap \
+  kleidia-openbao-0:/tmp/vault-snapshot.snap -n kleidia
 
-# Restore from backup
-gunzip -c backups/20250115/database.sql.gz | \
-  kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia
+# Restore snapshot
+kubectl exec -it kleidia-openbao-0 -n kleidia -- \
+  vault operator raft snapshot restore /tmp/vault-snapshot.snap
 
-# Restart backend
-kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia
+# Unseal after restore
+kubectl exec -it kleidia-openbao-0 -n kleidia -- \
+  vault operator unseal <key-share>
 ```
 
-### Vault Recovery
+Restart dependent services:
 
 ```bash
-# Stop backend
-kubectl scale deployment/kleidia-services-backend --replicas=0 -n kleidia
-
-# Restore Vault snapshot
-kubectl cp backups/20250115/vault-backup.snap \
-  kleidia-platform-openbao-0:/tmp/vault-backup.snap -n kleidia
-
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  vault operator raft snapshot restore /tmp/vault-backup.snap
-
-# Restart backend
-kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia
+kubectl scale deployment/kleidia-backend --replicas=2 -n kleidia
 ```
+
+#### 5. Verify Recovery
+
+```bash
+# Check Vault is active
+kubectl exec -it kleidia-openbao-0 -n kleidia -- vault status
+
+# Check secrets are accessible
+kubectl exec -it kleidia-openbao-0 -n kleidia -- \
+  vault kv list yubikeys/metadata/
+
+# Check PKI is functional
+kubectl exec -it kleidia-openbao-0 -n kleidia -- \
+  vault read pki/cert/ca
+```
+
+#### 6. Test Kleidia Operations
+
+1. Log into Kleidia web UI
+2. Verify YubiKey operations work
+3. Test certificate generation on a test device
+4. Review audit logs for errors
+
+### Expected Outcome
+
+- ✅ Vault is unsealed and active
+- ✅ All secrets are accessible
+- ✅ PKI engine is functional
+- ✅ Kleidia operations work normally
+- ✅ Incident documented
+
+### Escalation
+
+If unable to restore:
+1. Contact Kleidia support
+2. Engage security team for key ceremony
+3. Consider point-in-time recovery from backups
+
+### Related Docs
+
+- [Vault Setup](../deployment/vault-setup/)
+- [Backups & Restore](backups/)
+- [Troubleshooting](../03-deployment/troubleshooting.md)
+
+---
+
+## Database Failure
+
+### Trigger
+
+PostgreSQL database is unavailable or returning errors.
+
+### Roles Involved
+
+| Role | Responsibility |
+|------|----------------|
+| **Operations/DevOps** | Diagnose and restore service |
+| **DBA (if available)** | Assist with complex recovery |
+
+### Actions
+
+#### 1. Identify the Issue
+
+Check pod status:
+
+```bash
+kubectl get pods -n kleidia | grep postgres
+kubectl describe pod kleidia-postgresql-0 -n kleidia
+```
+
+Check logs:
+
+```bash
+kubectl logs kleidia-postgresql-0 -n kleidia
+```
+
+#### 2. If Pod is Not Running
+
+Restart the pod:
+
+```bash
+kubectl delete pod kleidia-postgresql-0 -n kleidia
+# StatefulSet will recreate it
+```
+
+If persistent volume issue:
+
+```bash
+kubectl describe pvc data-kleidia-postgresql-0 -n kleidia
+```
+
+#### 3. If Database Corruption
+
+Stop dependent services:
+
+```bash
+kubectl scale deployment/kleidia-backend --replicas=0 -n kleidia
+```
+
+Restore from backup:
+
+```bash
+# Restore database
+gunzip -c backups/kleidia-db.sql.gz | \
+  kubectl exec -i kleidia-postgresql-0 -n kleidia -- \
+  psql -U kleidia -d kleidia
+```
+
+Restart services:
+
+```bash
+kubectl scale deployment/kleidia-backend --replicas=2 -n kleidia
+```
+
+#### 4. Verify Recovery
+
+```bash
+# Check database connectivity
+kubectl exec -it kleidia-postgresql-0 -n kleidia -- \
+  psql -U kleidia -d kleidia -c "SELECT 1;"
+
+# Check tables exist
+kubectl exec -it kleidia-postgresql-0 -n kleidia -- \
+  psql -U kleidia -d kleidia -c "\dt"
+```
+
+### Expected Outcome
+
+- ✅ Database pod running
+- ✅ Data accessible
+- ✅ Kleidia backend connects successfully
+- ✅ Audit logs intact
+
+### Related Docs
+
+- [Backups & Restore](backups/)
+- [Troubleshooting](../03-deployment/troubleshooting.md)
+
+---
+
+## Additional Runbooks
+
+### Agent Pairing Issues
+
+See [Troubleshooting Guide](../03-deployment/troubleshooting.md) for agent connectivity problems.
+
+### Certificate Expiry
+
+See [Certificates & PKI](../security/certificates-and-pki/) for certificate renewal procedures.
+
+### TLS Certificate Expiry
+
+See [Load Balancer Setup](../deployment/load-balancer/) for TLS certificate management.
+
+---
 
 ## Related Documentation
 
-- [Daily Operations](daily-operations.md)
-- [Monitoring and Logs](monitoring-and-logs.md)
-- [Backups and Restore](backups-and-restore.md)
+- [Daily Operations](daily-operations/)
+- [Monitoring & Logs](monitoring/)
+- [Backups & Restore](backups/)
 - [Troubleshooting](../03-deployment/troubleshooting.md)
-

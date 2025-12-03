@@ -127,4 +127,3 @@ Browser (Frontend)
 
 - [Architecture](../01-architecture/system-overview.md)
 - [Deployment](../03-deployment/)
-

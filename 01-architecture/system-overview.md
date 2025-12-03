@@ -1,8 +1,12 @@
 # System Architecture Overview
 
-**Audience**: Operations Administrators, Security Professionals  
+**Audience**: Operations Administrators, Security Professionals, Infrastructure Engineers  
 **Prerequisites**: Basic understanding of distributed systems and Kubernetes  
-**Outcome**: Understand the high-level architecture and component relationships
+**Outcome**: Understand the high-level architecture, component relationships, and deployment topology
+
+## Deployment Model
+
+Kleidia is deployed entirely within your infrastructure—either on-premises or in your cloud subscription. All platform components (frontend, backend, database, OpenBao) run in a Kubernetes cluster that you own and control. There is no external SaaS dependency or multi-tenant shared infrastructure.
 
 ## Architecture Diagram
 
@@ -36,7 +40,7 @@
           │
           ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Kubernetes Cluster                               │
+│              Customer-Owned Kubernetes Cluster                      │
 │                                                                     │
 │  ┌─────────────────┐                                                │
 │  │  Frontend Pod   │  Nuxt.js 4 web application                     │

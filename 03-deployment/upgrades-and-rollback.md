@@ -280,4 +280,3 @@ kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
 - [Configuration](configuration.md)
 - [Troubleshooting](troubleshooting.md)
 - [Backups and Restore](../04-operations/backups-and-restore.md)
-

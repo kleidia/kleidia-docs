@@ -1,14 +1,24 @@
 # Enterprise Deployment Guide for Kleidia Agent (macOS)
 
-> **📘 Note:** This is a technical reference document. For customer-facing documentation, see:
-> - **[Main Installation Guide](../../../docs/AGENT_INSTALLATION.md)** - Concise guide for end-users and IT admins
-> - **[Quick Reference](../../../docs/AGENT_DEPLOYMENT_QUICK_REFERENCE.md)** - Commands and scripts
->
-> This document contains detailed technical information for advanced deployments and troubleshooting.
+## Download
+
+| Package | Description | Download |
+|---------|-------------|----------|
+| **kleidia-agent-\<version\>.pkg** | Signed and notarized macOS installer | [GitHub Releases](https://github.com/kleidia-org/kleidia/releases) |
+
+> [!NOTE]
+> Always download installers from the official [Kleidia GitHub Releases](https://github.com/kleidia-org/kleidia/releases) page. The PKG is signed with an Apple Developer ID and notarized for Gatekeeper compatibility.
+
+---
 
 ## Overview
 
 This guide covers deploying Kleidia Agent across macOS enterprise environments using MDM platforms and central management tools. The agent is distributed as a signed and notarized `.pkg` package suitable for all macOS deployment scenarios.
+
+**Related documentation:**
+- [Installers Overview](../) — Download links and quick installation
+- [Agent Reference](../../06-reference/agent-quick-reference.md) — Configuration options and CLI reference
+- [Troubleshooting](../../03-deployment/troubleshooting.md) — Common issues and solutions
 
 ## Package Contents
 
@@ -1194,4 +1204,3 @@ tail -f /var/log/kleidia-agent/stderr.log
 **Last Updated**: 2025-11-10  
 **Agent Version**: 0.4.6+  
 **Platforms**: macOS 10.15 (Catalina) and later
-

@@ -247,4 +247,3 @@ All authentication events logged:
 - [Security Overview](security-overview.md)
 - [Vault and Secrets](vault-and-secrets.md)
 - [Compliance Considerations](compliance-considerations.md)
-

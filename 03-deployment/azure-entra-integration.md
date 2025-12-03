@@ -233,4 +233,3 @@ FIDO2/WebAuthn provides strong phishing resistance because:
 - [Kleidia FIDO2 Management Guide](../05-using-the-system/fido2-management.md)
 - [YubiKey Lifecycle Management](../05-using-the-system/yubikey-lifecycle.md)
 - [Microsoft: Configure FIDO2 security keys](https://learn.microsoft.com/en-us/azure/active-directory/authentication/howto-authentication-passwordless-security-key)
-

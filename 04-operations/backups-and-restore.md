@@ -301,4 +301,3 @@ openssl enc -d -aes-256-cbc -pbkdf2 -in database.sql.gz.enc | \
 - [Daily Operations](daily-operations.md)
 - [Monitoring and Logs](monitoring-and-logs.md)
 - [Runbooks](runbooks.md)
-
