@@ -157,7 +157,7 @@ openbao:
     urls:
       # External base URL for PKI endpoints (e.g., "https://pki.example.com")
       # Leave empty to use internal Kubernetes service URLs
-      externalBaseUrl: "https://kleidia.smit.dev:8200"
+      externalBaseUrl: ""
       # CRL refresh interval (default: 24h)
       # Bitbucket checks CRL every 24 hours
       crlExpiry: "24h"

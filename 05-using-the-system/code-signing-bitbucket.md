@@ -175,7 +175,7 @@ Example Helm values:
 openbao:
   pki:
     urls:
-      externalBaseUrl: "https://kleidia.smit.dev:8200" # replace with your public PKI endpoint
+      externalBaseUrl: "https://pki.example.com:8200" # replace with your public PKI endpoint
       crlExpiry: "24h"
 ```
 
