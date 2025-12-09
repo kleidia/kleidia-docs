@@ -167,6 +167,7 @@ For Bitbucket to check certificate revocation status, it must be able to access 
 
 1. **Network access** - Bitbucket server must be able to reach the Kleidia PKI endpoint
 2. **PKI URL configuration** - Set `openbao.pki.urls.externalBaseUrl` in Kleidia Helm values to an externally accessible URL
+   - Ensure your load balancer exposes OpenBao on TCP 8200 at that DNS name
 
 Example Helm values:
 
@@ -174,7 +175,7 @@ Example Helm values:
 openbao:
   pki:
     urls:
-      externalBaseUrl: "https://pki.your-company.com"
+      externalBaseUrl: "https://kleidia.smit.dev:8200" # replace with your public PKI endpoint
       crlExpiry: "24h"
 ```
 

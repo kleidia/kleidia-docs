@@ -104,10 +104,11 @@ kubectl exec -it $VAULT_POD -n kleidia -- bao write pki/root/generate/internal \
     common_name="Kleidia Root CA" \
     ttl=87600h
 
-# Configure URLs
+# Configure URLs (use external DNS so Bitbucket/clients can fetch CRL/CA)
+# Example external URL: https://kleidia.smit.dev:8200
 kubectl exec -it $VAULT_POD -n kleidia -- bao write pki/config/urls \
-    issuing_certificates="http://kleidia-platform-openbao:8200/v1/pki/ca" \
-    crl_distribution_points="http://kleidia-platform-openbao:8200/v1/pki/crl"
+    issuing_certificates="https://kleidia.smit.dev:8200/v1/pki/ca" \
+    crl_distribution_points="https://kleidia.smit.dev:8200/v1/pki/crl"
 
 # Create PKI role (1-year leaf certificates)
 kubectl exec -it $VAULT_POD -n kleidia -- bao write pki/roles/kleidia \
