@@ -1,3 +1,4 @@
+
 # Security Overview for Auditors
 
 **Audience**: Security Auditors, Compliance Officers, Risk Assessors, CISOs  
@@ -199,10 +200,13 @@ Logs can be forwarded to external SIEM systems via:
 
 ## Related Documentation
 
-- [Architecture Overview](../01-architecture/system-overview.md)
+- [Architecture Overview](../architecture/)
 - [Authentication Model](auth-model/)
 - [Certificates & PKI](certificates-and-pki/)
 - [Vault and Secrets](vault-and-secrets/)
 - [Compliance Considerations](compliance/)
-- [Operational Runbooks](../04-operations/runbooks.md)
+- [Operational Runbooks](../operations/runbooks/)
+
+
+
 

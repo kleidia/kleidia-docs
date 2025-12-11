@@ -1,3 +1,4 @@
+
 # PKI Integration Patterns
 
 **Audience**: PKI Engineers, Security Architects, Infrastructure Engineers  
@@ -250,4 +251,7 @@ OpenBao includes a built-in OCSP responder. Enable and configure based on your r
 - [Certificates & PKI Overview](../security/certificates-and-pki/)
 - [Vault Setup Guide](vault-setup/)
 - [Security Overview for Auditors](../security/for-auditors/)
+
+
+
 

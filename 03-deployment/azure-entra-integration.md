@@ -1,3 +1,4 @@
+
 # Azure Entra ID Integration with Kleidia
 
 This guide covers integrating Kleidia-managed YubiKeys with Microsoft Azure Entra ID (formerly Azure Active Directory) for passwordless authentication.

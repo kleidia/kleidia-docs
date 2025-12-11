@@ -15,8 +15,8 @@ As a security lead, you're responsible for evaluating whether Kleidia meets your
 
 Start with a high-level understanding of how Kleidia works:
 
-- **[Overview](../00-overview/index.md)** - What Kleidia does and its deployment model (self-hosted, no SaaS)
-- **[Architecture Overview](../01-architecture/system-overview.md)** - Components, data flows, and deployment topology
+- **[Overview](../overview/)** - What Kleidia does and its deployment model (self-hosted, no SaaS)
+- **[Architecture Overview](../architecture/)** - Components, data flows, and deployment topology
 
 ### 2. Deep Dive on Security
 
@@ -45,7 +45,7 @@ Review how Kleidia supports compliance:
 
 Understand day-2 security operations:
 
-- **[Runbooks](../04-operations/runbooks.md)** - Incident response procedures (lost YubiKey, user departure)
+- **[Runbooks](../operations/runbooks/)** - Incident response procedures (lost YubiKey, user departure)
 - **[Monitoring & Logs](../operations/monitoring/)** - Security event monitoring
 
 ## Key Questions Answered
@@ -54,7 +54,7 @@ Understand day-2 security operations:
 |----------|---------------------|
 | Where do private keys reside? | [Security for Auditors](../security/for-auditors/) - Keys stay on YubiKey hardware |
 | How does Kleidia integrate with our CA? | [PKI Integration Patterns](../deployment/pki-integration/) |
-| Is there a SaaS dependency? | [Overview](../00-overview/index.md) - Fully self-hosted, no external dependencies |
+| Is there a SaaS dependency? | [Overview](../overview/) - Fully self-hosted, no external dependencies |
 | What gets logged for compliance? | [Compliance Considerations](../security/compliance/) |
 | How are secrets protected? | [Vault and Secrets](../security/vault-and-secrets/) |
 
@@ -62,7 +62,10 @@ Understand day-2 security operations:
 
 After completing your security review:
 
-1. **Technical Evaluation**: Work with your operations team to deploy a [POC](poc-quickstart.md)
-2. **Production Planning**: Review [Deployment Prerequisites](../03-deployment/prerequisites.md)
+1. **Technical Evaluation**: Work with your operations team to deploy a [POC](../getting-started/poc-quickstart/)
+2. **Production Planning**: Review [Deployment Prerequisites](../deployment/prerequisites/)
 3. **Contact Us**: Reach out to discuss your specific security requirements
+
+
+
 

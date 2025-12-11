@@ -1,13 +1,14 @@
+
 # Enterprise Deployment Guide for Kleidia Agent (macOS)
 
 ## Download
 
 | Package | Description | Download |
 |---------|-------------|----------|
-| **kleidia-agent-\<version\>.pkg** | Signed and notarized macOS installer | [GitHub Releases](https://github.com/kleidia-org/kleidia/releases) |
+| **kleidia-agent-\<version\>.pkg** | Signed and notarized macOS installer | [GitHub Releases](https://github.com/kleidia/kleidia-docs/releases) |
 
 > [!NOTE]
-> Always download installers from the official [Kleidia GitHub Releases](https://github.com/kleidia-org/kleidia/releases) page. The PKG is signed with an Apple Developer ID and notarized for Gatekeeper compatibility.
+> Always download installers from the official [Kleidia GitHub Releases](https://github.com/kleidia/kleidia-docs/releases) page. The PKG is signed with an Apple Developer ID and notarized for Gatekeeper compatibility.
 
 ---
 
@@ -17,8 +18,8 @@ This guide covers deploying Kleidia Agent across macOS enterprise environments u
 
 **Related documentation:**
 - [Installers Overview](../) — Download links and quick installation
-- [Agent Reference](../../06-reference/agent-quick-reference.md) — Configuration options and CLI reference
-- [Troubleshooting](../../03-deployment/troubleshooting.md) — Common issues and solutions
+- [Agent Reference](../../reference/agent-reference/) — Configuration options and CLI reference
+- [Troubleshooting](../../deployment/troubleshooting/) — Common issues and solutions
 
 ## Package Contents
 
@@ -1162,7 +1163,7 @@ Or deploy via MDM script/profile.
 - **SIGNING_GUIDE.md** - Code signing instructions
 - **NOTARIZATION_GUIDE.md** - Apple notarization process
 - **agent.toml.example** - Configuration file example
-- **GitHub Issues**: https://github.com/yourusername/kleidia/issues
+- **GitHub Issues**: https://github.com/kleidia/kleidia-docs/issues
 
 ### Logs and Diagnostics
 - Installation: `/var/log/kleidia-agent/postinstall.log`

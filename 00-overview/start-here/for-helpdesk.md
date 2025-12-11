@@ -23,13 +23,13 @@ Learn what users do with Kleidia:
 Master the procedures you'll use most often:
 
 - **[Administrator Guide](../user-guides/admin-guide/)** - Admin interface for managing users and devices
-- **[FIDO2 Management](../05-using-the-system/fido2-management.md)** - WebAuthn credential management and troubleshooting
+- **[FIDO2 Management](../user-guides/fido2-management/)** - WebAuthn credential management and troubleshooting
 
 ### 3. Incident Response
 
 Know what to do when things go wrong:
 
-- **[Runbooks](../04-operations/runbooks.md)** - Step-by-step procedures for common incidents:
+- **[Runbooks](../operations/runbooks/)** - Step-by-step procedures for common incidents:
   - Lost or stolen YubiKey
   - User leaves the organization
   - PIN lockout recovery
@@ -81,18 +81,18 @@ Know what to do when things go wrong:
 3. Is the user logged into Kleidia with correct permissions?
 4. Is the YubiKey already registered to another user?
 
-📖 See: [Agent Installation](../05-using-the-system/agent-installation.md) for troubleshooting
+📖 See: [Agent Installation](../user-guides/agent-installation/) for troubleshooting
 
 ## Quick Reference Card
 
 | User Request | Action | Documentation |
 |--------------|--------|---------------|
 | Forgot PIN | Reset via admin interface | [YubiKey Lifecycle](../user-guides/yubikey-lifecycle/) |
-| Lost YubiKey | Revoke, disable, replace | [Lost Key Runbook](../04-operations/runbooks.md) |
+| Lost YubiKey | Revoke, disable, replace | [Lost Key Runbook](../operations/runbooks/) |
 | New YubiKey | Enroll via web UI | [End User Guide](../user-guides/end-user-guide/) |
-| Can't authenticate | Check cert validity, PIN attempts | [Troubleshooting](../03-deployment/troubleshooting.md) |
-| Leaving company | Revoke all, disable device | [Departure Runbook](../04-operations/runbooks.md) |
-| Agent not working | Verify agent service running | [Agent Installation](../05-using-the-system/agent-installation.md) |
+| Can't authenticate | Check cert validity, PIN attempts | [Troubleshooting](../deployment/troubleshooting/) |
+| Leaving company | Revoke all, disable device | [Departure Runbook](../operations/runbooks/) |
+| Agent not working | Verify agent service running | [Agent Installation](../user-guides/agent-installation/) |
 
 ## Escalation Guide
 
@@ -109,7 +109,10 @@ Know what to do when things go wrong:
 
 ## Next Steps
 
-1. **Practice in Test Environment**: Get access to a [POC deployment](poc-quickstart.md) to practice workflows
+1. **Practice in Test Environment**: Get access to a [POC deployment](../getting-started/poc-quickstart/) to practice workflows
 2. **Bookmark Key Pages**: Keep runbooks accessible for quick reference
 3. **Know Your Escalation Path**: Understand who to contact for different issue types
+
+
+
 

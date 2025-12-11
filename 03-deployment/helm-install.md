@@ -1,3 +1,4 @@
+
 # Helm Installation Guide
 
 **Audience**: Operations Administrators  
@@ -27,8 +28,8 @@ See [Prerequisites](prerequisites.md) for detailed requirements.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/kleidia.git
-cd kleidia
+git clone https://github.com/kleidia/kleidia-docs.git
+cd kleidia-docs
 ```
 
 ### 2. Configure Values
@@ -347,3 +348,4 @@ kubectl delete namespace kleidia
 - [Vault Setup](vault-setup.md)
 - [Upgrades and Rollback](upgrades-and-rollback.md)
 - [Troubleshooting](troubleshooting.md)
+

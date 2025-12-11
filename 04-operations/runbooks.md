@@ -1,3 +1,4 @@
+
 # Operational Runbooks
 
 **Audience**: IT Operations, Helpdesk, Security Operations  
@@ -97,7 +98,7 @@ If user needs a replacement:
 ### Related Docs
 
 - [YubiKey Lifecycle](../user-guides/yubikey-lifecycle/)
-- [FIDO2 Management](../05-using-the-system/fido2-management.md)
+- [FIDO2 Management](../user-guides/fido2-management/)
 - [Security for Auditors](../security/for-auditors/)
 
 ---
@@ -328,7 +329,7 @@ If unable to restore:
 
 - [Vault Setup](../deployment/vault-setup/)
 - [Backups & Restore](backups/)
-- [Troubleshooting](../03-deployment/troubleshooting.md)
+- [Troubleshooting](../deployment/troubleshooting/)
 
 ---
 
@@ -422,7 +423,7 @@ kubectl exec -it kleidia-postgresql-0 -n kleidia -- \
 ### Related Docs
 
 - [Backups & Restore](backups/)
-- [Troubleshooting](../03-deployment/troubleshooting.md)
+- [Troubleshooting](../deployment/troubleshooting/)
 
 ---
 
@@ -430,7 +431,7 @@ kubectl exec -it kleidia-postgresql-0 -n kleidia -- \
 
 ### Agent Pairing Issues
 
-See [Troubleshooting Guide](../03-deployment/troubleshooting.md) for agent connectivity problems.
+See [Troubleshooting Guide](../deployment/troubleshooting/) for agent connectivity problems.
 
 ### Certificate Expiry
 
@@ -447,4 +448,4 @@ See [Load Balancer Setup](../deployment/load-balancer/) for TLS certificate mana
 - [Daily Operations](daily-operations/)
 - [Monitoring & Logs](monitoring/)
 - [Backups & Restore](backups/)
-- [Troubleshooting](../03-deployment/troubleshooting.md)
+- [Troubleshooting](../deployment/troubleshooting/)

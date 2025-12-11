@@ -15,16 +15,16 @@ As an operations engineer, you're responsible for deploying Kleidia, integrating
 
 Before deploying, understand what you're working with:
 
-- **[Overview](../00-overview/index.md)** - What Kleidia does and its components
-- **[Architecture Overview](../01-architecture/system-overview.md)** - Component diagram, data flows, and scalability
+- **[Overview](../overview/)** - What Kleidia does and its components
+- **[Architecture Overview](../architecture/)** - Component diagram, data flows, and scalability
 
 ### 2. Plan Your Deployment
 
 Prepare your environment:
 
-- **[Prerequisites](../03-deployment/prerequisites.md)** - Infrastructure requirements (Kubernetes, storage, networking)
-- **[Helm Installation](../03-deployment/helm-install.md)** - Helm chart deployment guide
-- **[Configuration](../03-deployment/configuration.md)** - Configuration options and customization
+- **[Prerequisites](../deployment/prerequisites/)** - Infrastructure requirements (Kubernetes, storage, networking)
+- **[Helm Installation](../deployment/helm-install/)** - Helm chart deployment guide
+- **[Configuration](../deployment/configuration/)** - Configuration options and customization
 
 ### 3. Set Up Integrations
 
@@ -49,26 +49,26 @@ Prepare for ongoing operations:
 
 When things go wrong:
 
-- **[Troubleshooting Guide](../03-deployment/troubleshooting.md)** - Common issues and solutions
-- **[Runbooks](../04-operations/runbooks.md)** - Incident response procedures
+- **[Troubleshooting Guide](../deployment/troubleshooting/)** - Common issues and solutions
+- **[Runbooks](../operations/runbooks/)** - Incident response procedures
 
 ## Quick Reference
 
 | Task | Documentation |
 |------|---------------|
-| Deploy Kleidia | [Helm Installation](../03-deployment/helm-install.md) |
+| Deploy Kleidia | [Helm Installation](../deployment/helm-install/) |
 | Configure OIDC/SSO | [Azure Entra Integration](../deployment/azure-entra/) |
 | Set up PKI | [Vault Setup](../deployment/vault-setup/) + [PKI Integration](../deployment/pki-integration/) |
 | Monitor health | [Monitoring & Logs](../operations/monitoring/) |
 | Back up data | [Backups & Restore](../operations/backups/) |
 | Upgrade version | [Upgrades & Rollback](../deployment/upgrades/) |
-| Troubleshoot issues | [Troubleshooting](../03-deployment/troubleshooting.md) |
+| Troubleshoot issues | [Troubleshooting](../deployment/troubleshooting/) |
 
 ## Deployment Checklist
 
 Before going to production, ensure you've completed:
 
-- [ ] Kubernetes cluster meets [prerequisites](../03-deployment/prerequisites.md)
+- [ ] Kubernetes cluster meets [prerequisites](../deployment/prerequisites/)
 - [ ] Helm chart deployed with production values
 - [ ] OpenBao configured as intermediate CA (not self-signed)
 - [ ] OIDC/SSO configured and tested
@@ -80,7 +80,10 @@ Before going to production, ensure you've completed:
 
 ## Next Steps
 
-1. **Start with POC**: Deploy a [test environment](poc-quickstart.md) first
+1. **Start with POC**: Deploy a [test environment](../getting-started/poc-quickstart/) first
 2. **Review Security**: Coordinate with security team on [PKI integration](../deployment/pki-integration/)
 3. **Plan Production**: Use the checklist above for production readiness
+
+
+
 
