@@ -463,12 +463,13 @@ spec:
           echo "✅ openbao-helm-approle secret created"
           
           # Step 6c: Create backend-openbao AppRole
+          # Uses periodic tokens (token_period) for indefinite renewal capability
           echo ""
           echo "Step 6c: Creating backend-openbao AppRole..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/backend-openbao" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policies":["kleidia-backend"],"token_ttl":"24h","token_max_ttl":"168h","secret_id_ttl":"8760h","secret_id_num_uses":0}'
+            -d '{"policies":["kleidia-backend"],"token_ttl":"24h","token_period":"24h","token_max_ttl":"0","secret_id_ttl":"8760h","secret_id_num_uses":0}'
           
           BACKEND_ROLE_ID=$(openbao_curl -sf "http://127.0.0.1:8200/v1/auth/approle/role/backend-openbao/role-id" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.role_id')
@@ -485,12 +486,13 @@ spec:
           echo "✅ openbao-backend-approle secret created"
           
           # Step 6d: Create license-openbao AppRole
+          # Uses periodic tokens (token_period) for indefinite renewal capability
           echo ""
           echo "Step 6d: Creating license-openbao AppRole..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/license-openbao" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policies":["license-service"],"token_ttl":"24h","token_max_ttl":"168h","secret_id_ttl":"8760h","secret_id_num_uses":0}'
+            -d '{"policies":["license-service"],"token_ttl":"24h","token_period":"24h","token_max_ttl":"0","secret_id_ttl":"8760h","secret_id_num_uses":0}'
           
           LICENSE_ROLE_ID=$(openbao_curl -sf "http://127.0.0.1:8200/v1/auth/approle/role/license-openbao/role-id" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.role_id')
