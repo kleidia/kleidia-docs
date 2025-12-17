@@ -511,9 +511,20 @@ Before your license expires:
 - ✅ Generate compliance reports monthly
 - ✅ Keep documentation updated
 
+## Multi-Tenant Organizations
+
+For enterprise deployments requiring subsidiary/department isolation:
+
+- **Enable Multi-Tenancy**: Navigate to **System Settings** → **Multi-Tenant**
+- **Manage Organizations**: Navigate to **Admin Panel** → **Organizations**
+- **Assign Roles**: Use IdP groups or manual role assignment
+
+See [Multi-Tenant Organizations](multi-tenant-organizations.md) for detailed configuration.
+
 ## Related Documentation
 
 - [End User Guide](end-user-guide.md)
 - [YubiKey Lifecycle](yubikey-lifecycle.md)
+- [Multi-Tenant Organizations](multi-tenant-organizations.md)
 - [Operations Guide](../04-operations/)
 

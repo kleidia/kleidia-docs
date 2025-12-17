@@ -48,6 +48,7 @@ This documentation is designed for **Kleidia customers** who need to:
 
 ### [05 - Using the System](05-using-the-system/)
 - **[Agent Installation](05-using-the-system/agent-installation.md)** - Install agent on workstations
+- **[Multi-Tenant Organizations](05-using-the-system/multi-tenant-organizations.md)** - Configure organization-based access control
 - End-user guide
 - Administrator guide
 - YubiKey lifecycle management
