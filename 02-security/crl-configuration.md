@@ -47,35 +47,47 @@ External System                  Kleidia Backend                   OpenBao
 
 ## Configuration
 
-### Prerequisites
+### Automatic URL Detection
 
-Before deploying Kleidia, decide on your PKI URL strategy:
+**No manual CRL URL configuration is needed.** Kleidia automatically derives the PKI URL from your domain configuration:
 
-1. **Internal only** (default): CRL accessible only within the Kubernetes cluster
-2. **External access**: CRL accessible from the internet (required for Entra ID, Bitbucket)
+| Configuration | Resulting PKI URL |
+|---------------|-------------------|
+| `global.siteUrl: "https://kleidia.example.com"` | `https://kleidia.example.com/api/pki` |
+| `global.domain: "kleidia.example.com"` | `https://kleidia.example.com/api/pki` |
+| Neither set | Internal URL (not externally accessible) |
 
 > **⚠️ Important**: The CRL URL is embedded in every issued certificate. Once certificates are issued, the URL cannot be changed without re-issuing all certificates.
 
-### Helm Configuration
+### Standard Helm Configuration
 
-Set the external PKI URL in your `values.yaml`:
+Just set your domain during Helm install - PKI URLs are derived automatically:
 
 ```yaml
-# In kleidia-platform/values.yaml or your custom values file
-openbao:
-  pki:
-    urls:
-      # Set this to your Kleidia domain's API endpoint
-      externalBaseUrl: "https://kleidia.example.com/api/pki"
-      
-      # CRL validity period (default: 24h)
-      crlExpiry: "24h"
+# In your values.yaml
+global:
+  domain: "kleidia.example.com"    # PKI URL auto-detected from this
+  # OR
+  siteUrl: "https://kleidia.example.com"  # Takes precedence if set
 ```
 
-This configures:
+This automatically configures:
 - **CRL URL**: `https://kleidia.example.com/api/pki/crl`
 - **CA URL**: `https://kleidia.example.com/api/pki/ca`
 - **CA Chain**: `https://kleidia.example.com/api/pki/ca_chain`
+
+### Optional: Override PKI URL
+
+Only needed if you want a different URL than `{siteUrl}/api/pki`:
+
+```yaml
+openbao:
+  pki:
+    urls:
+      # Override auto-detected URL (rarely needed)
+      externalBaseUrl: "https://pki.example.com/custom/path"
+      crlExpiry: "24h"
+```
 
 ### Load Balancer Configuration
 
@@ -294,9 +306,9 @@ frontend kleidia_http
 - External systems cannot reach CRL
 
 **Solution:**
-The CRL URL was not configured before certificate issuance. You must:
+The `global.domain` or `global.siteUrl` was not set before certificate issuance. You must:
 
-1. Update Helm values with correct `externalBaseUrl`
+1. Update Helm values with correct `global.domain` or `global.siteUrl`
 2. Reinstall OpenBao (or manually reconfigure PKI URLs)
 3. Re-enroll affected YubiKeys to get new certificates
 

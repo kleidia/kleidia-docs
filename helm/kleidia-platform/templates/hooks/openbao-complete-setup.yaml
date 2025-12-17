@@ -548,22 +548,27 @@ spec:
           echo "Step 10: Configuring PKI URLs..."
           
           {{- if .Values.openbao.pki.urls.externalBaseUrl }}
-          # Using external URLs for CRL and issuing certificates
-          # The external URL should point to Kleidia's backend which proxies CRL/CA requests
-          # Example: https://kleidia.example.com/api/pki
+          # Explicit external URL configured (overrides auto-detection)
           PKI_BASE_URL="{{ .Values.openbao.pki.urls.externalBaseUrl }}"
-          echo "  Using external PKI URL: ${PKI_BASE_URL}"
-          echo "  CRL will be available at: ${PKI_BASE_URL}/crl"
-          echo "  CA will be available at: ${PKI_BASE_URL}/ca"
+          echo "  Using explicit PKI URL: ${PKI_BASE_URL}"
+          {{- else if .Values.global.siteUrl }}
+          # Auto-derive PKI URL from global.siteUrl
+          PKI_BASE_URL="{{ .Values.global.siteUrl }}/api/pki"
+          echo "  Using PKI URL derived from siteUrl: ${PKI_BASE_URL}"
+          {{- else if .Values.global.domain }}
+          # Auto-derive PKI URL from global.domain
+          PKI_BASE_URL="https://{{ .Values.global.domain }}/api/pki"
+          echo "  Using PKI URL derived from domain: ${PKI_BASE_URL}"
           {{- else }}
-          # Using internal Kubernetes service URLs (for in-cluster verification only)
+          # No domain configured - using internal Kubernetes service URLs
           # External systems (Entra ID, Bitbucket) will NOT be able to reach this URL
           PKI_BASE_URL="http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/pki"
           echo "  Using internal PKI URL: ${PKI_BASE_URL}"
           echo "  ⚠️  WARNING: CRL is not accessible from external systems!"
-          echo "  ⚠️  For production, set openbao.pki.urls.externalBaseUrl to your Kleidia domain"
-          echo "  ⚠️  Example: https://kleidia.example.com/api/pki"
+          echo "  ⚠️  For production, set global.domain or global.siteUrl"
           {{- end }}
+          echo "  CRL will be available at: ${PKI_BASE_URL}/crl"
+          echo "  CA will be available at: ${PKI_BASE_URL}/ca"
           
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/config/urls" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
