@@ -7,29 +7,30 @@
 # This is the COMPLETE and FINAL schema for Kleidia.
 # ALL tables are created here - backend seed.go only ensures they exist.
 #
-# ESSENTIAL TABLES (14):
-#   1. users                    - User accounts and authentication
-#   2. refresh_tokens           - JWT refresh token management
-#   3. user_sessions            - Active session tracking
-#   4. discovered_agents        - Agents before pairing (unauthenticated)
-#   5. agents                   - Paired agents with session binding (authenticated)
-#   6. discovered_devices       - YubiKeys discovered by agents
-#   7. agent_pairing_sessions   - Agent pairing workflow
-#   8. pending_challenges       - Challenge/response authentication (V2 pairing)
-#   9. pairing_tokens           - Short-lived pairing tokens
-#   10. yubi_keys                - Registered YubiKeys
-#   11. yubikey_secrets         - Encrypted secrets (Vault paths)
-#   12. certificate_signing_requests - CSR lifecycle tracking
-#   13. agent_certificates      - Session-bound agent mTLS certificates (with revocation tracking)
-#   14. audit_logs              - Comprehensive audit logging
-#   15. compliance_reports      - PDF report generation from audit logs
+# ESSENTIAL TABLES (15):
+#   1. organizations            - Multi-tenant organization isolation
+#   2. users                    - User accounts and authentication (with org/role)
+#   3. refresh_tokens           - JWT refresh token management
+#   4. user_sessions            - Active session tracking
+#   5. discovered_agents        - Agents before pairing (unauthenticated)
+#   6. agents                   - Paired agents with session binding (authenticated)
+#   7. discovered_devices       - YubiKeys discovered by agents
+#   8. agent_pairing_sessions   - Agent pairing workflow
+#   9. pending_challenges       - Challenge/response authentication (V2 pairing)
+#   10. pairing_tokens          - Short-lived pairing tokens
+#   11. yubi_keys               - Registered YubiKeys
+#   12. yubikey_secrets         - Encrypted secrets (Vault paths)
+#   13. certificate_signing_requests - CSR lifecycle tracking
+#   14. agent_certificates      - Session-bound agent mTLS certificates (with revocation tracking)
+#   15. audit_logs              - Comprehensive audit logging
+#   16. compliance_reports      - PDF report generation from audit logs
 #
 # OPTIONAL TABLES (3 - metadata/audit/caching):
 #   14. yubikey_certificates    - YubiKey certificate metadata cache
 #   15. certificate_states      - Certificate lifecycle audit trail
 #   16. device_config_history   - Device configuration audit trail
 #
-# TOTAL: 17 tables (hybrid agent discovery - visibility + security)
+# TOTAL: 20 tables (hybrid agent discovery + multi-tenant isolation)
 #
 # REMOVED TABLES (obsolete/unused):
 #   ❌ operations          - Message queue era (HTTP agents now)
@@ -140,6 +141,25 @@ spec:
           -- AUTHENTICATION & AUTHORIZATION (3 tables) + BOOTSTRAP LOCKS
           -- ========================================================================
           
+          -- ========================================================================
+          -- MULTI-TENANT ORGANIZATIONS
+          -- ========================================================================
+          
+          -- Organizations table (multi-tenant isolation)
+          CREATE TABLE IF NOT EXISTS organizations (
+              id SERIAL PRIMARY KEY,
+              name VARCHAR(255) UNIQUE NOT NULL,
+              oidc_claim_value VARCHAR(255) UNIQUE,
+              is_active BOOLEAN DEFAULT true,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              deleted_at TIMESTAMP
+          );
+          
+          CREATE INDEX IF NOT EXISTS idx_organizations_deleted_at ON organizations(deleted_at);
+          CREATE INDEX IF NOT EXISTS idx_organizations_oidc_claim_value ON organizations(oidc_claim_value);
+          CREATE INDEX IF NOT EXISTS idx_organizations_is_active ON organizations(is_active);
+          
           -- Users table
           CREATE TABLE IF NOT EXISTS users (
               id SERIAL PRIMARY KEY,
@@ -149,6 +169,11 @@ spec:
               hashed_password TEXT NOT NULL,
               is_admin BOOLEAN DEFAULT FALSE,
               is_active BOOLEAN DEFAULT TRUE,
+              organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
+              role VARCHAR(50) DEFAULT 'user',
+              oidc_organization_claim VARCHAR(255),
+              oidc_role_claim VARCHAR(255),
+              role_override BOOLEAN DEFAULT false,
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
               updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
               deleted_at TIMESTAMP
@@ -157,6 +182,18 @@ spec:
           CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
           CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
           CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
+          CREATE INDEX IF NOT EXISTS idx_users_organization_id ON users(organization_id);
+          CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+          
+          -- Migration: Add multi-tenant columns to existing users table (v2.3+)
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL;
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'user';
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS oidc_organization_claim VARCHAR(255);
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS oidc_role_claim VARCHAR(255);
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS role_override BOOLEAN DEFAULT false;
+          
+          -- Migrate existing admin users to super_admin role
+          UPDATE users SET role = 'super_admin' WHERE is_admin = true AND role = 'user';
           
           -- Refresh tokens for JWT management
           CREATE TABLE IF NOT EXISTS refresh_tokens (
@@ -342,6 +379,7 @@ spec:
               serial VARCHAR(255) UNIQUE NOT NULL,
               model VARCHAR(255),
               firmware VARCHAR(255),
+              interfaces VARCHAR(255),
               device_type VARCHAR(50) NOT NULL,
               device_id VARCHAR(255),
               owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -358,6 +396,9 @@ spec:
               updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
               deleted_at TIMESTAMP
           );
+          
+          -- Add interfaces column if not exists (for upgrades from older versions)
+          ALTER TABLE yubi_keys ADD COLUMN IF NOT EXISTS interfaces VARCHAR(255);
           
           CREATE INDEX IF NOT EXISTS idx_yubi_keys_serial ON yubi_keys(serial);
           CREATE INDEX IF NOT EXISTS idx_yubi_keys_owner_id ON yubi_keys(owner_id);
@@ -664,8 +705,8 @@ spec:
           echo ""
           echo "✅ Kleidia database schema initialized successfully!"
           echo ""
-          echo "📊 Schema Summary (Certificate Revocation + Agent Cleanup + License Management):"
-          echo "  Essential tables (17): users, refresh_tokens, user_sessions,"
+          echo "📊 Schema Summary (Multi-Tenant + Certificate Revocation + License Management):"
+          echo "  Essential tables (18): organizations, users, refresh_tokens, user_sessions,"
           echo "                          discovered_agents, agents, discovered_devices,"
           echo "                          agent_pairing_sessions, pending_challenges,"
           echo "                          pairing_tokens, yubi_keys, yubikey_secrets,"
@@ -676,7 +717,7 @@ spec:
           echo "  Optional tables (3):   yubikey_certificates, certificate_states,"
           echo "                          device_config_history"
           echo ""
-          echo "  Total: 19 tables"
+          echo "  Total: 20 tables"
           echo ""
           echo "🔄 Hybrid Agent Discovery:"
           echo "  1. Agents auto-register in discovered_agents (unauthenticated)"
