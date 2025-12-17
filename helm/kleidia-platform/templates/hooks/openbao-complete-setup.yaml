@@ -548,20 +548,27 @@ spec:
           echo "Step 10: Configuring PKI URLs..."
           
           {{- if .Values.openbao.pki.urls.externalBaseUrl }}
-          # Using external URLs for CRL and issuing certificates (required for Bitbucket code signing)
+          # Using external URLs for CRL and issuing certificates
+          # The external URL should point to Kleidia's backend which proxies CRL/CA requests
+          # Example: https://kleidia.example.com/api/pki
           PKI_BASE_URL="{{ .Values.openbao.pki.urls.externalBaseUrl }}"
           echo "  Using external PKI URL: ${PKI_BASE_URL}"
+          echo "  CRL will be available at: ${PKI_BASE_URL}/crl"
+          echo "  CA will be available at: ${PKI_BASE_URL}/ca"
           {{- else }}
           # Using internal Kubernetes service URLs (for in-cluster verification only)
-          PKI_BASE_URL="http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200"
+          # External systems (Entra ID, Bitbucket) will NOT be able to reach this URL
+          PKI_BASE_URL="http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/pki"
           echo "  Using internal PKI URL: ${PKI_BASE_URL}"
-          echo "  ⚠️  Note: For Bitbucket code signing, set openbao.pki.urls.externalBaseUrl in values.yaml"
+          echo "  ⚠️  WARNING: CRL is not accessible from external systems!"
+          echo "  ⚠️  For production, set openbao.pki.urls.externalBaseUrl to your Kleidia domain"
+          echo "  ⚠️  Example: https://kleidia.example.com/api/pki"
           {{- end }}
           
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/config/urls" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{\"issuing_certificates\":[\"${PKI_BASE_URL}/v1/pki/ca\"],\"crl_distribution_points\":[\"${PKI_BASE_URL}/v1/pki/crl\"]}"
+            -d "{\"issuing_certificates\":[\"${PKI_BASE_URL}/ca\"],\"crl_distribution_points\":[\"${PKI_BASE_URL}/crl\"]}"
           
           # Configure CRL expiry (default: 24h - matches Bitbucket's refresh interval)
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/config/crl" \
