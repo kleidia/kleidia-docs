@@ -182,25 +182,31 @@ Returns CRL cache status (for monitoring).
   "age": "15m30s",
   "expires_in": "44m30s",
   "fetched_at": "2025-12-18T10:00:00Z",
-  "cache_ttl": "1h0m0s"
+  "cache_ttl": "1h0m0s",
+  "stale_ttl": "24h0m0s",
+  "is_stale": false
 }
 ```
+
+The `is_stale` field indicates if the cache is past its TTL but still being served (stale-while-revalidate). Stale CRLs are served for up to 24 hours if OpenBao becomes temporarily unavailable.
 
 ## Integration Examples
 
 ### Azure Entra ID (Certificate-Based Authentication)
 
-1. Configure CRL URL in Helm values before deploying:
+1. Set your domain in Helm values (PKI URL auto-detected):
    ```yaml
-   openbao:
-     pki:
-       urls:
-         externalBaseUrl: "https://kleidia.example.com/api/pki"
+   global:
+     domain: "kleidia.example.com"
    ```
 
-2. Ensure the CRL is accessible via HTTP (Azure requirement):
-   - Azure Entra ID requires CRL to be accessible over **HTTP** (not HTTPS)
-   - Configure your load balancer to serve `/api/pki/crl` on port 80
+2. HTTP accessibility for CRL (Azure consideration):
+   - **HTTPS works for most Azure Entra ID scenarios** (modern CBA flows)
+   - **HTTP (port 80) required only for**: legacy on-premises AD federation, 
+     certain hybrid identity configurations, or specific compliance requirements
+   - If HTTP is required, configure your load balancer to also serve `/api/pki/crl` on port 80
+   
+   > **Note**: Test with HTTPS first. Only configure HTTP if you encounter CRL fetch errors in Azure.
 
 3. Export CA certificate and import into Azure:
    ```bash
