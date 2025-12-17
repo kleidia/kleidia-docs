@@ -588,11 +588,12 @@ spec:
           echo "  ✅ yubikey-piv role created"
           
           # yubikey-piv-auth role (for slot 9a - Authentication)
+          # Supports: Entra ID CBA (ClientAuth) + On-prem AD Smart Card (SmartCardLogon OID)
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-auth" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":true,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature"],"ext_key_usage":["ClientAuth"],"use_csr_common_name":true,"use_csr_sans":true,"key_type":"any"}'
-          echo "  ✅ yubikey-piv-auth role created"
+            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":true,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["ClientAuth"],"ext_key_usage_oids":["1.3.6.1.4.1.311.20.2.2"],"use_csr_common_name":true,"use_csr_sans":true,"allowed_uri_sans":true,"key_type":"any"}'
+          echo "  ✅ yubikey-piv-auth role created (with Smart Card Logon EKU)"
           
           # yubikey-piv-code-signing role (for slot 9c - Code Signing)
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-code-signing" \
