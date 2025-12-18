@@ -314,9 +314,31 @@ Navigate to **Admin Panel → System Settings → OIDC Provider** and fill in:
   - Turns on OIDC login. When enabled, users can authenticate via SSO.
 
 - **Disable Local Login** (optional)  
-  - When enabled, only OIDC authentication is allowed; local username/password login is disabled.
+  - When enabled, the local username/password login form is hidden from the main login page.
+  - Users can only authenticate via OIDC/SSO.
+  - **Global Admin Access**: Administrators can still access local login via `/admin-login` for emergency access or when OIDC is unavailable.
 
 Click **Save** to persist settings.
+
+#### Global Admin Login (Escape Hatch)
+
+When "Disable Local Login" is enabled, the main login page (`/login`) shows only the SSO button. However, global administrators may need local login access for:
+
+- **Emergency Access**: When the OIDC provider is unavailable
+- **Initial Configuration**: Before OIDC is fully configured
+- **Troubleshooting**: When SSO issues prevent normal login
+
+**To access local login when it's disabled:**
+
+1. Navigate directly to `/admin-login`
+2. Enter local admin credentials (username/password)
+3. Log in as normal
+
+**Security Considerations:**
+- The `/admin-login` URL is not linked from the main login page
+- Only administrators who know this URL can access local login
+- All login attempts (including `/admin-login`) are logged in the audit trail
+- Consider documenting this URL in your organization's runbooks for break-glass scenarios
 
 #### 3. Test OIDC configuration
 

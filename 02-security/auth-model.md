@@ -21,6 +21,24 @@ Kleidia uses JWT-based authentication with Argon2id password hashing, session ma
 6. Frontend: Store tokens, redirect to dashboard
 ```
 
+### Login Pages
+
+Kleidia provides two login entry points:
+
+| Page | URL | Purpose |
+|------|-----|---------|
+| Main Login | `/login` | Standard user login (local + SSO when enabled) |
+| Admin Login | `/admin-login` | Local login only (for admin break-glass access) |
+
+When OIDC is enabled with "Disable Local Login" active:
+- **`/login`**: Shows only the SSO button
+- **`/admin-login`**: Always shows local username/password form
+
+The `/admin-login` page provides an escape hatch for administrators when:
+- OIDC provider is unavailable
+- SSO configuration needs troubleshooting
+- Emergency access is required
+
 ### Token Structure
 
 #### Access Token (JWT)
