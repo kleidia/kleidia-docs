@@ -14,13 +14,13 @@ Multi-tenancy enables enterprise deployments where:
 
 | Role | Scope | Capabilities |
 |------|-------|--------------|
-| **Super-Admin** | Global | Full system access. Manage all organizations, users, and system settings. |
+| **Global Admin** | Global | Full system access. Manage all organizations, users, and system settings. |
 | **Org-Admin** | Organization | View/manage YubiKeys and users within their organization only. Access compliance reports and audit logs scoped to their org. |
 | **User** | Self | Manage their own YubiKey only. |
 
 ### Menu Access by Role
 
-| Menu Item | Super-Admin | Org-Admin | User |
+| Menu Item | Global Admin | Org-Admin | User |
 |-----------|-------------|-----------|------|
 | Dashboard | ✓ | ✓ | ✓ |
 | My YubiKeys | ✓ | ✓ | ✓ |
@@ -56,7 +56,7 @@ Configure which OIDC claims Kleidia should use:
 
 Roles are assigned in the following order of precedence:
 
-1. **IdP Groups (Highest Priority)** – If the user is a member of a configured super-admin or org-admin group
+1. **IdP Groups (Highest Priority)** – If the user is a member of a configured global admin or org-admin group
 2. **Role Claim Value** – If the role claim matches configured values
 3. **Default** – User role
 
@@ -66,7 +66,7 @@ For security-sensitive environments, use IdP groups to manage privileged access:
 
 | Setting | Description | Example |
 |---------|-------------|---------|
-| **Super-Admin Groups** | IdP groups that grant Super-Admin access | `kleidia-super-admins, global-admins` |
+| **Global Admin Groups** | IdP groups that grant Global Admin access | `kleidia-global admins, global-admins` |
 | **Org-Admin Groups** | IdP groups that grant Org-Admin access | `kleidia-org-admins, department-admins` |
 
 **Benefits:**
@@ -81,12 +81,12 @@ If not using group-based assignment:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| **Super-Admin Value** | Role claim value for Super-Admin | `super_admin` |
+| **Global Admin Value** | Role claim value for Global Admin | `global_admin` |
 | **Org-Admin Value** | Role claim value for Org-Admin | `org_admin` |
 
 ## Managing Organizations
 
-Super-Admins can manage organizations from **Admin Panel** → **Organizations**.
+Global Admins can manage organizations from **Admin Panel** → **Organizations**.
 
 ### Creating an Organization
 
@@ -116,7 +116,7 @@ Organizations can only be deleted if they have no assigned users. To delete:
 
 ## User Role Management
 
-Super-Admins can manually assign roles via **Admin Panel** → **Manage Users** → **Update Role**.
+Global Admins can manually assign roles via **Admin Panel** → **Manage Users** → **Update Role**.
 
 ### Role Override
 
@@ -137,14 +137,14 @@ In your App Registration:
 ### 2. Create Admin Groups
 
 Create security groups in Entra ID:
-- `kleidia-super-admins` – For global administrators
+- `kleidia-global admins` – For global administrators
 - `kleidia-org-admins` – For organization administrators
 
 ### 3. Configure Kleidia
 
 In Kleidia's Multi-Tenant settings:
 - **Groups Claim**: `groups`
-- **Super-Admin Groups**: Enter the Group IDs (GUIDs) for super-admin groups
+- **Global Admin Groups**: Enter the Group IDs (GUIDs) for global admin groups
 - **Org-Admin Groups**: Enter the Group IDs (GUIDs) for org-admin groups
 
 ### 4. Organization Claim (Optional)
@@ -164,14 +164,14 @@ In your Okta Application:
 ### 2. Create Groups
 
 Create groups in Okta:
-- `kleidia-super-admins`
+- `kleidia-global admins`
 - `kleidia-org-admins`
 
 ### 3. Configure Kleidia
 
 In Kleidia's Multi-Tenant settings:
 - **Groups Claim**: `groups`
-- **Super-Admin Groups**: `kleidia-super-admins`
+- **Global Admin Groups**: `kleidia-global admins`
 - **Org-Admin Groups**: `kleidia-org-admins`
 
 ## Audit Trail

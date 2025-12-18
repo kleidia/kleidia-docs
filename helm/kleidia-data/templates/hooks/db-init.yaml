@@ -192,8 +192,10 @@ spec:
           ALTER TABLE users ADD COLUMN IF NOT EXISTS oidc_role_claim VARCHAR(255);
           ALTER TABLE users ADD COLUMN IF NOT EXISTS role_override BOOLEAN DEFAULT false;
           
-          -- Migrate existing admin users to super_admin role
-          UPDATE users SET role = 'super_admin' WHERE is_admin = true AND role = 'user';
+          -- Migrate existing admin users to global_admin role
+          UPDATE users SET role = 'global_admin' WHERE is_admin = true AND role = 'user';
+          -- Also migrate any existing super_admin roles to global_admin
+          UPDATE users SET role = 'global_admin' WHERE role = 'super_admin';
           
           -- Refresh tokens for JWT management
           CREATE TABLE IF NOT EXISTS refresh_tokens (
