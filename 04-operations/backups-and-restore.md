@@ -265,4 +265,3 @@ kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \
 - [Daily Operations](daily-operations.md)
 - [Monitoring and Logs](monitoring-and-logs.md)
 - [Runbooks](runbooks.md)
-
