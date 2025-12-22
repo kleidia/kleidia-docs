@@ -6,295 +6,259 @@
 
 ## Overview
 
-Regular backups are essential for disaster recovery and data protection. Kleidia requires backups of:
+Kleidia provides a built-in backup and restore system accessible through the Admin Portal. Backups are:
 
-1. **PostgreSQL Database**: User data, device records, audit logs
-2. **OpenBao**: Secrets and PKI certificates
-3. **Configuration**: Helm values
+- **Encrypted**: AES-256-GCM encryption with password-based key derivation (Argon2id)
+- **Complete**: Includes PostgreSQL database and OpenBao secrets
+- **Stored in S3**: Any S3-compatible storage (AWS S3, MinIO, etc.)
+- **Audited**: All backup and restore operations are logged
 
-## Backup Strategy
+### What Gets Backed Up
 
-### Backup Frequency
+| Component | Contents |
+|-----------|----------|
+| **PostgreSQL Database** | Users, organizations, YubiKey records, certificates, audit logs |
+| **OpenBao Secrets** | JWT secrets, PIV credentials, S3 credentials, certificate keys |
 
-- **Database**: Daily backups (recommended)
-- **Vault**: Daily backups (recommended)
-- **Configuration**: On configuration changes
-- **Full System**: Weekly full backups
+> **Note**: Audit logs can be excluded from backups to reduce file size (configurable in settings).
 
-### Backup Retention
+## Backup Configuration
 
-- **Daily Backups**: Keep 7 days
-- **Weekly Backups**: Keep 4 weeks
-- **Monthly Backups**: Keep 12 months
+### Accessing Backup Settings
 
-## Database Backups
+1. Log in to Kleidia Admin Portal
+2. Navigate to **Settings** → **Backup Management**
+3. Select the **Settings** tab
 
-### Automated Backup
+### S3 Storage Configuration
 
-Set up cron job for automated backups:
+Configure your S3-compatible storage:
 
-```bash
-# Create backup script
-sudo nano /usr/local/bin/kleidia-backup-db.sh
-```
+| Field | Description | Example |
+|-------|-------------|---------|
+| **S3 Endpoint** | Storage service URL | `https://s3.amazonaws.com` or `http://minio.local:9000` |
+| **Region** | S3 region | `us-east-1`, `eu-west-1` |
+| **Bucket** | Bucket name | `kleidia-backups` |
+| **Prefix** | Object key prefix | `backups/` |
+| **Access Key ID** | S3 access key | Your access key |
+| **Secret Access Key** | S3 secret key | Your secret key |
+| **Use Path-Style** | Enable for MinIO/non-AWS | ✓ for MinIO |
+| **Insecure TLS** | Skip certificate verification | Only for testing |
 
-```bash
-#!/bin/bash
-BACKUP_DIR="/backups/kleidia"
-DATE=$(date +%Y%m%d-%H%M%S)
-mkdir -p $BACKUP_DIR
+### Encryption Password
 
-# Backup database
-kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
-  pg_dumpall -U yubiuser > $BACKUP_DIR/db-backup-$DATE.sql
+**Important**: Set a strong encryption password and store it securely.
 
-# Compress backup
-gzip $BACKUP_DIR/db-backup-$DATE.sql
+- Backups are encrypted with AES-256-GCM
+- Password is used to derive the encryption key using Argon2id
+- **You will need this password to restore backups**
+- Password is stored securely in OpenBao (not in database)
 
-# Remove backups older than 7 days
-find $BACKUP_DIR -name "db-backup-*.sql.gz" -mtime +7 -delete
+### Backup Schedule
 
-echo "Database backup completed: $BACKUP_DIR/db-backup-$DATE.sql.gz"
-```
+Configure automatic backups:
 
-```bash
-# Make executable
-sudo chmod +x /usr/local/bin/kleidia-backup-db.sh
+| Field | Description | Default |
+|-------|-------------|---------|
+| **Schedule** | Cron expression | `0 2 * * *` (daily at 2 AM) |
+| **Retention Days** | Auto-delete after N days | 30 |
+| **Include Audit Logs** | Include audit logs in backup | Enabled |
 
-# Add to crontab (daily at 2 AM)
-sudo crontab -e
-# Add: 0 2 * * * /usr/local/bin/kleidia-backup-db.sh
-```
+### Testing the Connection
 
-### Manual Backup
+Click **Test S3 Connection** to verify your configuration before saving.
 
-```bash
-# Create backup directory
-mkdir -p backups/$(date +%Y%m%d)
-
-# Backup database
-kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
-  pg_dumpall -U yubiuser > backups/$(date +%Y%m%d)/database.sql
-
-# Compress
-gzip backups/$(date +%Y%m%d)/database.sql
-```
-
-### Backup Verification
-
-```bash
-# Verify backup file exists
-ls -lh backups/$(date +%Y%m%d)/database.sql.gz
-
-# Test backup restoration (on test system)
-gunzip -c backups/$(date +%Y%m%d)/database.sql.gz | \
-  psql -U yubiuser -d kleidia_test
-```
-
-## Vault Backups
-
-### Automated Backup
-
-```bash
-# Create backup script
-sudo nano /usr/local/bin/kleidia-backup-vault.sh
-```
-
-```bash
-#!/bin/bash
-BACKUP_DIR="/backups/kleidia"
-DATE=$(date +%Y%m%d-%H%M%S)
-mkdir -p $BACKUP_DIR
-
-# Create Vault snapshot
-kubectl exec -i kleidia-platform-openbao-0 -n kleidia -- \
-  vault operator raft snapshot save /tmp/vault-backup.snap
-
-# Copy snapshot locally
-kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \
-  $BACKUP_DIR/vault-backup-$DATE.snap -n kleidia
-
-# Remove backups older than 7 days
-find $BACKUP_DIR -name "vault-backup-*.snap" -mtime +7 -delete
-
-echo "Vault backup completed: $BACKUP_DIR/vault-backup-$DATE.snap"
-```
-
-```bash
-# Make executable
-sudo chmod +x /usr/local/bin/kleidia-backup-vault.sh
-
-# Add to crontab (daily at 3 AM)
-sudo crontab -e
-# Add: 0 3 * * * /usr/local/bin/kleidia-backup-vault.sh
-```
+## Running Backups
 
 ### Manual Backup
 
-```bash
-# Create backup directory
-mkdir -p backups/$(date +%Y%m%d)
+1. Navigate to **Backup Management** → **History** tab
+2. Click **Run Backup Now**
+3. Select backup type:
+   - **Full**: Database + OpenBao secrets (recommended)
+   - **Database Only**: PostgreSQL data only
+   - **Vault Only**: OpenBao secrets only
+4. Monitor progress in the job list
 
-# Create snapshot
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  vault operator raft snapshot save /tmp/vault-backup.snap
+### Scheduled Backups
 
-# Copy snapshot
-kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \
-  backups/$(date +%Y%m%d)/vault-backup.snap -n kleidia
+Scheduled backups run automatically according to the configured cron schedule. Check the **History** tab to verify scheduled backups are completing successfully.
+
+### Backup Status
+
+| Status | Description |
+|--------|-------------|
+| **Pending** | Job created, waiting to start |
+| **Running** | Backup in progress |
+| **Completed** | Backup successful |
+| **Failed** | Backup failed (check error message) |
+
+## Restoring from Backup
+
+### Before You Restore
+
+> ⚠️ **Warning**: Restore operations overwrite existing data. This cannot be undone.
+
+1. Ensure you have the backup encryption password
+2. Consider backing up current state first
+3. Notify users of potential service interruption
+
+### Restore Procedure
+
+1. Navigate to **Backup Management** → **Restore** tab
+2. Locate the backup you want to restore from
+3. Click **Restore** next to the backup
+4. Enter the encryption password
+5. Click **Validate Password** to verify
+6. Click **Restore Now** to start the restore
+
+### Restore Progress
+
+Monitor the restore operation in the **History** tab. The restore process:
+
+1. Downloads and decrypts the backup from S3
+2. Restores PostgreSQL database (using UPSERT for existing records)
+3. Restores OpenBao secrets
+4. Logs completion status to audit log
+
+### After Restore
+
+1. Verify the restore completed successfully in the History tab
+2. Test application functionality
+3. Check that users and data are accessible
+
+## Backup File Format
+
+Backup files are stored as encrypted archives:
+
+```
+backups/backup-full-20251222-143000.enc
 ```
 
-## Configuration Backups
+The encrypted archive contains:
+- `header.json`: Metadata (version, salt, timestamp, checksum)
+- `db-backup.sql.gz`: Compressed PostgreSQL dump
+- `vault-secrets.json.gz`: Compressed OpenBao KV export
 
-### Helm Values
+## Performance
 
-```bash
-# Backup Helm values
-helm get values kleidia-platform -n kleidia > backups/$(date +%Y%m%d)/platform-values.yaml
-helm get values kleidia-data -n kleidia > backups/$(date +%Y%m%d)/data-values.yaml
-helm get values kleidia-services -n kleidia > backups/$(date +%Y%m%d)/services-values.yaml
-```
+Backup and restore times depend on data volume:
 
-## Configuration Backups
+| Scale | Backup Time | Restore Time |
+|-------|-------------|--------------|
+| 1,000 keys | ~15-20 sec | ~20-30 sec |
+| 10,000 keys | ~1-2 min | ~2-3 min |
+| 50,000 keys | ~5-7 min | ~7-10 min |
 
-### Helm Values
+Backups use parallel processing (20 concurrent workers) for OpenBao secret export.
 
-```bash
-# Backup Helm values
-helm get values kleidia-platform -n kleidia > backups/$(date +%Y%m%d)/platform-values.yaml
-helm get values kleidia-data -n kleidia > backups/$(date +%Y%m%d)/data-values.yaml
-helm get values kleidia-services -n kleidia > backups/$(date +%Y%m%d)/services-values.yaml
-```
+## Audit Logging
 
-### Database Restore
+All backup and restore operations are recorded in the audit log:
 
-```bash
-# Stop backend (to prevent data corruption)
-kubectl scale deployment/kleidia-services-backend --replicas=0 -n kleidia
+| Action | Description |
+|--------|-------------|
+| `backup.started` | Manual backup initiated |
+| `backup.completed` | Backup finished successfully |
+| `backup.failed` | Backup failed with error |
+| `restore.started` | Restore initiated |
+| `restore.completed` | Restore finished successfully |
+| `restore.failed` | Restore failed with error |
 
-# Restore database
-gunzip -c backups/20250115/database.sql.gz | \
-  kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia
-
-# Restart backend
-kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia
-
-# Verify restoration
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT count(*) FROM users;"
-```
-
-### Vault Restore
-
-```bash
-# Stop backend (to prevent secret access issues)
-kubectl scale deployment/kleidia-services-backend --replicas=0 -n kleidia
-
-# Copy snapshot to pod
-kubectl cp backups/20250115/vault-backup.snap \
-  kleidia-platform-openbao-0:/tmp/vault-backup.snap -n kleidia
-
-# Restore snapshot
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  vault operator raft snapshot restore /tmp/vault-backup.snap
-
-# Verify Vault
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
-
-# Restart backend
-kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia
-```
-
-### Configuration Restore
-
-```bash
-# Restore Helm values
-helm upgrade kleidia-platform ./helm/kleidia-platform \
-  --namespace kleidia \
-  --values backups/20250115/platform-values.yaml
-
-# Restore Helm values
-helm upgrade kleidia-platform -n kleidia -f backups/20250115/platform-values.yaml ./helm/kleidia-platform
-helm upgrade kleidia-data -n kleidia -f backups/20250115/data-values.yaml ./helm/kleidia-data
-helm upgrade kleidia-services -n kleidia -f backups/20250115/services-values.yaml ./helm/kleidia-services
-```
+Audit entries include:
+- User who initiated the operation
+- Workstation hostname and IP address
+- Backup file name and type
+- Duration and file size (for completed backups)
 
 ## Disaster Recovery
 
-### Complete System Restore
+### Scenario: Corrupted System Storage
 
-1. **Restore Infrastructure**
-   ```bash
-   # Restore Kubernetes cluster (if needed)
-   # Restore persistent volumes
-   ```
+If the existing system's storage is corrupted but OpenBao is still sealed with known unseal keys:
 
-2. **Restore Database**
-   ```bash
-   # Restore PostgreSQL from backup
-   ```
+1. Restore the PostgreSQL database from backup
+2. Restore OpenBao secrets from backup
+3. Verify system functionality
 
-3. **Restore Vault**
-   ```bash
-   # Restore Vault from snapshot
-   ```
+### Scenario: Fresh Installation
 
-4. **Restore Configuration**
-   ```bash
-   # Restore Helm values
-   helm upgrade kleidia-platform -n kleidia -f backups/20250115/platform-values.yaml ./helm/kleidia-platform
-   helm upgrade kleidia-data -n kleidia -f backups/20250115/data-values.yaml ./helm/kleidia-data
-   helm upgrade kleidia-services -n kleidia -f backups/20250115/services-values.yaml ./helm/kleidia-services
-   ```
+If restoring to a completely new installation:
 
-5. **Verify System**
-   ```bash
-   # Check all pods are running
-   # Test application functionality
-   # Verify data integrity
-   ```
+1. Deploy Kleidia using Helm charts
+2. Complete initial setup (create admin user)
+3. Configure S3 backup settings with original storage location
+4. Navigate to Restore tab
+5. Select the backup and enter encryption password
+6. Restore data
 
-## Backup Storage
-
-### Local Storage
-
-- **Location**: `/backups/kleidia/`
-- **Retention**: 7 days local, longer-term archival
-- **Security**: Encrypt backups containing sensitive data
-
-### Remote Storage
-
-Consider storing backups remotely:
-
-- **Cloud Storage**: AWS S3, Azure Blob, Google Cloud Storage
-- **Network Storage**: NFS, SMB shares
-- **Backup Service**: Dedicated backup solutions
-
-### Backup Encryption
-
-Encrypt backups containing sensitive data:
-
-```bash
-# Encrypt database backup
-gzip -c database.sql | \
-  openssl enc -aes-256-cbc -salt -pbkdf2 -out database.sql.gz.enc
-
-# Decrypt backup
-openssl enc -d -aes-256-cbc -pbkdf2 -in database.sql.gz.enc | \
-  gunzip > database.sql
-```
+> **Important**: The new installation will have different OpenBao unseal keys. The backup restores the *secrets* (KV data), not the OpenBao encryption keys.
 
 ## Best Practices
 
-- ✅ Automate backups
-- ✅ Test restore procedures regularly
-- ✅ Store backups off-site
-- ✅ Encrypt sensitive backups
-- ✅ Verify backup integrity
-- ✅ Document restore procedures
-- ✅ Keep multiple backup versions
-- ✅ Monitor backup completion
+- ✅ **Set a strong encryption password** and store it in a secure password manager
+- ✅ **Test restore procedures** regularly (at least quarterly)
+- ✅ **Monitor backup completion** in the History tab
+- ✅ **Keep retention period appropriate** (30 days minimum recommended)
+- ✅ **Use separate S3 buckets** for production and test environments
+- ✅ **Enable audit logs in backups** unless storage is a concern
+- ✅ **Document your S3 credentials** in secure storage for disaster recovery
+
+## Troubleshooting
+
+### Backup Fails with S3 Connection Error
+
+1. Verify S3 endpoint URL is correct
+2. Check Access Key ID and Secret Access Key
+3. Enable "Use Path-Style" for MinIO or non-AWS S3
+4. Test connectivity with **Test S3 Connection** button
+
+### Restore Fails with Invalid Password
+
+The encryption password must match exactly what was used when the backup was created. Passwords are case-sensitive.
+
+### Backup Job Stuck in "Running"
+
+If a backup job remains in "Running" status for more than 2 hours:
+
+1. Check backend pod logs for errors
+2. The system automatically marks stale jobs as failed on restart
+3. Try running a new backup
+
+### No Backups Visible in Restore Tab
+
+1. Verify S3 configuration is saved correctly
+2. Check that backup files exist in S3 (use S3 browser or CLI)
+3. Verify the prefix matches the location of backup files
+
+## Manual Backup (Advanced)
+
+For environments without S3 access or for additional backup methods:
+
+### Database Backup
+
+```bash
+# Create backup
+kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
+  pg_dumpall -U yubiuser > database-backup.sql
+
+# Compress
+gzip database-backup.sql
+```
+
+### OpenBao Snapshot
+
+```bash
+# Create snapshot (requires root token)
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
+  vault operator raft snapshot save /tmp/vault-backup.snap
+
+# Copy locally
+kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \
+  vault-backup.snap -n kleidia
+```
+
+> **Note**: OpenBao raft snapshots include the master key encryption layer and can only be restored to the same OpenBao instance or one initialized with the same unseal keys.
 
 ## Related Documentation
 

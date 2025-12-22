@@ -244,10 +244,34 @@ Configure system-wide settings:
    - **Organization**: Organization name and branding
    - **Email**: SMTP host, port, from address, username, TLS settings
    - **Security**: Feature toggles (device binding, token rotation)
-   - **Backup**: Database and Vault backup schedules (cron expressions), retention days
+   - **Backup**: S3 storage, encryption password, schedule, and retention (see Backup Management below)
    - **OIDC Provider**: OpenID Connect authentication configuration (see next section)
    - **OpenBao CA**: Certificate Authority configuration
 3. Click "Save" for each settings category
+
+### Backup Management
+
+Kleidia provides built-in backup and restore functionality with S3 storage and AES-256 encryption.
+
+**Accessing Backup Settings**: Navigate to **Admin Panel** → **Backup Management**
+
+The Backup Management interface has three tabs:
+
+1. **Settings**: Configure S3 storage, encryption password, schedule, and retention
+2. **History**: View backup job history, run manual backups
+3. **Restore**: View available backups and restore from them
+
+**Key Configuration**:
+- **S3 Endpoint**: URL of your S3-compatible storage
+- **Encryption Password**: Required for encrypting/decrypting backups (store securely!)
+- **Schedule**: Cron expression for automatic backups (default: daily at 2 AM)
+- **Include Audit Logs**: Toggle to exclude audit logs from backups for smaller file sizes
+
+**Running a Backup**: Click **Run Backup Now** in the History tab to start an immediate backup.
+
+**Restoring**: In the Restore tab, select a backup and enter the encryption password to restore.
+
+For detailed backup and restore procedures, see [Backups and Restore](../04-operations/backups-and-restore.md).
 
 **Note**: Settings are persisted in the database and take effect immediately. All setting changes are logged to audit logs.
 
