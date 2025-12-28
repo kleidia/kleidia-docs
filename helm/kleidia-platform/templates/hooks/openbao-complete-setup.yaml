@@ -17,8 +17,8 @@ spec:
   ttlSecondsAfterFinished: 300
   # Allow 10 minutes for the job to complete
   activeDeadlineSeconds: 600
-  # Don't retry - let Kubernetes restart on failure with backoff
-  backoffLimit: 0
+  # Allow one retry in case of timing issues
+  backoffLimit: 1
   template:
     metadata:
       name: openbao-setup
@@ -63,7 +63,7 @@ spec:
           
           echo "=== OpenBao Complete Setup Script ==="
           echo "This script will initialize and configure OpenBao"
-          echo "Note: Auto-unseal is configured, no manual unsealing needed!"
+          echo "OpenBao uses static seal - auto-unseal enabled by default"
           echo ""
           
           # Verify required tools are available
@@ -184,18 +184,17 @@ spec:
             echo "OpenBao is not initialized. Initializing..."
             FIRST_INSTALL=true
             
-            # Initialize OpenBao with retries
-            # Note: With static seal, recovery keys may not be returned in init response
-            # We request recovery_shares but OpenBao may only return them if recovery seal is enabled
-            # Generate 3 recovery keys with threshold of 2 (any 2 keys can recover)
+            # Initialize OpenBao with static seal
+            # Static seal uses a key file for encryption, recovery keys are for root token regeneration
+            # 3 recovery keys total, all 3 required for recovery operations
             INIT_RESPONSE=""
             for attempt in $(seq 1 5); do
               echo "Initialization attempt ${attempt}/5..."
-              # Request both recovery_shares and key_shares to ensure we get keys
-              # Static seal may return keys in different format
+              # Initialize with 3 recovery key shares, threshold of 3 (all required for recovery)
+              # With static seal, these are recovery keys, not unseal keys
               INIT_RESPONSE=$(openbao_curl -s -X PUT "http://127.0.0.1:8200/v1/sys/init" \
                 -H "Content-Type: application/json" \
-                -d '{"recovery_shares": 3, "recovery_threshold": 2, "key_shares": 1, "key_threshold": 1}' 2>&1)
+                -d '{"recovery_shares": 3, "recovery_threshold": 3}' 2>&1)
               
               if [ $? -eq 0 ] && [ -n "$INIT_RESPONSE" ]; then
                 # Check if response contains root_token (indicates success)
@@ -224,47 +223,73 @@ spec:
             echo "Debug: Checking initialization response structure..."
             echo "$INIT_RESPONSE" | jq 'keys' || echo "Failed to parse JSON response"
             echo "$INIT_RESPONSE" | jq 'has("recovery_keys")' || echo "recovery_keys check failed"
-            echo "$INIT_RESPONSE" | jq 'has("recovery_keys_b64")' || echo "recovery_keys_b64 check failed"
-            echo "$INIT_RESPONSE" | jq 'has("keys")' || echo "keys check failed"
-            echo "$INIT_RESPONSE" | jq '.recovery_keys | length' || echo "recovery_keys length check failed"
+            echo "$INIT_RESPONSE" | jq 'has("recovery_keys_base64")' || echo "recovery_keys_base64 check failed"
             
             # Extract root token (always present)
             ROOT_TOKEN=$(echo "$INIT_RESPONSE" | jq -r '.root_token')
             
-            # For static seal with recovery_shares, OpenBao returns recovery keys
-            # Check all possible field names that OpenBao might use
-            # OpenBao/Vault can return: recovery_keys, recovery_keys_b64, or keys_b64
-            RECOVERY_KEY_1=$(echo "$INIT_RESPONSE" | jq -r '.recovery_keys[0] // .recovery_keys_b64[0] // .keys_b64[0] // ""')
-            RECOVERY_KEY_2=$(echo "$INIT_RESPONSE" | jq -r '.recovery_keys[1] // .recovery_keys_b64[1] // .keys_b64[1] // ""')
-            RECOVERY_KEY_3=$(echo "$INIT_RESPONSE" | jq -r '.recovery_keys[2] // .recovery_keys_b64[2] // .keys_b64[2] // ""')
+            # Extract recovery keys (base64 encoded)
+            # These are used for root token regeneration, NOT for unsealing
+            RECOVERY_KEY_1=$(echo "$INIT_RESPONSE" | jq -r '.recovery_keys_base64[0] // .recovery_keys[0] // ""')
+            RECOVERY_KEY_2=$(echo "$INIT_RESPONSE" | jq -r '.recovery_keys_base64[1] // .recovery_keys[1] // ""')
+            RECOVERY_KEY_3=$(echo "$INIT_RESPONSE" | jq -r '.recovery_keys_base64[2] // .recovery_keys[2] // ""')
             
-            # Debug: Log what we extracted
+            # Debug: Log what we extracted (lengths only, never the keys)
             echo "Debug: Extracted recovery keys:"
             echo "  RECOVERY_KEY_1 length: ${#RECOVERY_KEY_1}"
             echo "  RECOVERY_KEY_2 length: ${#RECOVERY_KEY_2}"
             echo "  RECOVERY_KEY_3 length: ${#RECOVERY_KEY_3}"
-            
-            # Legacy unseal key (will be empty for static seal, but kept for compatibility)
-            UNSEAL_KEY=$(echo "$INIT_RESPONSE" | jq -r '.keys[0] // ""')
             
             if [ -z "$ROOT_TOKEN" ]; then
               echo "❌ Failed to extract root token from initialization response"
               exit 1
             fi
             
+            # Recovery keys may be empty if static seal doesn't require them
+            # This is OK - we still need to continue
+            if [ -z "$RECOVERY_KEY_1" ] || [ -z "$RECOVERY_KEY_2" ] || [ -z "$RECOVERY_KEY_3" ]; then
+              echo "⚠️  Recovery keys not returned (this is OK for static seal)"
+              RECOVERY_KEY_1=""
+              RECOVERY_KEY_2=""
+              RECOVERY_KEY_3=""
+            fi
+            
+            # Read the static unseal key from the existing secret
+            echo "Reading static unseal key from openbao-unseal-key secret..."
+            STATIC_UNSEAL_KEY=$(kubectl get secret openbao-unseal-key -n "${NAMESPACE}" -o jsonpath='{.data.unseal-kleidia-1\.key}' | base64 -d 2>/dev/null || echo "")
+            
+            if [ -z "$STATIC_UNSEAL_KEY" ]; then
+              echo "❌ Failed to read static unseal key from secret"
+              exit 1
+            fi
+            echo "✅ Static unseal key retrieved (length: ${#STATIC_UNSEAL_KEY})"
+            
             echo "Storing initialization keys..."
-            # Store in Kubernetes secret
+            # Store in Kubernetes secret (will be shown to admin and then handled based on their choice)
             kubectl create secret generic openbao-init-keys \
               --namespace="${NAMESPACE}" \
               --from-literal=root-token="${ROOT_TOKEN}" \
-              --from-literal=unseal-key="${UNSEAL_KEY}" \
               --from-literal=recovery-key-1="${RECOVERY_KEY_1}" \
               --from-literal=recovery-key-2="${RECOVERY_KEY_2}" \
               --from-literal=recovery-key-3="${RECOVERY_KEY_3}" \
+              --from-literal=static-unseal-key="${STATIC_UNSEAL_KEY}" \
               --dry-run=client -o yaml | kubectl apply -f -
             
-            echo "✅ OpenBao initialized and keys stored"
-            echo "   Recovery keys: $([ -n "$RECOVERY_KEY_1" ] && echo "stored" || echo "none")"
+            echo "✅ OpenBao initialized with static seal"
+            echo "   Auto-unseal is enabled by default"
+            echo "   Admin can choose to disable auto-unseal during bootstrap"
+            
+            # With static seal, OpenBao should already be unsealed
+            echo ""
+            echo "Step 2b: Verifying OpenBao is unsealed..."
+            HEALTH=$(openbao_curl -s "http://127.0.0.1:8200/v1/sys/health" || echo '{"sealed":true}')
+            SEALED=$(echo "$HEALTH" | jq -r '.sealed // true')
+            if [ "$SEALED" = "true" ]; then
+              echo "❌ OpenBao is still sealed - static seal may not be working correctly"
+              echo "   Please check that openbao-unseal-key secret contains a valid key"
+              exit 1
+            fi
+            echo "✅ OpenBao is unsealed (static seal working)"
           else
             echo "✅ OpenBao is already initialized"
             
@@ -314,12 +339,20 @@ spec:
           # Step 3: Enable audit logging (security requirement)
           echo ""
           echo "Step 3: Enabling audit logging..."
-          # Enable file audit device - logs all operations
+          
+          # Enable file audit device - logs all operations to persistent storage
           openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/audit/file" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"type":"file","options":{"file_path":"/openbao/audit/audit.log","log_raw":"false"}}' 2>/dev/null || echo "Audit logging already enabled or audit path not available"
-          echo "✅ Audit logging configured"
+            -d '{"type":"file","options":{"file_path":"/openbao/audit/audit.log","log_raw":"false"}}' 2>/dev/null || echo "File audit already enabled or path not available"
+          
+          # Enable syslog audit device - streams logs to cluster logging
+          openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/audit/syslog" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"syslog","options":{"tag":"openbao","facility":"AUTH"}}' 2>/dev/null || echo "Syslog audit already enabled or not available"
+          
+          echo "✅ Audit logging configured (file + syslog)"
           
           # Step 4: Configure Kubernetes Authentication (auto-unseal handles unsealing)
           echo ""
@@ -375,7 +408,7 @@ spec:
           openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/kleidia-backend" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policy": "# PKI certificate signing\npath \"pki/sign/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/issue/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/cert/ca\" { capabilities = [\"read\"] }\n\n# PKI CA management (for intermediate CA reconfiguration)\npath \"pki/issuers/generate/intermediate/existing\" { capabilities = [\"create\", \"update\"] }\npath \"pki/intermediate/set-signed\" { capabilities = [\"create\", \"update\"] }\npath \"pki/config/urls\" { capabilities = [\"read\", \"update\"] }\npath \"pki/config/issuers\" { capabilities = [\"read\"] }\npath \"pki/issuer/*\" { capabilities = [\"read\"] }\n\n# Application secrets (specific paths only - least privilege)\npath \"yubikeys/data/jwt-secret\" { capabilities = [\"read\"] }\npath \"yubikeys/data/encryption-key\" { capabilities = [\"read\"] }\npath \"yubikeys/data/database\" { capabilities = [\"read\"] }\npath \"yubikeys/data/backend/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\"] }\npath \"yubikeys/data/backend-encryption-key\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"yubikeys/metadata/backend/*\" { capabilities = [\"list\", \"read\"] }\n\n# Backup S3 credentials\npath \"yubikeys/data/backup/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\"] }\npath \"yubikeys/metadata/backup/*\" { capabilities = [\"list\", \"read\"] }\n\n# Explicitly deny license paths (defense in depth)\npath \"yubikeys/data/license/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/metadata/license/*\" { capabilities = [\"deny\"] }\n\n# System endpoints (for health checks)\npath \"sys/auth\" { capabilities = [\"read\"] }\n\n# Token renewal\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }"}'
+            -d '{"policy": "# PKI certificate signing\npath \"pki/sign/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/issue/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/cert/ca\" { capabilities = [\"read\"] }\n\n# PKI CA management (for intermediate CA reconfiguration)\npath \"pki/issuers/generate/intermediate/existing\" { capabilities = [\"create\", \"update\"] }\npath \"pki/intermediate/set-signed\" { capabilities = [\"create\", \"update\"] }\npath \"pki/config/urls\" { capabilities = [\"read\", \"update\"] }\npath \"pki/config/issuers\" { capabilities = [\"read\"] }\npath \"pki/issuer/*\" { capabilities = [\"read\"] }\n\n# Application secrets (specific paths only - least privilege)\npath \"yubikeys/data/jwt-secret\" { capabilities = [\"read\", \"update\"] }\npath \"yubikeys/data/encryption-key\" { capabilities = [\"read\", \"update\"] }\npath \"yubikeys/data/database\" { capabilities = [\"read\"] }\npath \"yubikeys/data/backend/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\"] }\npath \"yubikeys/data/backend-encryption-key\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"yubikeys/metadata/backend/*\" { capabilities = [\"list\", \"read\"] }\n\n# System metadata\npath \"yubikeys/data/system/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"yubikeys/metadata/system/*\" { capabilities = [\"list\", \"read\"] }\n\n# Backup S3 credentials\npath \"yubikeys/data/backup/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\"] }\npath \"yubikeys/metadata/backup/*\" { capabilities = [\"list\", \"read\"] }\n\n# Explicitly deny license paths\npath \"yubikeys/data/license/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/metadata/license/*\" { capabilities = [\"deny\"] }\n\n# System endpoints (for health checks)\npath \"sys/auth\" { capabilities = [\"read\"] }\n\n# Token renewal\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }"}'
           
           echo "✅ Backend policy created (scoped access)"
           
@@ -438,12 +471,13 @@ spec:
           echo "✅ helm-admin policy created (no secret access)"
           
           # Step 6b: Create helm-admin AppRole
+          # secret_id_ttl=24h ensures rotation on each Helm upgrade
           echo ""
           echo "Step 6b: Creating helm-admin AppRole..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/helm-admin" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policies":["helm-admin"],"token_ttl":"1h","token_max_ttl":"24h","secret_id_ttl":"8760h","secret_id_num_uses":0}'
+            -d '{"policies":["helm-admin"],"token_ttl":"1h","token_max_ttl":"24h","secret_id_ttl":"24h","secret_id_num_uses":0}'
           
           # Get role_id
           HELM_ROLE_ID=$(openbao_curl -sf "http://127.0.0.1:8200/v1/auth/approle/role/helm-admin/role-id" \
@@ -464,12 +498,13 @@ spec:
           
           # Step 6c: Create backend-openbao AppRole
           # Uses periodic tokens (token_period) for indefinite renewal capability
+          # secret_id_ttl=24h ensures rotation on each Helm upgrade
           echo ""
           echo "Step 6c: Creating backend-openbao AppRole..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/backend-openbao" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policies":["kleidia-backend"],"token_ttl":"24h","token_period":"24h","token_max_ttl":"0","secret_id_ttl":"8760h","secret_id_num_uses":0}'
+            -d '{"policies":["kleidia-backend"],"token_ttl":"24h","token_period":"24h","token_max_ttl":"0","secret_id_ttl":"24h","secret_id_num_uses":0}'
           
           BACKEND_ROLE_ID=$(openbao_curl -sf "http://127.0.0.1:8200/v1/auth/approle/role/backend-openbao/role-id" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.role_id')
@@ -487,12 +522,13 @@ spec:
           
           # Step 6d: Create license-openbao AppRole
           # Uses periodic tokens (token_period) for indefinite renewal capability
+          # secret_id_ttl=24h ensures rotation on each Helm upgrade
           echo ""
           echo "Step 6d: Creating license-openbao AppRole..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/license-openbao" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policies":["license-service"],"token_ttl":"24h","token_period":"24h","token_max_ttl":"0","secret_id_ttl":"8760h","secret_id_num_uses":0}'
+            -d '{"policies":["license-service"],"token_ttl":"24h","token_period":"24h","token_max_ttl":"0","secret_id_ttl":"24h","secret_id_num_uses":0}'
           
           LICENSE_ROLE_ID=$(openbao_curl -sf "http://127.0.0.1:8200/v1/auth/approle/role/license-openbao/role-id" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.role_id')
@@ -714,14 +750,20 @@ spec:
           echo "OpenBao v2.4.1 is ready for use!"
           echo ""
           echo "Security features enabled:"
+          echo "  ✅ Static seal (auto-unseal by default)"
           echo "  ✅ Audit logging (all operations logged)"
           echo "  ✅ Tightened policies (least privilege)"
           echo "  ✅ AppRole auth for services (backend, license)"
           echo "  ✅ Helm-admin AppRole for future upgrades"
           echo ""
           echo "Kubernetes secrets created:"
-          echo "  - openbao-init-keys (root token - will be deleted by bootstrap UI)"
+          echo "  - openbao-init-keys (root token, recovery keys, static key - shown to admin)"
+          echo "  - openbao-unseal-key (static unseal key - controls auto-unseal)"
           echo "  - openbao-helm-approle (for Helm upgrades after bootstrap)"
           echo "  - openbao-backend-approle (for backend service)"
           echo "  - openbao-license-approle (for license service)"
+          echo ""
+          echo "Admin can choose during bootstrap:"
+          echo "  - Keep auto-unseal enabled (key stays in openbao-unseal-key)"
+          echo "  - Disable auto-unseal (key cleared, manual entry required after restarts)"
 {{- end }}

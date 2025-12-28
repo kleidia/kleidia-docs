@@ -56,6 +56,9 @@ spec:
         # This avoids mixed content errors and works from browser
         - name: NUXT_PUBLIC_API_BASE
           value: /api
+        # Site URL for OIDC redirects and absolute URLs
+        - name: NUXT_PUBLIC_SITE_URL
+          value: {{ .Values.global.siteUrl | quote }}
         
         readinessProbe:
           httpGet:

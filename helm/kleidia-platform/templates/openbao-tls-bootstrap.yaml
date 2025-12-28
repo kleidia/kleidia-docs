@@ -1,0 +1,126 @@
+{{- if and .Values.openbao.enabled .Values.openbao.internalTLS.enabled }}
+---
+# Self-signed issuer for bootstrapping OpenBao TLS
+# This is needed because OpenBao PKI cannot issue its own TLS certificate
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: openbao-selfsigned-issuer
+  namespace: {{ .Values.global.namespace }}
+spec:
+  selfSigned: {}
+---
+# Root CA certificate for internal TLS
+# Used as trust anchor for all services connecting to OpenBao
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: openbao-internal-ca
+  namespace: {{ .Values.global.namespace }}
+spec:
+  isCA: true
+  commonName: kleidia-internal-ca
+  secretName: openbao-internal-ca-tls
+  duration: 87600h  # 10 years
+  renewBefore: 8760h  # 1 year
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: openbao-selfsigned-issuer
+    kind: Issuer
+    group: cert-manager.io
+---
+# CA Issuer using the self-signed root
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: openbao-internal-ca-issuer
+  namespace: {{ .Values.global.namespace }}
+spec:
+  ca:
+    secretName: openbao-internal-ca-tls
+---
+# TLS certificate for OpenBao server
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: openbao-server-tls
+  namespace: {{ .Values.global.namespace }}
+spec:
+  secretName: openbao-server-tls
+  duration: 8760h  # 1 year
+  renewBefore: 720h  # 30 days
+  commonName: openbao
+  dnsNames:
+    - kleidia-platform-openbao
+    - kleidia-platform-openbao.{{ .Values.global.namespace }}
+    - kleidia-platform-openbao.{{ .Values.global.namespace }}.svc
+    - kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: openbao-internal-ca-issuer
+    kind: Issuer
+    group: cert-manager.io
+  usages:
+    - server auth
+    - client auth
+---
+# TLS certificate for backend service to authenticate to OpenBao
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kleidia-backend-tls
+  namespace: {{ .Values.global.namespace }}
+spec:
+  secretName: kleidia-backend-tls
+  duration: 8760h  # 1 year
+  renewBefore: 720h  # 30 days
+  commonName: kleidia-backend
+  dnsNames:
+    - kleidia-backend
+    - kleidia-backend.{{ .Values.global.namespace }}
+    - kleidia-backend.{{ .Values.global.namespace }}.svc
+    - kleidia-backend.{{ .Values.global.namespace }}.svc.cluster.local
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: openbao-internal-ca-issuer
+    kind: Issuer
+    group: cert-manager.io
+  usages:
+    - client auth
+---
+# TLS certificate for license service to authenticate to OpenBao
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kleidia-license-service-tls
+  namespace: {{ .Values.global.namespace }}
+spec:
+  secretName: kleidia-license-service-tls
+  duration: 8760h  # 1 year
+  renewBefore: 720h  # 30 days
+  commonName: kleidia-license-service
+  dnsNames:
+    - kleidia-license-service
+    - kleidia-license-service.{{ .Values.global.namespace }}
+    - kleidia-license-service.{{ .Values.global.namespace }}.svc
+    - kleidia-license-service.{{ .Values.global.namespace }}.svc.cluster.local
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: openbao-internal-ca-issuer
+    kind: Issuer
+    group: cert-manager.io
+  usages:
+    - client auth
+{{- end }}
+

@@ -82,7 +82,11 @@ spec:
   # Allow all egress - this job needs to access K8s API, OpenBao, and DNS
   - {}
 ---
-# Specific policy for backend to access OpenBao and Postgres
+# Specific policy for backend to access OpenBao, Postgres, and Kubernetes API
+# CRITICAL: Backend needs unrestricted egress to:
+#  - Call Kubernetes API to manage secrets (read/delete)
+#  - Connect to external OIDC providers
+#  - Access internal services (OpenBao, Postgres, License Service)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -95,45 +99,8 @@ spec:
   policyTypes:
   - Egress
   egress:
-  # Allow backend to reach Postgres
-  - to:
-    - podSelector:
-        matchLabels:
-          app: postgres
-    ports:
-    - protocol: TCP
-      port: 5432
-  # Allow backend to reach OpenBao
-  - to:
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/name: openbao
-    ports:
-    - protocol: TCP
-      port: 8200
-  # Allow backend to reach license service
-  - to:
-    - podSelector:
-        matchLabels:
-          app: license-service
-    ports:
-    - protocol: TCP
-      port: 8081
-  # Allow DNS
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system
-    ports:
-    - protocol: UDP
-      port: 53
-  # Allow HTTPS/HTTP egress for external services (OIDC providers, K8s API server, etc.)
-  # No 'to' selector = allow all destinations
-  - ports:
-    - protocol: TCP
-      port: 443
-    - protocol: TCP
-      port: 80
+  # Allow all egress - backend needs unrestricted access
+  - {}
 ---
 # Allow external traffic to frontend
 apiVersion: networking.k8s.io/v1
@@ -171,4 +138,61 @@ spec:
           app: frontend
   # Allow traffic from anywhere (NodePort/LoadBalancer for direct API access)
   - {}
+---
+# Restrict OpenBao access to authorized services only
+# SECURITY: Only backend, license-service, and cert-manager can access OpenBao
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openbao-ingress-restrict
+  namespace: {{ .Values.global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openbao
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from backend
+  - from:
+    - podSelector:
+        matchLabels:
+          app: backend
+    ports:
+    - protocol: TCP
+      port: 8200
+  # Allow from license-service
+  - from:
+    - podSelector:
+        matchLabels:
+          app: license-service
+    ports:
+    - protocol: TCP
+      port: 8200
+  # Allow from init jobs
+  - from:
+    - podSelector:
+        matchLabels:
+          app: openbao-init
+    ports:
+    - protocol: TCP
+      port: 8200
+  # Allow from cert-manager (for PKI operations)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: cert-manager
+    ports:
+    - protocol: TCP
+      port: 8200
+  # Allow internal cluster traffic (for health checks, cluster sync)
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: openbao
+    ports:
+    - protocol: TCP
+      port: 8200
+    - protocol: TCP
+      port: 8201
 

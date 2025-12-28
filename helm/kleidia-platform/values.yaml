@@ -47,10 +47,14 @@ storage:
 
 openbao:
   enabled: true
+  # Internal TLS between services and OpenBao
+  # When enabled, requires cert-manager and creates bootstrap certificates
+  internalTLS:
+    enabled: false  # Set to true to enable TLS (requires restart of services)
   # Configuration for official OpenBao Helm chart (v0.19.0, appVersion v2.4.1)
   global:
     enabled: true
-    tlsDisable: true
+    tlsDisable: true  # This is overridden by standalone.config when internalTLS.enabled=true
   
   # Disable injector (not needed for our use case)
   injector:
@@ -83,7 +87,9 @@ openbao:
         }
         
         # Static auto-unseal (OpenBao 2.4.0+)
-        # Eliminates need for manual unsealing after restarts
+        # The unseal key is stored in a Kubernetes secret and mounted as a file.
+        # Auto-unseal mode: Key persists in secret, OpenBao auto-unseals on restart
+        # Manual unseal mode: Key cleared from secret, admin must provide via UI
         seal "static" {
           current_key_id = "kleidia-1"
           current_key = "file:///keys/unseal-kleidia-1.key"
@@ -117,10 +123,12 @@ openbao:
       accessMode: ReadWriteOnce
     
     # Mount unseal key for static auto-unseal
+    # The secret is managed by the init hook and can be toggled via admin UI
     volumes:
       - name: unseal-key
         secret:
           secretName: openbao-unseal-key
+          optional: true  # Allow pod to start even if secret is empty (manual unseal mode)
     
     volumeMounts:
       - mountPath: /keys
@@ -152,14 +160,24 @@ openbao:
       customerRootCA: ""  # Base64-encoded customer root CA cert (required when mode=intermediate)
     
     # PKI URL configuration for certificate distribution
-    # Required for external systems (e.g., Bitbucket) to verify certificates and check revocation
-    # If not set, defaults to internal Kubernetes service URLs
+    # These URLs are embedded into every issued certificate for CRL and CA chain retrieval.
+    # IMPORTANT: Once certificates are issued, the URLs cannot be changed without re-issuing.
+    #
+    # URL auto-detection (no manual configuration needed):
+    #   1. If global.siteUrl is set → uses {siteUrl}/api/pki
+    #   2. If global.domain is set → uses https://{domain}/api/pki
+    #   3. Otherwise → uses internal Kubernetes URL (not accessible externally)
+    #
+    # The backend proxies CRL/CA requests with in-memory caching for performance.
+    # Resulting URLs embedded in certificates:
+    #   CRL:      https://your-domain.com/api/pki/crl
+    #   CA:       https://your-domain.com/api/pki/ca
     urls:
-      # External base URL for PKI endpoints (e.g., "https://pki.example.com")
-      # Leave empty to use internal Kubernetes service URLs
+      # Optional: Override auto-detected PKI URL (rarely needed)
+      # Only set this if you need a different URL than {siteUrl}/api/pki
       externalBaseUrl: ""
-      # CRL refresh interval (default: 24h)
-      # Bitbucket checks CRL every 24 hours
+      # CRL validity period (default: 24h)
+      # Should match or exceed your CRL cache refresh interval
       crlExpiry: "24h"
 
 certManager:

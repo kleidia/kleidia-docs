@@ -1,0 +1,42 @@
+{{- if .Values.openbao.enabled }}
+---
+# Service account for cert-manager to use in kleidia namespace
+# This allows cert-manager to authenticate with OpenBao using Kubernetes auth
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cert-manager
+  namespace: {{ .Values.global.namespace }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    app.kubernetes.io/name: cert-manager
+    app.kubernetes.io/component: serviceaccount
+---
+# Role to allow cert-manager (running in cert-manager namespace) to create tokens
+# for the cert-manager service account in kleidia namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cert-manager-token-creator
+  namespace: {{ .Values.global.namespace }}
+rules:
+- apiGroups: ['']
+  resources: ['serviceaccounts/token']
+  verbs: ['create']
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cert-manager-token-creator
+  namespace: {{ .Values.global.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cert-manager-token-creator
+subjects:
+- kind: ServiceAccount
+  name: cert-manager
+  namespace: cert-manager
+{{- end }}
+

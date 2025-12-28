@@ -358,11 +358,77 @@ kubectl exec -it $VAULT_POD -n kleidia -- tail -100 /openbao/audit/audit.log
 kubectl exec -it $VAULT_POD -n kleidia -- grep "yubikeys/data" /openbao/audit/audit.log
 ```
 
+## Unseal Key Transport Encryption
+
+When administrators enter unseal keys in the web interface (for manual unseal or auto-unseal configuration), the keys are encrypted before transmission to protect them from being captured by browser extensions, enterprise logging systems, or visible in browser developer tools.
+
+### Encryption Flow
+
+```
+┌────────────────────┐                    ┌─────────────────┐
+│   Admin Browser    │                    │     Backend     │
+│                    │                    │                 │
+│ 1. Request session ├───────────────────►│ 2. Generate     │
+│    encryption key  │   GET /unseal/     │    ephemeral    │
+│                    │   encryption-key   │    RSA keypair  │
+│                    │                    │                 │
+│ 3. Receive public  │◄───────────────────┤ Store private   │
+│    key + session   │   {public_key,     │ key in memory   │
+│    ID + nonce      │    session_id,     │ (5min expiry)   │
+│                    │    nonce}          │                 │
+│                    │                    │                 │
+│ 4. Encrypt unseal  │                    │                 │
+│    key with RSA-   │                    │                 │
+│    OAEP-256        │                    │                 │
+│                    │                    │                 │
+│ 5. Send encrypted  ├───────────────────►│ 6. Decrypt with │
+│    payload         │   POST /unseal     │    private key  │
+│                    │   {encrypted_key,  │                 │
+│                    │    session_id,     │ 7. Delete       │
+│                    │    nonce}          │    session      │
+│                    │                    │                 │
+│ 8. Receive result  │◄───────────────────┤ 9. Zero key     │
+│                    │   {success: true}  │    from memory  │
+└────────────────────┘                    └─────────────────┘
+```
+
+### Security Properties
+
+| Property | Implementation |
+|----------|----------------|
+| **Ephemeral keypairs** | New RSA-2048 keypair generated per unseal attempt |
+| **Single-use sessions** | Each session can only be used once, then deleted |
+| **Session expiry** | Sessions expire after 5 minutes |
+| **Nonce validation** | Prevents replay attacks |
+| **Memory zeroing** | Private keys zeroed from memory after use |
+| **Algorithm** | RSA-OAEP with SHA-256 |
+
+### What This Protects Against
+
+- **Browser DevTools**: Encrypted blob visible, not plaintext key
+- **Browser extensions/loggers**: Cannot capture plaintext key
+- **Enterprise HTTP logging**: Only encrypted data logged
+- **Shoulder surfing on network tab**: Key not visible in clear
+
+### What This Does NOT Protect Against
+
+- Keys visible in password input fields (screen recording)
+- Malicious browser extensions with DOM access
+- Compromised backend server
+- Kubernetes secrets access (for auto-unseal mode)
+
+### API Endpoints
+
+- `GET /admin/system/openbao/unseal/encryption-key` - Get ephemeral public key
+- `POST /admin/system/openbao/unseal` - Submit encrypted or plaintext key
+- `POST /admin/system/openbao/auto-unseal` - Enable/disable auto-unseal with encrypted key
+
 ## Security Considerations
 
 ### Secret Protection
 
 - **Encryption at Rest**: Vault encrypts all secrets
+- **Encryption in Transit**: TLS for network, RSA-OAEP for sensitive keys
 - **Access Control**: Policies restrict secret access per component
 - **Audit Logging**: All secret access logged
 - **Versioning**: Secret versions for rollback

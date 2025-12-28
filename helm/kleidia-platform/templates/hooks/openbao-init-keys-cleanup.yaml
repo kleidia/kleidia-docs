@@ -1,0 +1,126 @@
+{{- if .Values.openbao.enabled }}
+---
+# CronJob to automatically delete openbao-init-keys secret after 1 hour
+# This is a safety net in case admin doesn't retrieve keys during initial setup
+# The secret contains root token and recovery keys which should not persist indefinitely
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: openbao-init-keys-cleanup
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: openbao-init-keys-cleanup
+    app.kubernetes.io/name: openbao-init-keys-cleanup
+    app.kubernetes.io/component: security
+spec:
+  # Run every 15 minutes to check if secret should be deleted
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: openbao-init-keys-cleanup
+        spec:
+          serviceAccountName: openbao-init-cleanup
+          restartPolicy: Never
+          containers:
+          - name: cleanup
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              NAMESPACE="{{ .Values.global.namespace }}"
+              SECRET_NAME="openbao-init-keys"
+              MAX_AGE_SECONDS=3600  # 1 hour
+              
+              echo "Checking for stale OpenBao init keys..."
+              
+              # Check if secret exists
+              if ! kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+                echo "Secret ${SECRET_NAME} does not exist - nothing to clean up"
+                exit 0
+              fi
+              
+              # Get secret creation timestamp
+              CREATED=$(kubectl get secret "${SECRET_NAME}" -n "${NAMESPACE}" -o jsonpath='{.metadata.creationTimestamp}')
+              
+              if [ -z "$CREATED" ]; then
+                echo "Could not get creation timestamp for secret"
+                exit 0
+              fi
+              
+              # Convert to epoch seconds
+              CREATED_EPOCH=$(date -d "${CREATED}" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "${CREATED}" +%s 2>/dev/null)
+              NOW_EPOCH=$(date +%s)
+              AGE_SECONDS=$((NOW_EPOCH - CREATED_EPOCH))
+              
+              echo "Secret age: ${AGE_SECONDS} seconds (max: ${MAX_AGE_SECONDS})"
+              
+              if [ ${AGE_SECONDS} -gt ${MAX_AGE_SECONDS} ]; then
+                echo "⚠️  WARNING: Secret ${SECRET_NAME} is older than ${MAX_AGE_SECONDS} seconds"
+                echo "⚠️  This indicates the admin did not retrieve the bootstrap keys during initial setup"
+                echo "⚠️  Deleting secret to reduce security exposure..."
+                
+                kubectl delete secret "${SECRET_NAME}" -n "${NAMESPACE}"
+                
+                echo "✅ Secret ${SECRET_NAME} deleted"
+                echo ""
+                echo "IMPORTANT: If you need the root token or recovery keys, you will need to"
+                echo "re-initialize OpenBao, which will result in data loss."
+                echo ""
+                echo "To prevent this in the future, retrieve keys immediately after installation"
+                echo "by logging into the admin dashboard."
+              else
+                REMAINING=$((MAX_AGE_SECONDS - AGE_SECONDS))
+                echo "Secret is still within allowed age. Will be deleted in ${REMAINING} seconds if not retrieved."
+              fi
+            resources:
+              limits:
+                cpu: 100m
+                memory: 64Mi
+              requests:
+                cpu: 10m
+                memory: 32Mi
+---
+# ServiceAccount for the cleanup job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-init-cleanup
+  namespace: {{ .Values.global.namespace }}
+---
+# Role to allow deleting the specific secret
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbao-init-keys-cleanup
+  namespace: {{ .Values.global.namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["openbao-init-keys"]
+  verbs: ["get", "delete"]
+---
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbao-init-keys-cleanup
+  namespace: {{ .Values.global.namespace }}
+subjects:
+- kind: ServiceAccount
+  name: openbao-init-cleanup
+  namespace: {{ .Values.global.namespace }}
+roleRef:
+  kind: Role
+  name: openbao-init-keys-cleanup
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
+

@@ -1,0 +1,29 @@
+{{- if .Values.certManager.install }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: kleidia-vault-issuer
+  namespace: {{ .Values.global.namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "30"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  vault:
+    {{- if and .Values.openbao.enabled .Values.openbao.internalTLS.enabled }}
+    server: https://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200
+    caBundle: ""  # Populated by cert-manager from caBundleSecretRef
+    caBundleSecretRef:
+      name: openbao-internal-ca-tls
+      key: ca.crt
+    {{- else }}
+    server: http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200
+    {{- end }}
+    path: pki/sign/kleidia-component
+    auth:
+      kubernetes:
+        mountPath: /v1/auth/kubernetes
+        role: cert-manager
+        secretRef:
+          name: cert-manager-vault-token
+{{- end }}
