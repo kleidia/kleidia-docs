@@ -10,7 +10,7 @@ global:
 # Third-party image repositories (can be mirrored to private registry for air-gapped deployments)
 # When global.registry.host is set, these images will be pulled from: <registry.host>/<repository>:<tag>
 thirdPartyImages:
-  postgres: "postgres:15-alpine"     # PostgreSQL database image
+  postgres: "postgres:16-alpine"     # PostgreSQL database image
 
 # =============================================================================
 # STORAGE CONFIGURATION
@@ -25,11 +25,10 @@ storage:
 
 postgres:
   enabled: true
-  version: "15"               # PostgreSQL version
+  version: "16"               # PostgreSQL version
   database: kleidia           # Database name
   username: kleidiauser       # Database user (password is stored in a secret)
   storage:
     size: 10Gi               # PVC size for Postgres data
 
-# RabbitMQ removed - HTTP-based agent architecture
 # Agents now communicate via HTTPS on localhost (frontend-mediated)

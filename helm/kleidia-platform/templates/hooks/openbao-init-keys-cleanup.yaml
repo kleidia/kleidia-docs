@@ -29,7 +29,7 @@ spec:
           restartPolicy: Never
           containers:
           - name: cleanup
-            image: bitnami/kubectl:latest
+            image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}{{ .Values.thirdPartyImages.kubectl }}
             command:
             - /bin/sh
             - -c

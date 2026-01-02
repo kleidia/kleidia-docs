@@ -30,10 +30,23 @@ spec:
       nodeSelector:
         {{- toYaml .Values.global.nodeSelector | nindent 8 }}
       {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
-      # Wait for PostgreSQL
+      # Wait for PostgreSQL to be ready
       - name: wait-for-postgres
-        image: {{ include "kleidia-services.image" (dict "repository" "postgres" "tag" "15" "context" $) }}
+        image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.postgres "context" $) }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop: ["ALL"]
         env:
         - name: PGPASSWORD
           value: ""
@@ -65,9 +78,16 @@ spec:
           done
           
           echo "✅ PostgreSQL ready and database accessible!"
-      # Wait for OpenBao
+      # Wait for OpenBao to be ready
       - name: wait-for-openbao
-        image: {{ include "kleidia-services.image" (dict "repository" "curlimages/curl" "tag" "latest" "context" $) }}
+        image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.curl "context" $) }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop: ["ALL"]
         command:
         - sh
         - -c
@@ -181,4 +201,11 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop: ["ALL"]
 

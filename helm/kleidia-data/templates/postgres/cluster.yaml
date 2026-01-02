@@ -33,8 +33,9 @@ spec:
         {{- toYaml .Values.global.nodeSelector | nindent 8 }}
       {{- end }}
       containers:
+      # PostgreSQL database server
       - name: postgres
-        image: {{ include "kleidia-data.image" (dict "repository" "postgres" "tag" "15-alpine" "context" $) }}
+        image: {{ include "kleidia-data.thirdPartyImage" (dict "image" .Values.thirdPartyImages.postgres "context" $) }}
         ports:
         - containerPort: 5432
           name: postgresql

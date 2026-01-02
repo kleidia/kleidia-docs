@@ -19,7 +19,7 @@ global:
 # Third-party image repositories (can be mirrored to private registry for air-gapped deployments)
 # When global.registry.host is set, these images will be pulled from: <registry.host>/<repository>:<tag>
 thirdPartyImages:
-  postgres: "postgres:16-alpine"     # Used for database backups
+  postgres: "postgres:16-alpine"     # Used for database backups and health checks
   curl: "curlimages/curl:latest"     # Used for service health checks
   vault: "hashicorp/vault:latest"    # Used for vault backups (if enabled)
 

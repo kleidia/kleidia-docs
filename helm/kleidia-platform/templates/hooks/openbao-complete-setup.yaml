@@ -44,7 +44,7 @@ spec:
       # Init container: Simple 30 second delay to let OpenBao pod start
       initContainers:
       - name: wait-30s
-        image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/busybox:latest{{ else }}busybox:latest{{ end }}
+        image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}{{ .Values.thirdPartyImages.busybox }}
         command:
         - sh
         - -c
@@ -54,7 +54,9 @@ spec:
           echo "✅ 30 second delay complete, proceeding with OpenBao initialization"
       containers:
       - name: setup
-        image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/alpine/k8s:1.28.4{{ else }}alpine/k8s:1.28.4{{ end }}
+        # Using alpine/k8s for kubectl + bash + jq + curl
+        # Using bitnami/kubectl for Vault configuration
+        image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}alpine/k8s:1.28.4
         command:
         - bash
         - -c
@@ -471,13 +473,14 @@ spec:
           echo "✅ helm-admin policy created (no secret access)"
           
           # Step 6b: Create helm-admin AppRole
-          # secret_id_ttl=24h ensures rotation on each Helm upgrade
+          # secret_id_ttl=0 means unlimited - secret_ids don't expire
+          # This is important for long-running deployments without scheduled Helm upgrades
           echo ""
           echo "Step 6b: Creating helm-admin AppRole..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/helm-admin" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policies":["helm-admin"],"token_ttl":"1h","token_max_ttl":"24h","secret_id_ttl":"24h","secret_id_num_uses":0}'
+            -d '{"policies":["helm-admin"],"token_ttl":"1h","token_max_ttl":"24h","secret_id_ttl":"0","secret_id_num_uses":0}'
           
           # Get role_id
           HELM_ROLE_ID=$(openbao_curl -sf "http://127.0.0.1:8200/v1/auth/approle/role/helm-admin/role-id" \
@@ -498,13 +501,13 @@ spec:
           
           # Step 6c: Create backend-openbao AppRole
           # Uses periodic tokens (token_period) for indefinite renewal capability
-          # secret_id_ttl=24h ensures rotation on each Helm upgrade
+          # secret_id_ttl=0 means unlimited - critical for long-running services
           echo ""
           echo "Step 6c: Creating backend-openbao AppRole..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/backend-openbao" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policies":["kleidia-backend"],"token_ttl":"24h","token_period":"24h","token_max_ttl":"0","secret_id_ttl":"24h","secret_id_num_uses":0}'
+            -d '{"policies":["kleidia-backend"],"token_ttl":"24h","token_period":"24h","token_max_ttl":"0","secret_id_ttl":"0","secret_id_num_uses":0}'
           
           BACKEND_ROLE_ID=$(openbao_curl -sf "http://127.0.0.1:8200/v1/auth/approle/role/backend-openbao/role-id" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.role_id')
@@ -522,13 +525,13 @@ spec:
           
           # Step 6d: Create license-openbao AppRole
           # Uses periodic tokens (token_period) for indefinite renewal capability
-          # secret_id_ttl=24h ensures rotation on each Helm upgrade
+          # secret_id_ttl=0 means unlimited - critical for long-running services
           echo ""
           echo "Step 6d: Creating license-openbao AppRole..."
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/approle/role/license-openbao" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policies":["license-service"],"token_ttl":"24h","token_period":"24h","token_max_ttl":"0","secret_id_ttl":"24h","secret_id_num_uses":0}'
+            -d '{"policies":["license-service"],"token_ttl":"24h","token_period":"24h","token_max_ttl":"0","secret_id_ttl":"0","secret_id_num_uses":0}'
           
           LICENSE_ROLE_ID=$(openbao_curl -sf "http://127.0.0.1:8200/v1/auth/approle/role/license-openbao/role-id" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" | jq -r '.data.role_id')

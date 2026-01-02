@@ -29,10 +29,23 @@ spec:
       nodeSelector:
         {{- toYaml .Values.global.nodeSelector | nindent 8 }}
       {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       # Wait for backend to be ready
       - name: wait-for-backend
-        image: {{ include "kleidia-services.image" (dict "repository" "curlimages/curl" "tag" "latest" "context" $) }}
+        image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.curl "context" $) }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop: ["ALL"]
         command:
         - sh
         - -c
@@ -83,4 +96,11 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop: ["ALL"]
 

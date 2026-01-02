@@ -42,6 +42,25 @@ Usage: {{ include "kleidia-data.image" (dict "repository" "postgres" "tag" "15-a
 {{- end }}
 
 {{/*
+Construct third-party image reference with optional global registry prefix
+Usage: {{ include "kleidia-data.thirdPartyImage" (dict "image" .Values.thirdPartyImages.postgres "context" $) }}
+For images like "dhi.io/postgres:15", preserves the full reference
+When global.registry.host is set, strips original registry and prefixes with global registry
+*/}}
+{{- define "kleidia-data.thirdPartyImage" -}}
+{{- $registry := .context.Values.global.registry.host -}}
+{{- $image := .image -}}
+{{- if $registry -}}
+  {{- /* Extract image name and tag from full reference (e.g., "dhi.io/postgres:15" -> "postgres:15") */ -}}
+  {{- $parts := splitList "/" $image -}}
+  {{- $lastPart := index $parts (sub (len $parts) 1) -}}
+  {{- printf "%s/%s" $registry $lastPart -}}
+{{- else -}}
+  {{- $image -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Common labels
 */}}
 {{- define "kleidia-data.labels" -}}

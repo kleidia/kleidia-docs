@@ -85,8 +85,9 @@ spec:
         {{- toYaml .Values.global.nodeSelector | nindent 8 }}
       {{- end }}
       containers:
+      # Schema initialization
       - name: schema-init
-        image: {{ include "kleidia-data.image" (dict "repository" "postgres" "tag" "15-alpine" "context" $) }}
+        image: {{ include "kleidia-data.thirdPartyImage" (dict "image" .Values.thirdPartyImages.postgres "context" $) }}
         env:
         - name: PGPASSWORD
           value: ""

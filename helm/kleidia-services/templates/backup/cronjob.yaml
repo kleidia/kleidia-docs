@@ -36,10 +36,30 @@ spec:
           nodeSelector:
             {{- toYaml .Values.global.nodeSelector | nindent 12 }}
           {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            fsGroup: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          volumes:
+          - name: tmp
+            emptyDir: {}
           containers:
           # Database backup container
+          # Note: postgres images should include pg_dump and gzip
           - name: db-backup
-            image: {{ include "kleidia-services.image" (dict "repository" "postgres" "tag" "16-alpine" "context" $) }}
+            image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.postgres "context" $) }}
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              runAsNonRoot: true
+              runAsUser: 65534
+              capabilities:
+                drop: ["ALL"]
+            volumeMounts:
+            - name: tmp
+              mountPath: /tmp
             command:
             - sh
             - -c
@@ -47,21 +67,20 @@ spec:
               set -e
               echo "=== Starting Database Backup ==="
               
-              # Install curl and jq
-              apk add --no-cache curl jq
-              
               BACKEND_URL="http://backend.{{ .Values.global.namespace }}.svc.cluster.local:8080"
               INTERNAL_TOKEN="${BACKUP_RUNNER_TOKEN}"
               
               # Get presigned URL for database backup
+              # Using wget with JSON parsing via shell
               echo "Requesting presigned URL for database backup..."
-              PRESIGN_RESPONSE=$(curl -s -X POST "${BACKEND_URL}/api/admin/system/backup/presign?type=db" \
-                -H "X-Internal-Token: ${INTERNAL_TOKEN}")
+              PRESIGN_RESPONSE=$(wget -q -O - --post-data="" --header="X-Internal-Token: ${INTERNAL_TOKEN}" \
+                "${BACKEND_URL}/api/admin/system/backup/presign?type=db" 2>/dev/null || echo "{}")
               
-              PRESIGNED_URL=$(echo "${PRESIGN_RESPONSE}" | jq -r '.url // empty')
-              OBJECT_KEY=$(echo "${PRESIGN_RESPONSE}" | jq -r '.key // empty')
+              # Parse JSON response using shell (minimal images may not have jq)
+              PRESIGNED_URL=$(echo "${PRESIGN_RESPONSE}" | grep -o '"url":"[^"]*"' | cut -d'"' -f4)
+              OBJECT_KEY=$(echo "${PRESIGN_RESPONSE}" | grep -o '"key":"[^"]*"' | cut -d'"' -f4)
               
-              if [ -z "${PRESIGNED_URL}" ] || [ -z "${OBJECT_KEY}" ] || [ "${PRESIGNED_URL}" = "null" ] || [ "${OBJECT_KEY}" = "null" ]; then
+              if [ -z "${PRESIGNED_URL}" ] || [ -z "${OBJECT_KEY}" ]; then
                 echo "ERROR: Failed to get presigned URL"
                 echo "Response: ${PRESIGN_RESPONSE}"
                 exit 1
@@ -77,12 +96,15 @@ spec:
               PGDATABASE="${DB_NAME}"
               export PGPASSWORD="${DB_PASSWORD}"
               
+              # Use pg_dump with gzip, upload via wget
               pg_dump -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" | \
-                gzip | \
-                curl -X PUT --upload-file - "${PRESIGNED_URL}" \
-                  -H "Content-Type: application/gzip" \
-                  --fail --show-error
+                gzip > /tmp/backup.sql.gz
               
+              wget -q -O - --method=PUT --body-file=/tmp/backup.sql.gz \
+                --header="Content-Type: application/gzip" \
+                "${PRESIGNED_URL}" || { echo "ERROR: Upload failed"; exit 1; }
+              
+              rm -f /tmp/backup.sql.gz
               echo "✅ Database backup uploaded successfully"
               
             env:
@@ -113,9 +135,18 @@ spec:
                 cpu: "500m"
           
           # Vault backup container (only if enabled)
+          # Using hashicorp/vault image for Vault backups
+          # Note: vault container needs to install packages, so readOnlyRootFilesystem is disabled
           {{- if .Values.backup.enableVaultBackup }}
           - name: vault-backup
-            image: {{ include "kleidia-services.image" (dict "repository" "hashicorp/vault" "tag" "latest" "context" $) }}
+            image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.vault "context" $) }}
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: false  # apk add requires write access
+              runAsNonRoot: true
+              runAsUser: 65534
+              capabilities:
+                drop: ["ALL"]
             command:
             - sh
             - -c
@@ -123,7 +154,7 @@ spec:
               set -e
               echo "=== Starting Vault Backup ==="
               
-              # Install curl and jq
+              # Install curl and jq (vault image is alpine-based)
               apk add --no-cache curl jq
               
               BACKEND_URL="http://backend.{{ .Values.global.namespace }}.svc.cluster.local:8080"

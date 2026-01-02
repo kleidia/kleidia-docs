@@ -109,6 +109,7 @@ data:
       - name: helper-pod
         image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}{{ .Values.thirdPartyImages.busybox }}
         imagePullPolicy: IfNotPresent
+        # Busybox includes basic shell utilities needed for volume setup/teardown
 ---
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
