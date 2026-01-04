@@ -1,0 +1,170 @@
+# Example values file for air-gapped deployment
+# Copy this file and customize for your environment
+
+# Global configuration - applies to all subcharts
+global:
+  namespace: kleidia
+  
+  # REQUIRED for air-gapped: Set your private registry
+  registry:
+    host: "registry.example.com:5000"  # Change to your registry
+    authSecret: "regcred"               # Name of docker-registry secret (if authentication needed)
+  
+  # Optional: List of imagePullSecrets (alternative to authSecret)
+  # imagePullSecrets:
+  #   - regcred
+  #   - another-secret
+
+# Component toggles
+platform:
+  enabled: true
+data:
+  enabled: true
+services:
+  enabled: true
+
+# Platform chart configuration
+kleidia-platform:
+  global:
+    namespace: kleidia
+    registry:
+      host: ""  # Empty = inherit from global above
+      authSecret: ""
+    imagePullSecrets: []
+  
+  storage:
+    className: local-path
+    localPath:
+      enabled: true
+      path: /opt/local-path-provisioner
+  
+  openbao:
+    enabled: true
+    server:
+      image:
+        registry: ""  # Empty = use global.registry.host
+        repository: "openbao/openbao"
+        tag: "2.4.1"
+    pki:
+      mode: root
+      rootCA:
+        commonName: "Kleidia Root CA"
+        ttl: "87600h"
+
+# Data chart configuration
+kleidia-data:
+  global:
+    namespace: kleidia
+    registry:
+      host: ""  # Empty = inherit from global
+      authSecret: ""
+    imagePullSecrets: []
+  
+  storage:
+    className: local-path
+  
+  postgres:
+    enabled: true
+    version: "15"
+    database: kleidia
+    username: kleidiauser
+    storage:
+      size: 10Gi
+
+# Services chart configuration
+kleidia-services:
+  global:
+    namespace: kleidia
+    registry:
+      host: ""  # Empty = inherit from global
+      authSecret: ""
+    imagePullSecrets: []
+  
+  backend:
+    replicas: 2
+    image:
+      repository: kleidia-backend  # Will be prefixed with registry.host
+      tag: latest                   # CHANGE to specific version for production
+    service:
+      nodePort: 32570
+    corsOrigins: ""                 # REQUIRED for production: Set to your frontend URL(s)
+                                    # Example: "https://kleidia.example.com"
+                                    # Multiple origins: "https://app1.com,https://app2.com"
+  
+  frontend:
+    replicas: 2
+    image:
+      repository: kleidia-frontend  # Will be prefixed with registry.host
+      tag: latest                    # CHANGE to specific version for production
+    service:
+      nodePort: 30805
+  
+  licenseService:
+    enabled: true
+    replicas: 2
+    image: kleidia-license:latest    # Will be prefixed with registry.host
+                                     # CHANGE to specific version for production
+    imagePullPolicy: Always
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+    networkPolicy:
+      enabled: true
+  
+  backup:
+    schedule: "0 2 * * *"      # Daily at 2 AM
+    suspend: false
+    enableVaultBackup: true
+
+# =============================================================================
+# INSTRUCTIONS FOR USE
+# =============================================================================
+#
+# 1. MIRROR IMAGES TO YOUR REGISTRY
+#    Run: ./mirror-images.sh registry.example.com:5000
+#    
+#    Or manually mirror these images:
+#    - quay.io/openbao/openbao:2.4.1
+#    - postgres:15-alpine
+#    - postgres:16-alpine
+#    - postgres:15
+#    - curlimages/curl:latest
+#    - hashicorp/vault:latest
+#    - rancher/local-path-provisioner:v0.0.24
+#    - alpine:latest
+#    - busybox:latest
+#    - yubimgr-backend:latest
+#    - yubimgr-frontend:latest
+#    - yubimgr-license:latest
+#
+# 2. CREATE REGISTRY SECRET (if authentication required)
+#    kubectl create secret docker-registry regcred \
+#      --docker-server=registry.example.com:5000 \
+#      --docker-username=admin \
+#      --docker-password=yourpassword \
+#      --namespace=kleidia
+#
+# 3. CUSTOMIZE THIS FILE
+#    - Change global.registry.host to your registry
+#    - Update image tags to specific versions (not 'latest')
+#    - Set backend.corsOrigins to your frontend URL (REQUIRED for production)
+#    - Adjust replicas, resources, storage as needed
+#
+# 4. DEPLOY
+#    helm install kleidia ./kleidia-meta \
+#      --namespace kleidia \
+#      --create-namespace \
+#      --values values-airgap-example.yaml
+#
+# 5. VERIFY
+#    kubectl get pods -n kleidia
+#    kubectl get pods -n kleidia -o jsonpath='{range .items[*]}{range .spec.containers[*]}{.image}{"\n"}{end}{end}' | sort -u
+#    
+#    All images should show: registry.example.com:5000/...
+#
+# =============================================================================
+

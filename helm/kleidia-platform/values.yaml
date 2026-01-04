@@ -10,10 +10,10 @@ global:
 # Third-party image repositories (can be mirrored to private registry for air-gapped deployments)
 # When global.registry.host is set, these images will be pulled from: <registry.host>/<repository>:<tag>
 thirdPartyImages:
+  alpine: "alpine:3.21"
   kubectl: "bitnami/kubectl:latest"  # Used in hooks for Kubernetes API interactions
-  busybox: "busybox:latest"          # Utility container
+  busybox: "busybox:1.37"            # Utility container
   curl: "curlimages/curl:latest"     # HTTP client for health checks
-  # Third-party images
   rancher:
     localPathProvisioner: "rancher/local-path-provisioner:v0.0.24"
 

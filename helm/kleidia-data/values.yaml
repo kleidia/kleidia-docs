@@ -10,7 +10,7 @@ global:
 # Third-party image repositories (can be mirrored to private registry for air-gapped deployments)
 # When global.registry.host is set, these images will be pulled from: <registry.host>/<repository>:<tag>
 thirdPartyImages:
-  postgres: "postgres:16-alpine"     # PostgreSQL database image
+  postgres: "postgres:18-alpine"     # PostgreSQL database image
 
 # =============================================================================
 # STORAGE CONFIGURATION
@@ -25,7 +25,7 @@ storage:
 
 postgres:
   enabled: true
-  version: "16"               # PostgreSQL version
+  version: "18"               # PostgreSQL version
   database: kleidia           # Database name
   username: kleidiauser       # Database user (password is stored in a secret)
   storage:
