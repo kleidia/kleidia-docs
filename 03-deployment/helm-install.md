@@ -101,6 +101,15 @@ Replace `nfs-client` with your cluster's StorageClass name (e.g., `longhorn`, `g
 
 #### Step 2: Install Data Layer (PostgreSQL)
 
+The data layer automatically selects the PostgreSQL deployment method based on your Kubernetes version:
+
+| Kubernetes Version | PostgreSQL Method | TLS Support |
+|:-------------------|:------------------|:------------|
+| 1.32+ | CloudNativePG (CNPG) | ✅ Full TLS 1.3 with certificates |
+| < 1.32 | Legacy StatefulSet | ❌ No TLS (internal network only) |
+
+**Standard Installation (auto-detects K8s version):**
+
 ```bash
 # Use the same storage class as the platform chart
 helm install kleidia-data ./helm/kleidia-data \
@@ -110,9 +119,24 @@ helm install kleidia-data ./helm/kleidia-data \
   --set storage.className=local-path  # Must match platform chart
 ```
 
+**Force Legacy PostgreSQL (optional, for older Kubernetes):**
+
+```bash
+# Explicitly disable CNPG for K8s < 1.32
+helm install kleidia-data ./helm/kleidia-data \
+  --namespace kleidia \
+  --set global.domain=kleidia.example.com \
+  --set global.namespace=kleidia \
+  --set storage.className=local-path \
+  --set cnpg.enabled=false
+```
+
+> ⚠️ **Note**: Legacy PostgreSQL does not support TLS. Database connections are unencrypted but remain within the Kubernetes internal network. For production deployments requiring encrypted database connections, use Kubernetes 1.32+ with CloudNativePG.
+
 **What this installs**:
-- PostgreSQL with persistent storage
+- PostgreSQL with persistent storage (CNPG or legacy based on K8s version)
 - Database initialization hooks
+- TLS certificates via cert-manager (CNPG only)
 
 **Wait for**: PostgreSQL to be ready (2-3 minutes)
 
@@ -127,9 +151,9 @@ helm install kleidia-services ./helm/kleidia-services \
   --set global.namespace=kleidia
 ```
 
-**With Database TLS (CloudNativePG):**
+**With Database TLS (CloudNativePG, Kubernetes 1.32+):**
 
-When using CloudNativePG for PostgreSQL, enable TLS for encrypted database connections:
+When using CloudNativePG for PostgreSQL (automatically enabled on K8s 1.32+), enable TLS for encrypted database connections:
 
 ```bash
 helm install kleidia-services ./helm/kleidia-services \
@@ -143,6 +167,8 @@ helm install kleidia-services ./helm/kleidia-services \
 ```
 
 This enables TLS 1.3 encryption with certificate verification for all database connections.
+
+> ⚠️ **Note**: Database TLS is only available with CloudNativePG (Kubernetes 1.32+). On older Kubernetes versions using legacy PostgreSQL, omit the `database.tls.*` settings.
 
 **What this installs**:
 - Backend API server (with AppRole authentication to OpenBao)

@@ -219,7 +219,7 @@ All operations logged for compliance:
 
 ### Database TLS (CloudNativePG)
 
-When using CloudNativePG for PostgreSQL, full TLS encryption is enabled:
+When using CloudNativePG for PostgreSQL (**requires Kubernetes 1.32+**), full TLS encryption is enabled:
 
 - **TLS Version**: TLS 1.3 (latest, most secure)
 - **Cipher Suite**: TLS_AES_256_GCM_SHA384 (256-bit encryption)
@@ -228,6 +228,8 @@ When using CloudNativePG for PostgreSQL, full TLS encryption is enabled:
 - **Authentication**: scram-sha-256 password hashing with TLS encryption
 
 This provides defense-in-depth for database connections even within the Kubernetes cluster.
+
+> ⚠️ **Legacy PostgreSQL (K8s < 1.32)**: On older Kubernetes versions, the legacy PostgreSQL StatefulSet is used, which does not support TLS. Database connections remain unencrypted but are restricted to the internal Kubernetes network. For production deployments requiring encrypted database connections, upgrade to Kubernetes 1.32+.
 
 ### Known Limitations
 

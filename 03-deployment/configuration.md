@@ -95,7 +95,9 @@ postgres:
 
 ### Database TLS Configuration (CloudNativePG)
 
-When using CloudNativePG, enable TLS for secure database connections:
+> ⚠️ **Kubernetes Version Requirement**: Database TLS is only available when using CloudNativePG, which requires **Kubernetes 1.32+**. On older Kubernetes versions, the legacy PostgreSQL StatefulSet is used, which does not support TLS (connections remain unencrypted but within the internal Kubernetes network).
+
+When using CloudNativePG (K8s 1.32+), enable TLS for secure database connections:
 
 ```yaml
 database:
