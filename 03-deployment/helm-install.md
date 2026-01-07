@@ -118,12 +118,31 @@ helm install kleidia-data ./helm/kleidia-data \
 
 #### Step 3: Install Services (Backend, Frontend)
 
+**Basic Installation:**
+
 ```bash
 helm install kleidia-services ./helm/kleidia-services \
   --namespace kleidia \
   --set global.domain=kleidia.example.com \
   --set global.namespace=kleidia
 ```
+
+**With Database TLS (CloudNativePG):**
+
+When using CloudNativePG for PostgreSQL, enable TLS for encrypted database connections:
+
+```bash
+helm install kleidia-services ./helm/kleidia-services \
+  --namespace kleidia \
+  --set global.domain=kleidia.example.com \
+  --set global.namespace=kleidia \
+  --set database.tls.enabled=true \
+  --set database.tls.sslMode=verify-full \
+  --set database.tls.clientCertSecret=kleidia-db-client-tls \
+  --set database.tls.caSecret=kleidia-db-ca
+```
+
+This enables TLS 1.3 encryption with certificate verification for all database connections.
 
 **What this installs**:
 - Backend API server (with AppRole authentication to OpenBao)

@@ -173,9 +173,14 @@ All secrets stored in OpenBao, not in database:
 
 #### Backend to Database
 - **Protocol**: PostgreSQL (internal Kubernetes)
-- **Authentication**: Username/password (from Vault)
-- **Encryption**: Internal network (can enable TLS)
+- **Authentication**: Username/password (from Vault) with scram-sha-256
+- **Encryption**: TLS 1.3 with certificate verification (verify-full mode)
 - **Port**: 5432 (internal service)
+
+When using CloudNativePG (CNPG), TLS is automatically configured:
+- Server certificates issued by cert-manager
+- Client certificates for mutual TLS authentication
+- `verify-full` SSL mode validates server certificate and hostname
 
 ### Network Isolation
 
@@ -211,6 +216,18 @@ All operations logged for compliance:
 - **Security Events**: Failed authentication attempts
 
 ## Security Considerations
+
+### Database TLS (CloudNativePG)
+
+When using CloudNativePG for PostgreSQL, full TLS encryption is enabled:
+
+- **TLS Version**: TLS 1.3 (latest, most secure)
+- **Cipher Suite**: TLS_AES_256_GCM_SHA384 (256-bit encryption)
+- **SSL Mode**: `verify-full` (validates server certificate and hostname)
+- **Certificate Management**: Automatic via cert-manager
+- **Authentication**: scram-sha-256 password hashing with TLS encryption
+
+This provides defense-in-depth for database connections even within the Kubernetes cluster.
 
 ### Known Limitations
 

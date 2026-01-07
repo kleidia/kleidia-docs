@@ -93,6 +93,40 @@ postgres:
     size: 10Gi                          # Storage size
 ```
 
+### Database TLS Configuration (CloudNativePG)
+
+When using CloudNativePG, enable TLS for secure database connections:
+
+```yaml
+database:
+  tls:
+    enabled: true                       # Enable TLS for database connections
+    sslMode: verify-full                # SSL verification mode
+    clientCertSecret: kleidia-db-client-tls  # Client certificate secret
+    caSecret: kleidia-db-ca             # CA certificate secret
+```
+
+**SSL Modes**:
+- `disable`: No SSL (not recommended)
+- `require`: Use SSL but don't verify certificates
+- `verify-ca`: Verify the server certificate is signed by a trusted CA
+- `verify-full`: Verify certificate and that the hostname matches (recommended)
+
+**Certificate Secrets**:
+The TLS certificates are automatically provisioned by cert-manager when using CloudNativePG:
+- `kleidia-db-client-tls`: Client certificate and key for backend authentication
+- `kleidia-db-ca`: CA certificate for server verification
+
+**Verification**:
+To verify TLS is working, check the PostgreSQL connection:
+
+```bash
+kubectl exec kleidia-db-1 -n kleidia -c postgres -- psql -U kleidiauser -d kleidia -c \
+  "SELECT datname, ssl, version, cipher FROM pg_stat_ssl JOIN pg_stat_activity ON pg_stat_ssl.pid = pg_stat_activity.pid WHERE datname = 'kleidia';"
+```
+
+Expected output shows `ssl = t` (true) with TLS 1.3 and AES-256 encryption.
+
 ## Common Configuration Scenarios
 
 ### Production Deployment
