@@ -155,18 +155,18 @@ All secrets stored in OpenBao, not in database:
 
 The following table summarizes how each connection between components is secured:
 
-| Source | Destination | Protocol | Port | Encryption | Authentication | Notes |
-|:-------|:------------|:---------|:-----|:-----------|:---------------|:------|
-| Browser | Frontend | HTTPS | 443 | TLS 1.2+ | JWT tokens | Via external load balancer |
-| Browser | Backend API | HTTPS | 443 | TLS 1.2+ | JWT tokens | Via external load balancer |
-| Browser | Agent | HTTP | 56123 | RSA-OAEP¹ | None | Localhost only |
-| Frontend | Backend API | HTTP | 8080 | None² | JWT tokens | Internal K8s network |
-| Backend | OpenBao | HTTP/HTTPS | 8200 | TLS 1.3³ | AppRole | HTTPS when intermediate CA configured |
-| Backend | PostgreSQL (CNPG) | PostgreSQL | 5432 | TLS 1.3 | scram-sha-256 + client certs | K8s 1.32+ only |
-| Backend | PostgreSQL (Legacy) | PostgreSQL | 5432 | None² | Password | K8s < 1.32 |
-| Backend | License Service | HTTPS | 8081/8443 | mTLS 1.3⁴ | Client certificates | Default when mtls.enabled=true |
-| License Service | OpenBao | HTTP/HTTPS | 8200 | TLS 1.3³ | AppRole | HTTPS when intermediate CA configured |
-| Agent | YubiKey | USB/CCID | — | Hardware | PIN/Touch | Local hardware |
+| Source   | Destination  | Protocol   | Port  | Encryption | Authentication | Notes                                 |
+|:---------|:-------------|:-----------|:------|:-----------|:---------------|:--------------------------------------|
+| Browser  | Frontend     | HTTPS      | 443   | TLS 1.2+   | JWT tokens     | Via external load balancer            |
+| Browser  | Backend API  | HTTPS      | 443   | TLS 1.2+   | JWT tokens     | Via external load balancer            |
+| Browser  | Agent        | HTTP       | 56123 | RSA-OAEP¹  | None           | Localhost only                        |
+| Frontend | Backend API  | HTTP       | 8080  | None²      | JWT tokens     | Internal K8s network                  |
+| Backend  | OpenBao      | HTTP/HTTPS | 8200  | TLS 1.3³   | AppRole        | HTTPS when intermediate CA configured |
+| Backend  | PG (CNPG)    | PostgreSQL | 5432  | TLS 1.3    | Client certs   | K8s 1.32+ only                        |
+| Backend  | PG  (Legacy) | PostgreSQL | 5432  | None²      | Password       | K8s < 1.32                            |
+| Backend  | License      | HTTPS      | 8443  | mTLS 1.3⁴  | Client certs   | Default when mtls.enabled=true        |
+| License  | OpenBao      | HTTP/HTTPS | 8200  | TLS 1.3³   | AppRole        | HTTPS when intermediate CA configured |
+| Agent    | YubiKey      | USB/CCID   | —     | Hardware   | PIN/Touch      | Local hardware                        |
 
 **Legend:**
 - ¹ RSA-OAEP: Sensitive data (PINs, PUKs, keys) is encrypted at application layer with RSA-OAEP even over HTTP
@@ -178,7 +178,7 @@ The following table summarizes how each connection between components is secured
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         EXTERNAL (Internet)                              │
+│                         EXTERNAL (Internet)                             │
 │  ┌──────────┐                                    ┌──────────┐           │
 │  │ Browser  │◄──────── HTTPS/TLS ───────────────►│   Load   │           │
 │  └──────────┘                                    │ Balancer │           │
@@ -193,9 +193,9 @@ The following table summarizes how each connection between components is secured
 ┌───────────────────────────────────────────────────────┼─────────────────┐
 │                    INTERNAL (Kubernetes Cluster)      │                 │
 │                                                       ▼                 │
-│  ┌──────────┐    HTTP     ┌──────────┐  HTTP/HTTPS  ┌──────────┐       │
-│  │ Frontend │◄───────────►│ Backend  │◄────────────►│ OpenBao  │       │
-│  └──────────┘             └────┬─────┘              └──────────┘       │
+│  ┌──────────┐    HTTP     ┌──────────┐  HTTP/HTTPS  ┌──────────┐        │
+│  │ Frontend │◄───────────►│ Backend  │◄────────────►│ OpenBao  │        │
+│  └──────────┘             └────┬─────┘              └──────────┘        │
 │                                │  \                       ▲             │
 │                    mTLS 1.3    │   \                      │             │
 │                                │    ▼                HTTP/HTTPS         │
