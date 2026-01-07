@@ -161,15 +161,18 @@ The following table summarizes how each connection between components is secured
 | Browser | Backend API | HTTPS | 443 | TLS 1.2+ | JWT tokens | Via external load balancer |
 | Browser | Agent | HTTP | 56123 | RSA-OAEP¹ | None | Localhost only |
 | Frontend | Backend API | HTTP | 8080 | None² | JWT tokens | Internal K8s network |
-| Backend | OpenBao | HTTP | 8200 | None² | AppRole | Internal K8s network |
+| Backend | OpenBao | HTTP/HTTPS | 8200 | TLS 1.3³ | AppRole | HTTPS when intermediate CA configured |
 | Backend | PostgreSQL (CNPG) | PostgreSQL | 5432 | TLS 1.3 | scram-sha-256 + client certs | K8s 1.32+ only |
 | Backend | PostgreSQL (Legacy) | PostgreSQL | 5432 | None² | Password | K8s < 1.32 |
-| Backend | License Service | HTTP | 8081 | None² | Internal | Internal K8s network |
+| Backend | License Service | HTTPS | 8081/8443 | mTLS 1.3⁴ | Client certificates | Default when mtls.enabled=true |
+| License Service | OpenBao | HTTP/HTTPS | 8200 | TLS 1.3³ | AppRole | HTTPS when intermediate CA configured |
 | Agent | YubiKey | USB/CCID | — | Hardware | PIN/Touch | Local hardware |
 
 **Legend:**
 - ¹ RSA-OAEP: Sensitive data (PINs, PUKs, keys) is encrypted at application layer with RSA-OAEP even over HTTP
 - ² None: No transport encryption, but isolated within Kubernetes internal network (not exposed externally)
+- ³ OpenBao HTTPS: Enabled automatically when configuring intermediate CA via Admin UI, or manually via `mtls.openbaoTLS=true`
+- ⁴ mTLS: Mutual TLS with client certificate verification, enabled by default (`mtls.enabled=true`)
 
 ### External vs Internal Connections
 
@@ -190,10 +193,16 @@ The following table summarizes how each connection between components is secured
 ┌───────────────────────────────────────────────────────┼─────────────────┐
 │                    INTERNAL (Kubernetes Cluster)      │                 │
 │                                                       ▼                 │
-│  ┌──────────┐    HTTP     ┌──────────┐    HTTP    ┌──────────┐         │
-│  │ Frontend │◄───────────►│ Backend  │◄──────────►│ OpenBao  │         │
-│  └──────────┘             └────┬─────┘            └──────────┘         │
-│                                │                                        │
+│  ┌──────────┐    HTTP     ┌──────────┐  HTTP/HTTPS  ┌──────────┐       │
+│  │ Frontend │◄───────────►│ Backend  │◄────────────►│ OpenBao  │       │
+│  └──────────┘             └────┬─────┘              └──────────┘       │
+│                                │  \                       ▲             │
+│                    mTLS 1.3    │   \                      │             │
+│                                │    ▼                HTTP/HTTPS         │
+│                                │  ┌─────────┐             │             │
+│                                │  │ License │─────────────┘             │
+│                                │  │ Service │                           │
+│                                │  └─────────┘                           │
 │                    PostgreSQL + TLS 1.3 (CNPG)                          │
 │                    or PostgreSQL (Legacy)                               │
 │                                │                                        │
@@ -203,6 +212,8 @@ The following table summarizes how each connection between components is secured
 │                          └──────────┘                                   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Note**: OpenBao uses HTTPS when configured with an intermediate CA (either at install time or via Admin UI). The backend and license service automatically detect and use the appropriate protocol.
 
 ### Communication Channels
 
@@ -218,11 +229,16 @@ The following table summarizes how each connection between components is secured
 - **Encryption**: RSA-OAEP for sensitive data
 - **Port**: 56123 (localhost)
 
-#### Backend to Vault
-- **Protocol**: HTTP (internal Kubernetes)
-- **Authentication**: AppRole
-- **Encryption**: Internal network (can enable TLS)
+#### Backend to OpenBao (Vault)
+- **Protocol**: HTTP or HTTPS (internal Kubernetes)
+- **Authentication**: AppRole (role_id + secret_id)
+- **Encryption**: TLS 1.3 when intermediate CA is configured
 - **Port**: 8200 (internal service)
+
+OpenBao automatically switches to HTTPS when:
+- An intermediate CA is configured via the Admin UI
+- The `mtls.openbaoTLS=true` Helm setting is enabled
+- This generates a server certificate using the customer's CA chain
 
 #### Backend to Database
 - **Protocol**: PostgreSQL (internal Kubernetes)
