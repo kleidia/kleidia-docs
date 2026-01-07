@@ -151,6 +151,59 @@ All secrets stored in OpenBao, not in database:
 
 ## Network Security
 
+### Component Connection Security Matrix
+
+The following table summarizes how each connection between components is secured:
+
+| Source | Destination | Protocol | Port | Encryption | Authentication | Notes |
+|:-------|:------------|:---------|:-----|:-----------|:---------------|:------|
+| Browser | Frontend | HTTPS | 443 | TLS 1.2+ | JWT tokens | Via external load balancer |
+| Browser | Backend API | HTTPS | 443 | TLS 1.2+ | JWT tokens | Via external load balancer |
+| Browser | Agent | HTTP | 56123 | RSA-OAEP¹ | None | Localhost only |
+| Frontend | Backend API | HTTP | 8080 | None² | JWT tokens | Internal K8s network |
+| Backend | OpenBao | HTTP | 8200 | None² | AppRole | Internal K8s network |
+| Backend | PostgreSQL (CNPG) | PostgreSQL | 5432 | TLS 1.3 | scram-sha-256 + client certs | K8s 1.32+ only |
+| Backend | PostgreSQL (Legacy) | PostgreSQL | 5432 | None² | Password | K8s < 1.32 |
+| Backend | License Service | HTTP | 8081 | None² | Internal | Internal K8s network |
+| Agent | YubiKey | USB/CCID | — | Hardware | PIN/Touch | Local hardware |
+
+**Legend:**
+- ¹ RSA-OAEP: Sensitive data (PINs, PUKs, keys) is encrypted at application layer with RSA-OAEP even over HTTP
+- ² None: No transport encryption, but isolated within Kubernetes internal network (not exposed externally)
+
+### External vs Internal Connections
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         EXTERNAL (Internet)                              │
+│  ┌──────────┐                                    ┌──────────┐           │
+│  │ Browser  │◄──────── HTTPS/TLS ───────────────►│   Load   │           │
+│  └──────────┘                                    │ Balancer │           │
+│       │                                          └────┬─────┘           │
+│       │ HTTP + RSA-OAEP                               │                 │
+│       ▼ (localhost only)                              │                 │
+│  ┌──────────┐                                         │                 │
+│  │  Agent   │                                         │                 │
+│  └──────────┘                                         │                 │
+└───────────────────────────────────────────────────────┼─────────────────┘
+                                                        │
+┌───────────────────────────────────────────────────────┼─────────────────┐
+│                    INTERNAL (Kubernetes Cluster)      │                 │
+│                                                       ▼                 │
+│  ┌──────────┐    HTTP     ┌──────────┐    HTTP    ┌──────────┐         │
+│  │ Frontend │◄───────────►│ Backend  │◄──────────►│ OpenBao  │         │
+│  └──────────┘             └────┬─────┘            └──────────┘         │
+│                                │                                        │
+│                    PostgreSQL + TLS 1.3 (CNPG)                          │
+│                    or PostgreSQL (Legacy)                               │
+│                                │                                        │
+│                                ▼                                        │
+│                          ┌──────────┐                                   │
+│                          │PostgreSQL│                                   │
+│                          └──────────┘                                   │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
 ### Communication Channels
 
 #### Browser to Frontend
