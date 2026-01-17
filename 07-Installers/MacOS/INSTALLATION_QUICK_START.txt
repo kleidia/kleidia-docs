@@ -2,8 +2,28 @@
 Kleidia Agent - macOS Installation Quick Start
 ================================================================================
 
-VERSION: 0.4.6+
-DATE: November 2025
+VERSION: 0.4.9+
+DATE: January 2026
+
+================================================================================
+PREREQUISITES (INSTALL FIRST)
+================================================================================
+
+  YubiKey Manager (ykman) - REQUIRED
+  -----------------------------------
+  The Kleidia Agent requires YubiKey Manager CLI to communicate with YubiKeys.
+  
+  Download from Yubico (latest version 5.8.0):
+    https://developers.yubico.com/yubikey-manager/Releases/
+  
+  Direct download:
+    https://developers.yubico.com/yubikey-manager/Releases/yubikey-manager-5.8.0-mac.pkg
+  
+  Install ykman BEFORE installing the Kleidia Agent:
+    sudo installer -pkg yubikey-manager-5.8.0-mac.pkg -target /
+  
+  Verify installation:
+    ykman --version
 
 ================================================================================
 PACKAGE CONTENTS
@@ -23,9 +43,6 @@ This package installs:
   Utilities
     - /usr/local/bin/kleidia-agent-uninstall.sh (removal tool)
 
- Dependencies
-    - YubiKey Manager (ykman) if not already installed
-
 ================================================================================
 SYSTEM REQUIREMENTS
 ================================================================================
@@ -43,9 +60,9 @@ Architecture:
   - Apple Silicon (ARM64)
 
 Prerequisites:
+  - YubiKey Manager (ykman) - see PREREQUISITES section above
   - Administrator privileges for installation
   - Network access to backend server (HTTPS)
-  - YubiKey Manager (ykman) - installed automatically if missing
 
 ================================================================================
 INSTALLATION OPTIONS
@@ -201,9 +218,12 @@ Cannot connect to backend:
 
 YubiKey not detected:
   
-  # Check if ykman is installed
+  # Ensure ykman is installed (REQUIRED prerequisite)
   which ykman
   ykman --version
+  
+  # If not installed, download from:
+  # https://developers.yubico.com/yubikey-manager/Releases/yubikey-manager-5.8.0-mac.pkg
   
   # Test YubiKey detection
   ykman list
