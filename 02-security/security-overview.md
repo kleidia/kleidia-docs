@@ -163,7 +163,7 @@ The following table summarizes how each connection between components is secured
 | Frontend | Backend API  | HTTP       | 8080  | None²      | JWT tokens     | Internal K8s network                  |
 | Backend  | OpenBao      | HTTP/HTTPS | 8200  | TLS 1.3³   | AppRole        | HTTPS when intermediate CA configured |
 | Backend  | PG (CNPG)    | PostgreSQL | 5432  | TLS 1.3    | Client certs   | K8s 1.32+ only                        |
-| Backend  | PG  (Legacy) | PostgreSQL | 5432  | None²      | Password       | K8s < 1.32                            |
+| Backend  | PG (Legacy)  | PostgreSQL | 5432  | None²      | Password       | K8s < 1.32                            |
 | Backend  | License      | HTTPS      | 8443  | mTLS 1.3⁴  | Client certs   | Default when mtls.enabled=true        |
 | License  | OpenBao      | HTTP/HTTPS | 8200  | TLS 1.3³   | AppRole        | HTTPS when intermediate CA configured |
 | Agent    | YubiKey      | USB/CCID   | —     | Hardware   | PIN/Touch      | Local hardware                        |
@@ -197,7 +197,7 @@ The following table summarizes how each connection between components is secured
 │  │ Frontend │◄───────────►│ Backend  │◄────────────►│ OpenBao  │        │
 │  └──────────┘             └────┬─────┘              └──────────┘        │
 │                                │  \                       ▲             │
-│                    mTLS 1.3    │   \                      │             │
+│                                │   \  mTLS 1.3            │             │
 │                                │    ▼                HTTP/HTTPS         │
 │                                │  ┌─────────┐             │             │
 │                                │  │ License │─────────────┘             │
