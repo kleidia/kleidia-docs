@@ -119,6 +119,15 @@ Without the OpenBao keys:
 4. Click "Create User"
 5. User receives account credentials
 
+#### Users created via directory sync / provisioning
+
+In addition to manual user creation, Kleidia can populate users automatically via:
+
+- **Entra ID Sync** (Microsoft Graph) — pulls users from Entra ID groups into Kleidia
+- **SCIM provisioning** — pushes users from an identity platform (including Entra ID provisioning) into Kleidia
+
+These users can exist in Kleidia **before they ever log in**, which enables admin “on-behalf-of” YubiKey provisioning and shipping workflows.
+
 ### Edit User
 
 1. Navigate to **Admin Panel** → **Users**
@@ -144,6 +153,21 @@ Without the OpenBao keys:
 1. Navigate to **Admin Panel** → **YubiKeys**
 2. View all registered YubiKeys across organization
 3. Filter by status, user, or search by serial number
+
+### Register YubiKey for a User (Admin provisioning)
+
+Use this workflow to provision a YubiKey **on behalf of** a user (for example, a user synced from Entra ID).
+
+1. Ensure the **Kleidia Agent** is paired on the admin workstation
+2. Insert the target YubiKey into the admin workstation
+3. Navigate to **Admin Panel → Register YubiKey**
+4. Select:
+   - The connected device
+   - The target user
+5. Click **Register YubiKey**
+6. Save/print the **Initial PIN** and **Initial PUK** (shown once) for a sealed envelope to ship with the device
+
+For the full lifecycle (prepare → certify → ship → activate), see [YubiKey Lifecycle](yubikey-lifecycle.md).
 
 ### Device Details
 
@@ -245,7 +269,7 @@ Configure system-wide settings:
    - **Email**: SMTP host, port, from address, username, TLS settings
    - **Security**: Feature toggles (device binding, token rotation)
    - **Backup**: S3 storage, encryption password, schedule, and retention (see Backup Management below)
-   - **OIDC Provider**: OpenID Connect authentication configuration (see next section)
+   - **Identity Providers**: Authentication and user provisioning (OIDC, Entra sync, SCIM)
    - **OpenBao CA**: Certificate Authority configuration
 3. Click "Save" for each settings category
 
@@ -275,10 +299,18 @@ For detailed backup and restore procedures, see [Backups and Restore](../04-oper
 
 **Note**: Settings are persisted in the database and take effect immediately. All setting changes are logged to audit logs.
 
-### OIDC Provider Configuration
+### Identity Providers
+
+Kleidia groups SSO authentication and user provisioning under **Admin Panel → System Settings → Identity Providers**:
+
+- **OIDC**: Single Sign-On (SSO) into Kleidia
+- **Entra ID Sync**: Pull users from Entra ID (Graph API)
+- **SCIM**: Push users via SCIM provisioning (e.g., Entra provisioning app)
+
+#### OIDC (SSO) configuration
 
 Kleidia can use an external OpenID Connect (OIDC) provider for single sign-on (SSO).  
-Configuration is done from **Admin Panel → System Settings → OIDC Provider**.
+Configuration is done from **Admin Panel → System Settings → Identity Providers → OIDC**.
 
 #### Prerequisites
 
@@ -305,7 +337,7 @@ In your OIDC provider:
 
 #### 2. Configure OIDC in Kleidia
 
-Navigate to **Admin Panel → System Settings → OIDC Provider** and fill in:
+Navigate to **Admin Panel → System Settings → Identity Providers → OIDC** and fill in:
 
 - **Issuer URL** (required)  
   - Base URL of your OIDC provider, e.g. `https://auth.example.com`  
@@ -366,7 +398,7 @@ When "Disable Local Login" is enabled, the main login page (`/login`) shows only
 
 #### 3. Test OIDC configuration
 
-Use the **Test Configuration** button in the OIDC Provider panel:
+Use the **Test Configuration** button in the OIDC panel:
 
 1. Ensure **Issuer URL**, **Redirect URI**, **Client ID**, and (if required) **Client Secret** are filled.
 2. Click **Test Configuration**.
@@ -394,6 +426,46 @@ If the test fails, the error message usually indicates whether:
   - User lifecycle (activation, password policies, etc.) is controlled by the OIDC provider.
 
 Local users (created via the Kleidia admin UI with a password) remain fully manageable through the existing user management actions.
+
+#### Entra ID Sync (Graph API)
+
+Use **Entra ID Sync** when you want Kleidia to periodically **pull users** from Entra ID.
+
+1. Navigate to **Admin Panel → System Settings → Identity Providers → Entra ID Sync**
+2. Click **Add configuration**
+3. Provide:
+   - **Config name**
+   - **Tenant ID**
+   - **Client ID** and **Client Secret** (App Registration)
+   - **Sync group IDs** (one per line)
+   - Optional filters: **Exclude guest users**, **Exclude disabled users**
+   - **Sync interval** (or set to manual-only)
+   - **Organization mapping** (multi-tenant deployments):
+     - **single_org**: assign all synced users into a selected default organization
+     - **by_group / by_attribute**: map users into organizations using Entra group membership or attributes
+4. Click **Save**
+5. Use the action buttons to:
+   - **Test** the Graph connection
+   - **Preview** which users would be synced
+   - **Trigger** a sync immediately
+
+> Synced users appear in **Admin → Users** and can be selected as targets in **Admin Panel → Register YubiKey**, even if they have not logged in yet.
+
+#### SCIM provisioning
+
+Use **SCIM** when your identity platform will **push users** into Kleidia (including Microsoft Entra provisioning).
+
+1. Navigate to **Admin Panel → System Settings → Identity Providers → SCIM**
+2. Copy the **SCIM endpoint** (typically `${your_kleidia_url}/scim/v2`)
+3. Click **Generate token**
+4. (Optional, multi-tenant) Choose a **target organization** to scope provisioning into a single organization
+5. Copy the generated **Bearer token** and store it securely — it is shown once
+
+In your identity provider’s SCIM configuration:
+
+- **SCIM Base URL**: Kleidia SCIM endpoint
+- **Authorization**: `Bearer <token>`
+
 
 ## License Management
 

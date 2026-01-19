@@ -12,13 +12,22 @@ Kleidia provides a built-in backup and restore system accessible through the Adm
 - **Complete**: Includes PostgreSQL database and OpenBao secrets
 - **Stored in S3**: Any S3-compatible storage (AWS S3, MinIO, etc.)
 - **Audited**: All backup and restore operations are logged
+- **Atomic**: Restore operations run in a single transaction
 
 ### What Gets Backed Up
 
 | Component | Contents |
 |-----------|----------|
 | **PostgreSQL Database** | Users, organizations, YubiKey records, certificates, audit logs |
-| **OpenBao Secrets** | JWT secrets, PIV credentials, S3 credentials, certificate keys |
+| **OpenBao Secrets** | JWT secrets, database credentials, S3 credentials, YubiKey PIV credentials, certificate private keys |
+
+### What Is NOT Backed Up
+
+| Component | Reason |
+|-----------|--------|
+| **Backup Jobs Table** | Preserved during restore to maintain job history |
+| **OpenBao Unseal Keys** | Not stored in KV; required to access OpenBao |
+| **OpenBao Root Token** | Regenerated on each unseal |
 
 > **Note**: Audit logs can be excluded from backups to reduce file size (configurable in settings).
 
@@ -74,11 +83,10 @@ Click **Test S3 Connection** to verify your configuration before saving.
 
 1. Navigate to **Backup Management** → **History** tab
 2. Click **Run Backup Now**
-3. Select backup type:
-   - **Full**: Database + OpenBao secrets (recommended)
-   - **Database Only**: PostgreSQL data only
-   - **Vault Only**: OpenBao secrets only
+3. The backup starts immediately (full backup of database + OpenBao secrets)
 4. Monitor progress in the job list
+
+> **Note**: All backups are full backups containing both PostgreSQL database and OpenBao secrets. Partial backup types (database-only or vault-only) are only available via the API.
 
 ### Scheduled Backups
 
@@ -117,15 +125,41 @@ Scheduled backups run automatically according to the configured cron schedule. C
 Monitor the restore operation in the **History** tab. The restore process:
 
 1. Downloads and decrypts the backup from S3
-2. Restores PostgreSQL database (using UPSERT for existing records)
-3. Restores OpenBao secrets
-4. Logs completion status to audit log
+2. Validates checksum and decryption
+3. Restores PostgreSQL database:
+   - Temporarily disables foreign key constraints
+   - Runs pg_dump restore (DROP + CREATE statements)
+   - Re-enables foreign key constraints
+   - Runs as a single atomic transaction
+4. Restores OpenBao secrets using parallel workers (20 concurrent)
+5. Logs completion status to audit log
+
+### Technical Details: Database Restore
+
+The restore process uses PostgreSQL's `session_replication_role` to handle foreign key constraints:
+
+```sql
+-- Disable FK constraint checking during restore
+SET session_replication_role = 'replica';
+
+-- pg_dump restore statements (DROP TABLE, CREATE TABLE, COPY data)
+...
+
+-- Re-enable FK constraint checking
+SET session_replication_role = 'origin';
+```
+
+This approach:
+- Allows tables to be dropped even when referenced by foreign keys
+- Runs the entire restore as a single transaction (`-1` flag)
+- Rolls back completely if any error occurs
 
 ### After Restore
 
 1. Verify the restore completed successfully in the History tab
 2. Test application functionality
 3. Check that users and data are accessible
+4. **Restart backend pods** if you experience session issues (JWT secret may have changed)
 
 ## Backup File Format
 
@@ -135,10 +169,64 @@ Backup files are stored as encrypted archives:
 backups/backup-full-20251222-143000.enc
 ```
 
-The encrypted archive contains:
-- `header.json`: Metadata (version, salt, timestamp, checksum)
-- `db-backup.sql.gz`: Compressed PostgreSQL dump
-- `vault-secrets.json.gz`: Compressed OpenBao KV export
+### File Structure
+
+The encrypted backup file uses a custom binary format:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Magic Bytes (17 bytes): "KLEIDIA_BACKUP_V1"            │
+├─────────────────────────────────────────────────────────┤
+│ Header Length (4 bytes, big-endian uint32)             │
+├─────────────────────────────────────────────────────────┤
+│ Header (JSON): version, created_at, backup_type,       │
+│   checksum, includes_db, includes_kv, includes_audit   │
+├─────────────────────────────────────────────────────────┤
+│ Salt (32 bytes): Random salt for Argon2id              │
+├─────────────────────────────────────────────────────────┤
+│ Nonce (12 bytes): Random nonce for AES-GCM             │
+├─────────────────────────────────────────────────────────┤
+│ Ciphertext: AES-256-GCM encrypted, gzip-compressed     │
+│   JSON containing database SQL and vault secrets       │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Encryption Details
+
+| Parameter | Value |
+|-----------|-------|
+| **Key Derivation** | Argon2id |
+| **Argon2 Time** | 3 iterations |
+| **Argon2 Memory** | 64 MB |
+| **Argon2 Parallelism** | 4 threads |
+| **Encryption** | AES-256-GCM |
+| **Key Length** | 256 bits (32 bytes) |
+| **Nonce Length** | 96 bits (12 bytes) |
+| **Salt Length** | 256 bits (32 bytes) |
+| **Integrity** | SHA-256 checksum of ciphertext |
+
+### Archive Contents
+
+The decrypted, decompressed payload is a JSON object:
+
+```json
+{
+  "header": {
+    "version": 1,
+    "created_at": "2026-01-17T12:00:00Z",
+    "backup_type": "full",
+    "includes_db": true,
+    "includes_kv": true,
+    "includes_audit_logs": true
+  },
+  "database_sql": "-- pg_dump output...",
+  "vault_secrets": {
+    "jwt-secret": {"secret": "..."},
+    "database": {"password": "..."},
+    "yubikeys/abc123/piv": {"management_key": "..."}
+  }
+}
+```
 
 ## Performance
 
@@ -150,7 +238,25 @@ Backup and restore times depend on data volume:
 | 10,000 keys | ~1-2 min | ~2-3 min |
 | 50,000 keys | ~5-7 min | ~7-10 min |
 
-Backups use parallel processing (20 concurrent workers) for OpenBao secret export.
+### Parallel Processing
+
+Both backup and restore use parallel workers for OpenBao operations:
+
+| Parameter | Value |
+|-----------|-------|
+| **Concurrent Workers** | 20 |
+| **Operation Timeout** | 30 minutes per S3 operation |
+| **Job Timeout** | 2 hours maximum |
+| **Stale Job Detection** | Jobs running >2 hours marked as failed |
+
+### Timeouts and Limits
+
+| Setting | Value |
+|---------|-------|
+| **Presigned URL Expiry** | 1 hour |
+| **Default Retention** | 30 days |
+| **Max Backups Listed** | 1,000 |
+| **Default Page Size** | 50 backups |
 
 ## Audit Logging
 
@@ -158,18 +264,23 @@ All backup and restore operations are recorded in the audit log:
 
 | Action | Description |
 |--------|-------------|
-| `backup.started` | Manual backup initiated |
 | `backup.completed` | Backup finished successfully |
 | `backup.failed` | Backup failed with error |
-| `restore.started` | Restore initiated |
 | `restore.completed` | Restore finished successfully |
 | `restore.failed` | Restore failed with error |
 
 Audit entries include:
-- User who initiated the operation
+- User who initiated the operation (or "system" for scheduled backups)
 - Workstation hostname and IP address
 - Backup file name and type
 - Duration and file size (for completed backups)
+
+### Scheduled Backup Audit Entries
+
+Scheduled backups appear with:
+- **IP Address**: `system`
+- **Details**: Prefixed with `[Scheduled]`
+- **Triggered By**: `null` (no user ID)
 
 ## Disaster Recovery
 
@@ -217,6 +328,14 @@ If restoring to a completely new installation:
 
 The encryption password must match exactly what was used when the backup was created. Passwords are case-sensitive.
 
+### Restore Fails with Foreign Key Constraint Error
+
+If restore fails with errors like `cannot drop constraint X because other objects depend on it`:
+
+1. Ensure you're running the latest backend version
+2. The backend automatically disables FK constraints during restore
+3. Check backend logs for the specific error
+
 ### Backup Job Stuck in "Running"
 
 If a backup job remains in "Running" status for more than 2 hours:
@@ -225,11 +344,33 @@ If a backup job remains in "Running" status for more than 2 hours:
 2. The system automatically marks stale jobs as failed on restart
 3. Try running a new backup
 
+```bash
+# Check for stale jobs
+kubectl logs -l app=backend -n kleidia | grep -i "stale"
+
+# Force cleanup by restarting backend
+kubectl rollout restart deployment/backend -n kleidia
+```
+
 ### No Backups Visible in Restore Tab
 
 1. Verify S3 configuration is saved correctly
 2. Check that backup files exist in S3 (use S3 browser or CLI)
 3. Verify the prefix matches the location of backup files
+
+### OpenBao Secrets Partially Restored
+
+If vault restore reports partial failures:
+
+- **<50% failure rate**: Restore succeeds with warnings
+- **>50% failure rate**: Restore fails
+- **100% failure rate**: Restore fails
+
+Check backend logs for specific paths that failed:
+
+```bash
+kubectl logs -l app=backend -n kleidia | grep -i "failed to write"
+```
 
 ## Manual Backup (Advanced)
 
@@ -259,6 +400,51 @@ kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \
 ```
 
 > **Note**: OpenBao raft snapshots include the master key encryption layer and can only be restored to the same OpenBao instance or one initialized with the same unseal keys.
+
+## API Reference
+
+The backup system exposes the following REST API endpoints:
+
+### Backup Operations
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/backup/trigger` | Trigger a manual backup |
+| `GET` | `/api/backup/list` | List available backups |
+| `DELETE` | `/api/backup/{key}` | Delete a specific backup |
+| `GET` | `/api/backup/test-connection` | Test S3 connectivity |
+
+### Restore Operations
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/backup/restore` | Initiate a restore |
+| `POST` | `/api/backup/restore/validate-password` | Validate restore password |
+| `GET` | `/api/backup/restore/status` | Get current restore status |
+
+### Job Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/backup/jobs` | List backup/restore jobs |
+| `GET` | `/api/backup/jobs/{id}` | Get specific job details |
+| `GET` | `/api/backup/jobs/running` | Get currently running jobs |
+
+### Example: Trigger Backup via API
+
+```bash
+curl -X POST https://kleidia.example.com/api/backup/trigger \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "full"}'
+```
+
+### Example: List Backups
+
+```bash
+curl -X GET "https://kleidia.example.com/api/backup/list?limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 ## Related Documentation
 

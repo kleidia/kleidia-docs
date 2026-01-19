@@ -14,6 +14,17 @@ Kleidia enables organizations to manage YubiKey credentials for authentication w
 | **PIV Certificate-Based Authentication (CBA)** | X.509 certificates | Automated deployment, enterprise PKI integration |
 | **FIDO2 Passkeys** | WebAuthn | Modern cloud-first deployments |
 
+### User provisioning into Kleidia (optional)
+
+In addition to using YubiKeys *with* Entra ID for authentication, Kleidia can also integrate with Entra ID to **populate users in Kleidia** for administration and pre-provisioning:
+
+- **Entra ID Sync (Graph)**: Kleidia pulls users from Entra ID groups on a schedule or on demand.
+- **SCIM provisioning**: Entra (or another IdP) pushes users into Kleidia via SCIM.
+
+This is especially useful when you want to **provision and ship YubiKeys “on behalf of” users** before they ever log in to Kleidia.
+
+Configuration is managed in the Kleidia UI under **Admin Panel → System Settings → Identity Providers**.
+
 Users can leverage their YubiKeys for:
 
 - **Passwordless sign-in** to Microsoft 365, Azure Portal, and Entra ID-connected applications

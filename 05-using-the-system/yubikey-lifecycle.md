@@ -17,13 +17,39 @@ YubiKey devices go through several stages:
 
 ## Registration Phase
 
-### New Device Registration
+### New Device Registration (End User)
 
 1. **Connect Device**: Insert YubiKey into computer
 2. **Detect Device**: System automatically detects YubiKey
 3. **Enter Information**: Provide device details and credentials
 4. **Store Secrets**: PIN/PUK/management key stored in Vault
 5. **Complete Registration**: Device appears in system
+
+### Admin “On-Behalf-Of” Registration (Pre‑Provisioning)
+
+Use this flow when you want IT to pre-provision YubiKeys for users (for example, users synced from Entra ID who have not logged in yet).
+
+1. **Connect admin agent + YubiKey**: On an admin workstation, ensure the Kleidia Agent is paired and the YubiKey is inserted.
+2. **Open admin registration**: Navigate to **Admin Panel → Register YubiKey**.
+3. **Select target user**: Choose the user who will own the device.
+4. **Select the connected device**: Click the detected YubiKey in the device list.
+   - If the YubiKey has a **non-default PIV management key**, Kleidia will require a **PIV reset** before provisioning can continue (this wipes existing PIV keys/certificates on the device).
+5. **Register**: Click **Register YubiKey**.
+6. **Record credentials (one-time)**: The admin is shown an **Initial PIN** and **Initial PUK** once. Print or copy these into a **sealed envelope** for the user.
+7. **Provisioning steps** (typical):
+   - Prepare the YubiKey (PIV setup) from the YubiKey details view.
+   - Sign and import certificates.
+   - Mark the device as shipped and deliver the YubiKey + sealed envelope to the user.
+
+#### Admin Provisioning States
+
+Admin-provisioned devices track a provisioning lifecycle in addition to their active/revoked status:
+
+1. **pending**: Registered for a user, not yet prepared
+2. **prepared**: PIV prepared and ready for certificate operations
+3. **certified**: Certificates signed/imported
+4. **shipped**: Device delivered to user
+5. **activated**: User has successfully activated/used the device
 
 ### Initial Configuration
 
@@ -84,7 +110,9 @@ When a device needs to be revoked (lost, stolen, compromised, or user departure)
    - **Automatic Wipe**: If device is connected to an admin workstation, system attempts to wipe PIV data (reset PIV application)
    - Revocation logged in audit trail
 4. **Device Status**: Device marked as revoked and removed from active devices list
-5. **Re-registration**: If device is recovered and needs to be reused, it must be re-registered as a new device
+5. **Re-registration**:
+   - If the device remains in **revoked** state, revocation is not reversible.
+   - If the device was later **removed/returned** (soft-deleted) and needs to be reused, an administrator can **re-provision** it for a new user via **Admin Panel → Register YubiKey**. Kleidia will revoke any old certificates associated with that serial before re-provisioning.
 
 **Important Notes**:
 - **Automatic Wipe**: When a revoked device is connected to an admin workstation (where an agent is running), the system automatically attempts to wipe the PIV application. This ensures the device cannot be used even if physically recovered.

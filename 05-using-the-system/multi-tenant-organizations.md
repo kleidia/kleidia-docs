@@ -27,6 +27,7 @@ Multi-tenancy enables enterprise deployments where:
 | Register YubiKey | ✓ | ✓ | ✓ |
 | Admin Panel | ✓ | ✓ | - |
 | Manage YubiKeys | ✓ | ✓ (org only) | - |
+| Register YubiKey (Admin) | ✓ | ✓ (org only) | - |
 | Manage Users | ✓ | - | - |
 | Organizations | ✓ | - | - |
 | Compliance Reports | ✓ | ✓ (org only) | - |
@@ -41,6 +42,14 @@ Multi-tenancy enables enterprise deployments where:
 4. Save the configuration
 
 ## OIDC Claim Configuration
+
+### How users get assigned to organizations
+
+Kleidia can assign users to organizations through multiple mechanisms:
+
+- **OIDC login-time claims**: Users are assigned when they log in via OIDC, based on configured claim mappings (described below).
+- **Entra ID Sync (Graph) mapping**: Synced users can be mapped into organizations during sync (useful for pre-provisioning users who have not logged in yet).
+- **SCIM provisioning scope**: SCIM tokens can be scoped to a single organization so all provisioned users land in that org.
 
 ### Claim Mapping
 
@@ -152,6 +161,26 @@ In Kleidia's Multi-Tenant settings:
 If using organization-based isolation:
 1. Add a custom claim or extension attribute for organization
 2. Configure the **Organization Claim** in Kleidia
+
+### Entra ID Sync mapping (optional)
+
+If you use **Entra ID Sync** to import users before they log in, configure organization mapping in:
+
+**Admin Panel → System Settings → Identity Providers → Entra ID Sync**
+
+Supported mapping modes:
+
+- **single_org**: assign all synced users to a selected default organization
+- **by_group**: map users into organizations using Entra group membership
+- **by_attribute**: map users into organizations using an Entra user attribute (for example, department or extension attribute)
+
+### SCIM provisioning scope (optional)
+
+If you provision users via **SCIM**, generate SCIM tokens per organization:
+
+**Admin Panel → System Settings → Identity Providers → SCIM**
+
+When a SCIM token is scoped to an organization, all users provisioned with that token are assigned to that organization automatically.
 
 ## Example: Okta Configuration
 
