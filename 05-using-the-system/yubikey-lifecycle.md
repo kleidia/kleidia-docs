@@ -119,6 +119,37 @@ When a device needs to be revoked (lost, stolen, compromised, or user departure)
 - **Permanent Action**: Revocation cannot be undone. The device must be re-registered if needed again.
 - **Returned Status**: The system tracks "returned" devices in statistics, but there is no separate UI action for marking devices as returned. Use "Revoke Device" for all device retirement scenarios.
 
+### Understanding PIV vs FIDO2 Reset
+
+> ⚠️ **Critical**: PIV and FIDO2 are separate applets with different reset procedures. Automatic wipe only resets PIV—FIDO2 credentials remain intact unless manually reset.
+
+| Applet | Automatic Reset | Manual Reset Required | Timing Requirement |
+|--------|-----------------|----------------------|-------------------|
+| **PIV** | ✅ Yes (on revocation) | Optional | None |
+| **FIDO2** | ❌ No | Yes | Must be within 5 seconds of insertion |
+
+**FIDO2 Reset Procedure**:
+
+FIDO2 has a security feature that prevents remote/malware-initiated resets. The reset can only be performed **within 5 seconds of inserting the YubiKey**:
+
+1. Unplug the YubiKey
+2. Reinsert the YubiKey
+3. Immediately (within 5 seconds) initiate the reset via:
+   - Kleidia UI: Dashboard → YubiKey → FIDO2 Management → Advanced → Reset FIDO2 Applet
+   - Command line: `ykman fido reset`
+4. Touch the YubiKey when prompted
+
+If the 5-second window expires, the reset will fail with a timing error. Simply unplug, reinsert, and try again immediately.
+
+**Why This Matters for Revocation**:
+
+When revoking a YubiKey:
+- PIV credentials (certificates, keys) are automatically wiped
+- FIDO2 passkeys (Microsoft 365, Google, GitHub, etc.) **remain on the device**
+- For complete device wipe, FIDO2 must be reset separately using the procedure above
+
+See [FIDO2 Management Guide](fido2-management.md) for detailed FIDO2 operations.
+
 ## Retirement Phase
 
 ### Device Removal
