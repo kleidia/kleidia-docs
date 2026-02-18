@@ -17,6 +17,12 @@ spec:
     port: 8081
     targetPort: 8081
     protocol: TCP
+  {{- if $.Values.mtls.enabled }}
+  - name: health
+    port: 9001
+    targetPort: 9001
+    protocol: TCP
+  {{- end }}
   type: ClusterIP
   sessionAffinity: None
 {{- end }}

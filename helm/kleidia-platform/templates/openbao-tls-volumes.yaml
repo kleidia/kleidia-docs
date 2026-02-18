@@ -1,0 +1,53 @@
+{{- /*
+OpenBao TLS Configuration
+This file documents how TLS is enabled for OpenBao internal communication.
+
+There are two ways to enable OpenBao internal HTTPS:
+
+1. INSTALL-TIME (requires pre-created certificates):
+   helm install ... --set openbao.internalTLS.enabled=true
+   
+   This requires the TLS secret to already exist before OpenBao starts.
+   Not recommended as it requires bootstrapping certificates outside of OpenBao.
+
+2. RUNTIME via Admin UI (recommended):
+   - Install with internalTLS.enabled=false (default)
+   - Configure intermediate CA via Admin UI
+   - Check "Enable OpenBao Internal HTTPS" option
+   - System auto-generates server cert using customer CA
+   - OpenBao pods restart with HTTPS enabled
+
+When HTTPS is enabled via the admin UI:
+- A TLS secret 'openbao-internal-tls' is created with:
+  - tls.crt: Server certificate
+  - tls.key: Server private key  
+  - ca.crt: CA chain for client verification
+- A ConfigMap 'openbao-https-config' tracks the enabled state
+- OpenBao StatefulSet is annotated to trigger rolling restart
+- The new pods mount the TLS secret and use HTTPS listener
+
+Client Updates Required:
+When OpenBao switches to HTTPS, clients (backend, license-service) need to:
+1. Use https:// URLs for OpenBao
+2. Trust the customer CA (mounted from the TLS secret)
+
+This is handled automatically by the services reading the openbao-https-config ConfigMap.
+*/ -}}
+
+{{- if .Values.openbao.internalTLS.enabled }}
+# Pre-install TLS mode: Mount existing TLS secret
+# This is used when TLS is enabled at install time (not recommended)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openbao-https-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/name: openbao
+    app.kubernetes.io/component: https-config
+data:
+  internal_tls_enabled: "true"
+  tls_secret_name: {{ .Values.openbao.internalTLS.certSecretName | quote }}
+  enabled_at: "install-time"
+{{- end }}
+

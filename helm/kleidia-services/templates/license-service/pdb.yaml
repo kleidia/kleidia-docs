@@ -1,0 +1,16 @@
+{{- if and .Values.licenseService.enabled (gt (int .Values.licenseService.replicas) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: license-service-pdb
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: license-service
+spec:
+  # Ensure at least one license-service pod is always available during disruptions
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: license-service
+{{- end }}
+

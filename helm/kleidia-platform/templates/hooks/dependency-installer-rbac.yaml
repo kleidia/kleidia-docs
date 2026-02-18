@@ -1,0 +1,52 @@
+{{- if or .Values.dependencies.certManager.install .Values.dependencies.cnpg.install }}
+# =============================================================================
+# Dependency Installer RBAC
+# =============================================================================
+# Grants cluster-wide permissions to the pre-install hook that conditionally
+# installs cert-manager and/or CNPG operator if they don't already exist.
+#
+# Uses before-hook-creation only (no hook-succeeded) so the SA persists
+# long enough for the installer Job to use it.
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kleidia-dependency-installer
+  namespace: {{ .Values.global.namespace }}
+  annotations:
+    helm.sh/hook: pre-install
+    helm.sh/hook-weight: "-30"
+    helm.sh/hook-delete-policy: before-hook-creation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kleidia-dependency-installer
+  annotations:
+    helm.sh/hook: pre-install
+    helm.sh/hook-weight: "-30"
+    helm.sh/hook-delete-policy: before-hook-creation
+rules:
+  # Full cluster-admin equivalent needed to install operator manifests
+  # (CRDs, Deployments, ClusterRoles, ClusterRoleBindings, webhooks, etc.)
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kleidia-dependency-installer
+  annotations:
+    helm.sh/hook: pre-install
+    helm.sh/hook-weight: "-30"
+    helm.sh/hook-delete-policy: before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kleidia-dependency-installer
+subjects:
+  - kind: ServiceAccount
+    name: kleidia-dependency-installer
+    namespace: {{ .Values.global.namespace }}
+{{- end }}

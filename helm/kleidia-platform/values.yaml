@@ -7,15 +7,47 @@ global:
     authSecret: ""            # Optional: docker-registry secret name for private registries
   imagePullSecrets: []        # Optional: list of imagePullSecrets to attach to pods
 
+# =============================================================================
+# CLUSTER DEPENDENCIES (Auto-Install)
+# =============================================================================
+# Kleidia requires cert-manager and CloudNativePG operator in the cluster.
+# When install=true (default), the platform chart will automatically install
+# these if they are not already present. Set install=false if you manage
+# these operators yourself or they are already installed.
+#
+# The installer checks for existing CRDs before installing -- it will NOT
+# reinstall or upgrade operators that already exist in the cluster.
+# =============================================================================
+dependencies:
+  certManager:
+    install: true               # Auto-install cert-manager if CRDs not found
+    version: "v1.17.1"         # cert-manager release version (pinned for stability)
+                                # Update to latest: https://github.com/cert-manager/cert-manager/releases
+  cnpg:
+    install: true               # Auto-install CNPG operator if CRDs not found
+    version: "1.28.1"          # CNPG operator release version (requires K8s 1.32+)
+                                # Update to latest: https://github.com/cloudnative-pg/cloudnative-pg/releases
+
 # Third-party image repositories (can be mirrored to private registry for air-gapped deployments)
 # When global.registry.host is set, these images will be pulled from: <registry.host>/<repository>:<tag>
 thirdPartyImages:
   alpine: "alpine:3.21"
   kubectl: "bitnami/kubectl:latest"  # Used in hooks for Kubernetes API interactions
-  busybox: "busybox:1.37"            # Utility container
+  busybox: "busybox:1.37"
   curl: "curlimages/curl:latest"     # HTTP client for health checks
+  reloader: "ghcr.io/stakater/reloader:v1.2.0"  # Watches secrets/configmaps and triggers rolling restarts
   rancher:
     localPathProvisioner: "rancher/local-path-provisioner:v0.0.24"
+
+# =============================================================================
+# RELOADER CONFIGURATION
+# =============================================================================
+# Stakater Reloader watches for changes to Secrets and ConfigMaps and triggers
+# rolling restarts of Deployments/StatefulSets that reference them.
+# This enables automatic certificate rotation without manual pod restarts.
+# =============================================================================
+reloader:
+  enabled: true                    # Enable Reloader for automatic secret rotation
 
 # =============================================================================
 # STORAGE CONFIGURATION
@@ -49,10 +81,16 @@ storage:
 openbao:
   enabled: true
   # Internal TLS between services and OpenBao
-  # When enabled, requires cert-manager and creates bootstrap certificates
+  # Can be enabled in two ways:
+  #   1. Set internalTLS.enabled=true during install (requires pre-created certs)
+  #   2. Enable via admin UI during intermediate CA import (recommended)
+  #      This auto-generates server certs using the customer CA
   internalTLS:
-    enabled: false  # Set to true to enable TLS (requires restart of services)
-  # Configuration for official OpenBao Helm chart (v0.19.0, appVersion v2.4.1)
+    enabled: false          # Set to true to enable TLS
+    # Secret containing TLS cert/key for OpenBao server
+    # Created automatically when enabling HTTPS via admin UI
+    certSecretName: "openbao-internal-tls"
+  # Configuration for official OpenBao Helm chart (v0.19.0, appVersion v2.4.4)
   global:
     enabled: true
     tlsDisable: true  # This is overridden by standalone.config when internalTLS.enabled=true
@@ -65,10 +103,10 @@ openbao:
     enabled: true
     image:
       registry: ""                  # OpenBao image registry (leave empty to use global.registry.host)
-                                    # For air-gapped: set global.registry.host and mirror quay.io/openbao/openbao:2.4.1
+                                    # For air-gapped: set global.registry.host and mirror quay.io/openbao/openbao:2.4.4
                                     # Default public registry: "quay.io"
       repository: "openbao/openbao" # OpenBao repository (use "openbao/openbao" for mirrored images)
-      tag: "2.4.1"                  # OpenBao version
+      tag: "2.4.4"                  # OpenBao version
       pullPolicy: IfNotPresent
     
     # Use standalone mode with persistent storage
@@ -130,11 +168,14 @@ openbao:
         secret:
           secretName: openbao-unseal-key
           optional: true  # Allow pod to start even if secret is empty (manual unseal mode)
+      # TLS certificates volume (only when internalTLS is enabled)
+      # This is conditional and will be empty if TLS is not enabled
     
     volumeMounts:
       - mountPath: /keys
         name: unseal-key
         readOnly: true
+      # TLS certificate mount point (used when HTTPS enabled via admin UI)
     
     # Resources
     resources:
@@ -182,4 +223,12 @@ openbao:
       crlExpiry: "24h"
 
 certManager:
+  install: false             # Set true if cert-manager should create Vault Issuer
   testCertificate: false     # Leave false (we do not use cert-manager for app TLS)
+
+# External Secrets Operator configuration
+# Syncs secrets from OpenBao to Kubernetes Secrets
+externalSecrets:
+  enabled: false             # Set to true to enable ESO integration
+  # Note: ESO must be installed separately in the cluster
+  # Install with: helm install external-secrets external-secrets/external-secrets -n external-secrets --create-namespace

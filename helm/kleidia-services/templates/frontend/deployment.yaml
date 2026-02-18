@@ -36,7 +36,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
-      # Wait for backend to be ready
+      # Wait for backend to be ready - uses curl image for health checks
       - name: wait-for-backend
         image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.curl "context" $) }}
         securityContext:
@@ -51,7 +51,11 @@ spec:
         - -c
         - |
           echo "Waiting for backend..."
+          {{- if .Values.mtls.enabled }}
+          until curl -sf http://backend.{{ .Values.global.namespace }}.svc.cluster.local:9000/health >/dev/null 2>&1; do
+          {{- else }}
           until curl -sf http://backend.{{ .Values.global.namespace }}.svc.cluster.local:8080/health >/dev/null 2>&1; do
+          {{- end }}
             echo "Backend not ready yet..."
             sleep 5
           done

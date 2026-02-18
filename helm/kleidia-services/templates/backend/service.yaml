@@ -9,11 +9,22 @@ spec:
   selector:
     app: backend
   ports:
+  # HTTP port for external traffic (HAProxy terminates TLS externally)
   - port: 8080
     targetPort: 8080
     {{- if .Values.backend.service.nodePort }}
     nodePort: {{ .Values.backend.service.nodePort }}
     {{- end }}
     name: http
+  {{- if .Values.mtls.enabled }}
+  # mTLS port for internal cluster traffic (TLS 1.3)
+  - port: 8443
+    targetPort: 8443
+    name: mtls
+  # Health probe port for Kubernetes probes
+  - port: 9000
+    targetPort: 9000
+    name: health
+  {{- end }}
   type: NodePort  # Required for HAProxy to route external traffic
 

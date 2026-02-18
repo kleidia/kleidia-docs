@@ -14,7 +14,13 @@ spec:
     metadata:
       labels:
         app: backend
+      annotations:
+        # Reloader: automatically restart pods when referenced secrets change
+        # This enables zero-downtime certificate rotation
+        reloader.stakater.com/auto: "true"
     spec:
+      # Graceful shutdown: allow 45 seconds for connections to drain
+      terminationGracePeriodSeconds: 45
       serviceAccountName: backend
       {{- /* Registry authentication: prefer explicit global.imagePullSecrets, else fallback to global.registry.authSecret */}}
       {{- if .Values.global.imagePullSecrets }}
@@ -37,7 +43,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
-      # Wait for PostgreSQL to be ready
+      # Wait for PostgreSQL - uses postgres image with pg_isready
       - name: wait-for-postgres
         image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.postgres "context" $) }}
         securityContext:
@@ -49,12 +55,34 @@ spec:
             drop: ["ALL"]
         env:
         - name: PGPASSWORD
-          value: ""
+          valueFrom:
+            secretKeyRef:
+              name: kleidia-db-app
+              key: password
+        {{- if .Values.database.tls.enabled }}
+        - name: PGSSLMODE
+          value: {{ .Values.database.tls.sslMode | quote }}
+        - name: PGSSLCERT
+          value: "/db-tls/tls.crt"
+        - name: PGSSLKEY
+          value: "/db-tls/tls.key"
+        - name: PGSSLROOTCERT
+          value: "/db-tls/ca.crt"
+        {{- end }}
+        {{- if .Values.database.tls.enabled }}
+        volumeMounts:
+          - name: db-tls-certs
+            mountPath: /db-tls
+            readOnly: true
+        {{- end }}
         command:
         - sh
         - -c
         - |
           echo "Waiting for PostgreSQL..."
+          {{- if .Values.database.tls.enabled }}
+          echo "TLS mode: {{ .Values.database.tls.sslMode }}"
+          {{- end }}
           
           # Wait for PostgreSQL to accept connections
           until pg_isready -h postgres.{{ .Values.global.namespace }}.svc.cluster.local -p 5432 -U kleidiauser 2>/dev/null; do
@@ -78,7 +106,7 @@ spec:
           done
           
           echo "✅ PostgreSQL ready and database accessible!"
-      # Wait for OpenBao to be ready
+      # Wait for OpenBao - uses curl image for health checks
       - name: wait-for-openbao
         image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.curl "context" $) }}
         securityContext:
@@ -98,6 +126,32 @@ spec:
             sleep 2
           done
           echo "✅ OpenBao ready!"
+      {{- if .Values.mtls.enabled }}
+      # Wait for mTLS certificate to be ready
+      - name: wait-for-certificate
+        image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.curl "context" $) }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+          - name: mtls-certs
+            mountPath: /tls
+            readOnly: true
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for mTLS certificate..."
+          while [ ! -f /tls/tls.crt ] || [ ! -f /tls/tls.key ]; do
+            echo "Certificate not ready yet..."
+            sleep 2
+          done
+          echo "✅ mTLS certificate ready!"
+      {{- end }}
       containers:
       - name: backend
         image: "{{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
@@ -105,8 +159,14 @@ spec:
         ports:
         - containerPort: 8080
           name: http
+        {{- if .Values.mtls.enabled }}
+        - containerPort: 8443
+          name: mtls
+        - containerPort: 9000
+          name: health
+        {{- end }}
         env:
-        # Database connection (simple password auth)
+        # Database connection
         - name: DB_HOST
           value: postgres.{{ .Values.global.namespace }}.svc.cluster.local
         - name: DB_PORT
@@ -114,11 +174,27 @@ spec:
         - name: DB_USER
           value: kleidiauser
         - name: DB_PASSWORD
-          value: ""
+          valueFrom:
+            secretKeyRef:
+              name: kleidia-db-app
+              key: password
         - name: DB_NAME
           value: kleidia
+        {{- if .Values.database.tls.enabled }}
+        # PostgreSQL TLS configuration (CNPG mode)
         - name: DB_SSL_MODE
-          value: disable
+          value: {{ .Values.database.tls.sslMode | quote }}
+        - name: DB_SSL_CERT
+          value: "/db-tls/tls.crt"
+        - name: DB_SSL_KEY
+          value: "/db-tls/tls.key"
+        - name: DB_SSL_ROOT_CERT
+          value: "/db-tls/ca.crt"
+        {{- else }}
+        # No TLS (legacy mode or TLS disabled)
+        - name: DB_SSL_MODE
+          value: "disable"
+        {{- end }}
         
         # OpenBao connection (AppRole auth for security isolation)
         - name: VAULT_ENABLED
@@ -166,9 +242,30 @@ spec:
           {{- end }}
           value: {{ $corsOrigins | quote }}
         
-        # License service connection
+        # License service connection (mTLS)
+        {{- if .Values.mtls.enabled }}
+        - name: LICENSE_SERVICE_URL
+          value: "https://license-service.{{ .Values.global.namespace }}.svc.cluster.local:8081"
+        # mTLS Configuration (TLS 1.3 for all intra-cluster communication)
+        # Dual-port architecture: 8080=HTTP (HAProxy), 8443=mTLS (internal), 9000=health
+        - name: TLS_ENABLED
+          value: "true"
+        - name: MTLS_PORT
+          value: "8443"
+        - name: TLS_CERT_FILE
+          value: "/tls/tls.crt"
+        - name: TLS_KEY_FILE
+          value: "/tls/tls.key"
+        - name: TLS_CA_FILE
+          value: "/tls/ca.crt"
+        - name: TLS_CLIENT_AUTH
+          value: {{ .Values.mtls.clientAuth | default "require" | quote }}
+        {{- else }}
         - name: LICENSE_SERVICE_URL
           value: "http://license-service.{{ .Values.global.namespace }}.svc.cluster.local:8081"
+        - name: TLS_ENABLED
+          value: "false"
+        {{- end }}
         
         # OIDC Configuration
         - name: OIDC_SKIP_TLS_VERIFY
@@ -178,10 +275,17 @@ spec:
           value: "{{ .Values.backend.oidc.discoveryBase }}"
         {{- end }}
         
+        # Backup runner token (for internal backup job authentication)
+        - name: BACKUP_RUNNER_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: backup-runner-token
+              key: token
+        
         readinessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: {{ if .Values.mtls.enabled }}9000{{ else }}8080{{ end }}
           initialDelaySeconds: 10
           periodSeconds: 5
           timeoutSeconds: 3
@@ -189,7 +293,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 8080
+            port: {{ if .Values.mtls.enabled }}9000{{ else }}8080{{ end }}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 3
@@ -201,6 +305,22 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
+        volumeMounts:
+        {{- if .Values.mtls.enabled }}
+          - name: mtls-certs
+            mountPath: /tls
+            readOnly: true
+        {{- end }}
+        {{- if .Values.database.tls.enabled }}
+          - name: db-tls-certs
+            mountPath: /db-tls
+            readOnly: true
+        {{- end }}
+        # Graceful shutdown: wait for load balancer to drain connections
+        lifecycle:
+          preStop:
+            exec:
+              command: ["sh", "-c", "sleep 10"]
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -208,4 +328,31 @@ spec:
           runAsUser: 65534
           capabilities:
             drop: ["ALL"]
+      volumes:
+      {{- if .Values.mtls.enabled }}
+        - name: mtls-certs
+          secret:
+            secretName: backend-mtls-tls
+            defaultMode: 0400
+      {{- end }}
+      {{- if .Values.database.tls.enabled }}
+        # Database TLS certificates (client cert + CA)
+        # Combines client cert from kleidia-db-client-tls and CA from kleidia-db-ca
+        - name: db-tls-certs
+          projected:
+            defaultMode: 0400
+            sources:
+              - secret:
+                  name: {{ .Values.database.tls.clientCertSecret }}
+                  items:
+                    - key: tls.crt
+                      path: tls.crt
+                    - key: tls.key
+                      path: tls.key
+              - secret:
+                  name: {{ .Values.database.tls.caSecret }}
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+      {{- end }}
 

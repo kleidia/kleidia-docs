@@ -17,8 +17,8 @@ spec:
   ttlSecondsAfterFinished: 300
   # Allow 10 minutes for the job to complete
   activeDeadlineSeconds: 600
-  # Allow one retry in case of timing issues
-  backoffLimit: 1
+  # Allow retries in case of timing issues
+  backoffLimit: 3
   template:
     metadata:
       name: openbao-setup
@@ -55,7 +55,6 @@ spec:
       containers:
       - name: setup
         # Using alpine/k8s for kubectl + bash + jq + curl
-        # Using bitnami/kubectl for Vault configuration
         image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}alpine/k8s:1.28.4
         command:
         - bash
@@ -282,12 +281,23 @@ spec:
             echo "   Admin can choose to disable auto-unseal during bootstrap"
             
             # With static seal, OpenBao should already be unsealed
+            # But there may be a brief delay after initialization - retry with backoff
             echo ""
             echo "Step 2b: Verifying OpenBao is unsealed..."
-            HEALTH=$(openbao_curl -s "http://127.0.0.1:8200/v1/sys/health" || echo '{"sealed":true}')
-            SEALED=$(echo "$HEALTH" | jq -r '.sealed // true')
-            if [ "$SEALED" = "true" ]; then
-              echo "❌ OpenBao is still sealed - static seal may not be working correctly"
+            UNSEALED=false
+            for unseal_attempt in $(seq 1 10); do
+              sleep 2  # Give OpenBao time to process the initialization
+              HEALTH=$(openbao_curl -s "http://127.0.0.1:8200/v1/sys/health" || echo '{"sealed":true}')
+              SEALED=$(echo "$HEALTH" | jq -r '.sealed // true')
+              if [ "$SEALED" = "false" ]; then
+                UNSEALED=true
+                break
+              fi
+              echo "  Waiting for OpenBao to unseal... (attempt ${unseal_attempt}/10)"
+            done
+            
+            if [ "$UNSEALED" = "false" ]; then
+              echo "❌ OpenBao is still sealed after 20 seconds - static seal may not be working correctly"
               echo "   Please check that openbao-unseal-key secret contains a valid key"
               exit 1
             fi
@@ -447,12 +457,31 @@ spec:
             -H "Content-Type: application/json" \
             -d '{"policy": "path \"pki/sign/kleidia-component\" { capabilities = [\"create\", \"update\"] }\npath \"pki/issue/kleidia-component\" { capabilities = [\"create\", \"update\"] }"}'
           
+          # Allow cert-manager from both cert-manager namespace AND kleidia namespace (for mTLS issuer)
+          # Also allow cert-manager-sa service account used by kleidia-services mTLS issuer
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/kubernetes/role/cert-manager" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"bound_service_account_names": ["cert-manager"], "bound_service_account_namespaces": ["cert-manager"], "policies": ["cert-manager"], "ttl": "1h"}'
+            -d '{"bound_service_account_names": ["cert-manager", "cert-manager-sa"], "bound_service_account_namespaces": ["cert-manager", "{{ .Values.global.namespace }}"], "policies": ["cert-manager"], "ttl": "1h"}'
           
-          echo "✅ Cert-manager policy and role created"
+          echo "✅ Cert-manager policy and role created (includes mTLS support)"
+          
+          {{- if .Values.externalSecrets.enabled }}
+          # Create external-secrets policy and role (for ESO secret sync)
+          echo ""
+          echo "Step 5d: Creating external-secrets policy and role..."
+          openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/external-secrets" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"policy": "# Read application secrets (for backend sync)\npath \"yubikeys/data/jwt-secret\" { capabilities = [\"read\"] }\npath \"yubikeys/data/encryption-key\" { capabilities = [\"read\"] }\npath \"yubikeys/data/database\" { capabilities = [\"read\"] }\npath \"yubikeys/data/backend/*\" { capabilities = [\"read\"] }\npath \"yubikeys/data/backup/*\" { capabilities = [\"read\"] }\n\n# Metadata access for secret versioning\npath \"yubikeys/metadata/jwt-secret\" { capabilities = [\"read\"] }\npath \"yubikeys/metadata/encryption-key\" { capabilities = [\"read\"] }\npath \"yubikeys/metadata/database\" { capabilities = [\"read\"] }\npath \"yubikeys/metadata/backend/*\" { capabilities = [\"read\", \"list\"] }\npath \"yubikeys/metadata/backup/*\" { capabilities = [\"read\", \"list\"] }\n\n# Explicitly DENY access to license secrets\npath \"yubikeys/data/license/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/metadata/license/*\" { capabilities = [\"deny\"] }\n\n# Token renewal\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }\npath \"auth/token/lookup-self\" { capabilities = [\"read\"] }"}'
+          
+          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/auth/kubernetes/role/external-secrets" \
+            -H "X-Vault-Token: ${ROOT_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"bound_service_account_names": ["external-secrets"], "bound_service_account_namespaces": ["{{ .Values.global.namespace }}"], "policies": ["external-secrets"], "ttl": "1h"}'
+          
+          echo "✅ External-secrets policy and role created"
+          {{- end }}
           
           # Step 6: Enable AppRole auth method and create management AppRoles
           echo ""
@@ -642,11 +671,12 @@ spec:
           
           # yubikey-piv-auth role (for slot 9a - Authentication)
           # Supports: Entra ID CBA (ClientAuth) + On-prem AD Smart Card (SmartCardLogon OID)
+          # NOTE: use_csr_sans=false allows backend to inject email SAN for Entra ID authentication
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-auth" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":true,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["ClientAuth"],"ext_key_usage_oids":["1.3.6.1.4.1.311.20.2.2"],"use_csr_common_name":true,"use_csr_sans":true,"allowed_uri_sans":true,"key_type":"any"}'
-          echo "  ✅ yubikey-piv-auth role created (with Smart Card Logon EKU)"
+            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":true,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["ClientAuth"],"ext_key_usage_oids":["1.3.6.1.4.1.311.20.2.2"],"use_csr_common_name":true,"use_csr_sans":false,"allowed_email_sans":true,"allowed_uri_sans":true,"key_type":"any"}'
+          echo "  ✅ yubikey-piv-auth role created (with Smart Card Logon EKU + Email SANs)"
           
           # yubikey-piv-code-signing role (for slot 9c - Code Signing)
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-code-signing" \
@@ -750,7 +780,7 @@ spec:
           
           echo ""
           echo "=== OpenBao Complete Setup Finished Successfully ==="
-          echo "OpenBao v2.4.1 is ready for use!"
+          echo "OpenBao v2.4.4 is ready for use!"
           echo ""
           echo "Security features enabled:"
           echo "  ✅ Static seal (auto-unseal by default)"

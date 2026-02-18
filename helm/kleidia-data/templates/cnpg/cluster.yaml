@@ -1,0 +1,149 @@
+{{- $useCNPG := eq (include "kleidia-data.useCNPG" .) "true" }}
+{{- if and .Values.postgres.enabled $useCNPG }}
+---
+# =============================================================================
+# CloudNativePG Cluster
+# =============================================================================
+# This creates a PostgreSQL cluster managed by the CNPG operator.
+# Features:
+#   - Automatic TLS with certificate hot-reload
+#   - Continuous WAL archiving to S3
+#   - Point-in-time recovery (PITR)
+#   - Automatic failover (when instances > 1)
+#
+# Prerequisites:
+#   - CNPG operator installed in cluster (requires K8s 1.32+)
+#   - cert-manager installed (for TLS)
+#   - S3 credentials configured via frontend (for backups)
+#
+# Kubernetes Version: {{ .Capabilities.KubeVersion.Version }}
+# CNPG Supported: {{ include "kleidia-data.cnpgSupported" . }}
+# =============================================================================
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: kleidia-db
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: postgres
+    app.kubernetes.io/name: kleidia-postgres
+    app.kubernetes.io/component: database
+spec:
+  # Number of PostgreSQL instances (default: 2 for HA when CNPG is used)
+  instances: {{ default 2 .Values.cnpg.instances }}
+  
+  # PostgreSQL image
+  imageName: {{ include "kleidia-data.thirdPartyImage" (dict "image" .Values.thirdPartyImages.cnpg "context" $) }}
+  
+  # PostgreSQL configuration
+  postgresql:
+    parameters:
+      {{- range $key, $value := .Values.cnpg.parameters }}
+      {{ $key }}: {{ $value | quote }}
+      {{- end }}
+    pg_hba:
+      # Allow connections from pod network with scram-sha-256 authentication
+      - host all all 10.0.0.0/8 scram-sha-256
+      - host all all 172.16.0.0/12 scram-sha-256
+      - host all all 192.168.0.0/16 scram-sha-256
+  
+  # Bootstrap configuration
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database }}
+      owner: {{ .Values.postgres.username }}
+      # CNPG auto-generates superuser secret: <cluster-name>-superuser
+  
+  # Storage configuration
+  storage:
+    size: {{ .Values.postgres.storage.size }}
+    storageClass: {{ .Values.storage.className }}
+  
+  # Resource configuration
+  resources:
+    requests:
+      memory: {{ .Values.cnpg.resources.requests.memory }}
+      cpu: {{ .Values.cnpg.resources.requests.cpu }}
+    limits:
+      memory: {{ .Values.cnpg.resources.limits.memory }}
+      cpu: {{ .Values.cnpg.resources.limits.cpu }}
+  
+  {{- if .Values.cnpg.tls.enabled }}
+  # TLS Configuration
+  # CNPG automatically manages certificates and performs hot-reload
+  {{- if .Values.cnpg.tls.certManager.enabled }}
+  certificates:
+    # Server certificate issued by cert-manager
+    serverTLSSecret: kleidia-db-server-tls
+    serverCASecret: kleidia-db-ca
+    # Client certificates for applications
+    clientCASecret: kleidia-db-ca
+    replicationTLSSecret: kleidia-db-replication-tls
+  {{- end }}
+  {{- end }}
+  
+  # Backup Configuration - Disabled by default
+  # Enable via backend API after configuring S3 credentials in OpenBao
+  # The backend dynamically patches the Cluster CR when backups are configured
+  # {{- if .Values.cnpg.backup.enabled }}
+  # backup:
+  #   barmanObjectStore:
+  #     destinationPath: "s3://bucket/path"
+  #     endpointURL: "https://s3.region.amazonaws.com"
+  #     s3Credentials:
+  #       accessKeyId:
+  #         name: {{ .Values.cnpg.backup.s3CredentialsSecret }}
+  #         key: AWS_ACCESS_KEY_ID
+  #       secretAccessKey:
+  #         name: {{ .Values.cnpg.backup.s3CredentialsSecret }}
+  #         key: AWS_SECRET_ACCESS_KEY
+  #       region:
+  #         name: {{ .Values.cnpg.backup.s3CredentialsSecret }}
+  #         key: AWS_REGION
+  #     wal:
+  #       compression: {{ .Values.cnpg.backup.walCompression }}
+  #     data:
+  #       compression: {{ .Values.cnpg.backup.dataCompression }}
+  #   retentionPolicy: {{ .Values.cnpg.backup.retentionPolicy | quote }}
+  # {{- end }}
+  
+  # Monitoring
+  monitoring:
+    enablePodMonitor: false  # Set to true if Prometheus Operator is installed
+  
+  # Node affinity (if configured)
+  {{- if .Values.global.nodeSelector }}
+  affinity:
+    nodeSelector:
+      {{- toYaml .Values.global.nodeSelector | nindent 6 }}
+  {{- end }}
+  
+  # Image pull secrets
+  {{- if .Values.global.imagePullSecrets }}
+  imagePullSecrets:
+  {{- range .Values.global.imagePullSecrets }}
+    - name: {{ . }}
+  {{- end }}
+  {{- else if .Values.global.registry.authSecret }}
+  imagePullSecrets:
+    - name: {{ .Values.global.registry.authSecret }}
+  {{- end }}
+---
+# Service for backwards compatibility (same name as legacy StatefulSet)
+# CNPG creates its own services (kleidia-db-rw, kleidia-db-r, kleidia-db-ro)
+# This alias ensures existing backend config works without changes
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: postgres
+    app.kubernetes.io/name: kleidia-postgres
+    app.kubernetes.io/component: database-alias
+spec:
+  type: ExternalName
+  # Point to CNPG read-write service
+  externalName: kleidia-db-rw.{{ .Values.global.namespace }}.svc.cluster.local
+{{- end }}
+

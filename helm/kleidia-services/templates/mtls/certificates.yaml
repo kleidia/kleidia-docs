@@ -1,0 +1,99 @@
+{{- if .Values.mtls.enabled }}
+# Backend mTLS Certificate
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: backend-mtls
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: backend
+    app.kubernetes.io/component: mtls-certificate
+spec:
+  secretName: backend-mtls-tls
+  duration: {{ .Values.mtls.certificateDuration | default "24h" }}
+  renewBefore: {{ .Values.mtls.renewBefore | default "4h" }}
+  issuerRef:
+    name: kleidia-mtls-issuer
+    kind: Issuer
+    group: cert-manager.io
+  commonName: backend.{{ .Values.global.namespace }}.svc.cluster.local
+  dnsNames:
+    - backend
+    - backend.{{ .Values.global.namespace }}
+    - backend.{{ .Values.global.namespace }}.svc
+    - backend.{{ .Values.global.namespace }}.svc.cluster.local
+  usages:
+    - server auth
+    - client auth
+    - digital signature
+    - key encipherment
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+---
+# License Service mTLS Certificate
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: license-service-mtls
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: license-service
+    app.kubernetes.io/component: mtls-certificate
+spec:
+  secretName: license-service-mtls-tls
+  duration: {{ .Values.mtls.certificateDuration | default "24h" }}
+  renewBefore: {{ .Values.mtls.renewBefore | default "4h" }}
+  issuerRef:
+    name: kleidia-mtls-issuer
+    kind: Issuer
+  commonName: license-service.{{ .Values.global.namespace }}.svc.cluster.local
+  dnsNames:
+    - license-service
+    - license-service.{{ .Values.global.namespace }}
+    - license-service.{{ .Values.global.namespace }}.svc
+    - license-service.{{ .Values.global.namespace }}.svc.cluster.local
+  usages:
+    - server auth
+    - client auth
+    - digital signature
+    - key encipherment
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+---
+# Frontend mTLS Certificate (internal communication)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: frontend-mtls
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: frontend
+    app.kubernetes.io/component: mtls-certificate
+spec:
+  secretName: frontend-mtls-tls
+  duration: {{ .Values.mtls.certificateDuration | default "24h" }}
+  renewBefore: {{ .Values.mtls.renewBefore | default "4h" }}
+  issuerRef:
+    name: kleidia-mtls-issuer
+    kind: Issuer
+  commonName: frontend.{{ .Values.global.namespace }}.svc.cluster.local
+  dnsNames:
+    - frontend
+    - frontend.{{ .Values.global.namespace }}
+    - frontend.{{ .Values.global.namespace }}.svc
+    - frontend.{{ .Values.global.namespace }}.svc.cluster.local
+  usages:
+    - server auth
+    - client auth
+    - digital signature
+    - key encipherment
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+{{- end }}
+

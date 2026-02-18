@@ -1,0 +1,181 @@
+{{- if or .Values.dependencies.certManager.install .Values.dependencies.cnpg.install }}
+# =============================================================================
+# Dependency Installer (pre-install hook)
+# =============================================================================
+# Conditionally installs cert-manager and/or CNPG operator if they are not
+# already present in the cluster. Checks for existing CRDs before installing.
+#
+# This runs before all other hooks (weight -25) to ensure CRDs are available
+# when the rest of the platform chart templates are processed.
+# =============================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kleidia-dependency-installer
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: kleidia-dependency-installer
+    component: platform
+  annotations:
+    helm.sh/hook: pre-install
+    helm.sh/hook-weight: "-25"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 120
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      name: kleidia-dependency-installer
+    spec:
+      serviceAccountName: kleidia-dependency-installer
+      restartPolicy: OnFailure
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- else if .Values.global.registry.authSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.registry.authSecret }}
+      {{- end }}
+      containers:
+      - name: installer
+        image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}{{ .Values.thirdPartyImages.kubectl }}
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          echo "============================================"
+          echo "  Kleidia Dependency Installer"
+          echo "============================================"
+
+          {{- if .Values.dependencies.certManager.install }}
+          # ==================================================================
+          # cert-manager
+          # ==================================================================
+          echo ""
+          echo "--- cert-manager ---"
+          if kubectl get crd issuers.cert-manager.io >/dev/null 2>&1; then
+            echo "✅ cert-manager CRDs already exist, skipping installation"
+
+            # Verify pods are actually running
+            if kubectl get pods -n cert-manager -l app.kubernetes.io/instance=cert-manager 2>/dev/null | grep -q Running; then
+              echo "✅ cert-manager pods are running"
+            else
+              echo "⚠️  cert-manager CRDs exist but pods not found in cert-manager namespace"
+              echo "   This may be fine if cert-manager is installed in a different namespace"
+            fi
+          else
+            echo "cert-manager not found, installing {{ .Values.dependencies.certManager.version }}..."
+            kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/{{ .Values.dependencies.certManager.version }}/cert-manager.yaml
+
+            echo "Waiting for cert-manager to be ready..."
+            # Wait for the CRDs to be established
+            i=0
+            while [ $i -lt 60 ]; do
+              i=$((i + 1))
+              if kubectl get crd issuers.cert-manager.io >/dev/null 2>&1 && \
+                 kubectl get crd certificates.cert-manager.io >/dev/null 2>&1 && \
+                 kubectl get crd clusterissuers.cert-manager.io >/dev/null 2>&1; then
+                echo "  CRDs established"
+                break
+              fi
+              echo "  Waiting for CRDs... ($i/60)"
+              sleep 2
+            done
+
+            # Wait for cert-manager deployments to be ready
+            echo "Waiting for cert-manager deployments..."
+            kubectl wait --for=condition=Available deployment/cert-manager -n cert-manager --timeout=180s
+            kubectl wait --for=condition=Available deployment/cert-manager-cainjector -n cert-manager --timeout=180s
+            kubectl wait --for=condition=Available deployment/cert-manager-webhook -n cert-manager --timeout=180s
+
+            # Wait for webhook to be fully operational (it needs its self-signed CA)
+            echo "Waiting for cert-manager webhook to become operational..."
+            i=0
+            while [ $i -lt 30 ]; do
+              i=$((i + 1))
+              if kubectl get validatingwebhookconfigurations cert-manager-webhook >/dev/null 2>&1; then
+                # Try a dry-run create to verify the webhook actually responds
+                if echo '{"apiVersion":"cert-manager.io/v1","kind":"Issuer","metadata":{"name":"test-webhook","namespace":"default"},"spec":{"selfSigned":{}}}' | \
+                   kubectl apply --dry-run=server -f - >/dev/null 2>&1; then
+                  echo "  Webhook is operational"
+                  break
+                fi
+              fi
+              echo "  Webhook not ready yet ($i/30)..."
+              sleep 5
+            done
+
+            # Final verification
+            if kubectl get crd issuers.cert-manager.io >/dev/null 2>&1; then
+              echo "✅ cert-manager {{ .Values.dependencies.certManager.version }} installed successfully"
+            else
+              echo "❌ cert-manager installation failed"
+              exit 1
+            fi
+          fi
+          {{- end }}
+
+          {{- if .Values.dependencies.cnpg.install }}
+          # ==================================================================
+          # CloudNativePG Operator
+          # ==================================================================
+          echo ""
+          echo "--- CloudNativePG Operator ---"
+          if kubectl get crd clusters.postgresql.cnpg.io >/dev/null 2>&1; then
+            echo "✅ CNPG CRDs already exist, skipping installation"
+
+            # Verify operator pods are running
+            if kubectl get pods -n cnpg-system -l app.kubernetes.io/name=cloudnative-pg 2>/dev/null | grep -q Running; then
+              echo "✅ CNPG operator pods are running"
+            else
+              echo "⚠️  CNPG CRDs exist but operator pods not found in cnpg-system namespace"
+              echo "   This may be fine if the operator is installed in a different namespace"
+            fi
+          else
+            echo "CNPG operator not found, installing..."
+
+            # Create namespace if it doesn't exist
+            kubectl get namespace cnpg-system >/dev/null 2>&1 || kubectl create namespace cnpg-system
+
+            # Install CNPG operator using the release manifest
+            # URL format: release-MAJOR.MINOR branch, cnpg-FULL_VERSION.yaml
+            {{- $cnpgVersion := .Values.dependencies.cnpg.version }}
+            {{- $cnpgBranch := regexReplaceAll "\\.[0-9]+$" $cnpgVersion "" }}
+            echo "Applying CNPG operator manifest (branch: release-{{ $cnpgBranch }}, version: {{ $cnpgVersion }})..."
+            kubectl apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-{{ $cnpgBranch }}/releases/cnpg-{{ $cnpgVersion }}.yaml
+
+            echo "Waiting for CNPG operator to be ready..."
+            # Wait for CRDs
+            i=0
+            while [ $i -lt 60 ]; do
+              i=$((i + 1))
+              if kubectl get crd clusters.postgresql.cnpg.io >/dev/null 2>&1; then
+                echo "  CRDs established"
+                break
+              fi
+              echo "  Waiting for CRDs... ($i/60)"
+              sleep 2
+            done
+
+            # Wait for operator deployment
+            kubectl wait --for=condition=Available deployment -n cnpg-system -l app.kubernetes.io/name=cloudnative-pg --timeout=120s 2>/dev/null || true
+
+            # Final verification
+            if kubectl get crd clusters.postgresql.cnpg.io >/dev/null 2>&1; then
+              echo "✅ CNPG operator {{ .Values.dependencies.cnpg.version }} installed successfully"
+            else
+              echo "❌ CNPG operator installation failed"
+              exit 1
+            fi
+          fi
+          {{- end }}
+
+          echo ""
+          echo "============================================"
+          echo "  ✅ All dependencies satisfied"
+          echo "============================================"
+{{- end }}

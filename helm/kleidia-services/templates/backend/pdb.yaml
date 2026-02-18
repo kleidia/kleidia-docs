@@ -1,0 +1,17 @@
+{{- if gt (int .Values.backend.replicas) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend-pdb
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: backend
+spec:
+  # Ensure at least one backend pod is always available during disruptions
+  # This prevents downtime during rolling updates, node drains, or certificate rotations
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: backend
+{{- end }}
+

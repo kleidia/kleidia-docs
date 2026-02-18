@@ -10,7 +10,10 @@ global:
 # Third-party image repositories (can be mirrored to private registry for air-gapped deployments)
 # When global.registry.host is set, these images will be pulled from: <registry.host>/<repository>:<tag>
 thirdPartyImages:
-  postgres: "postgres:18-alpine"     # PostgreSQL database image
+  postgres: "postgres:18.1-alpine"   # PostgreSQL database image (used for legacy mode)
+  # CNPG PostgreSQL image - uses default from CNPG v1.28.0 (Dec 2025)
+  # See: https://github.com/cloudnative-pg/cloudnative-pg/releases/tag/v1.28.0
+  cnpg: "ghcr.io/cloudnative-pg/postgresql:18.1"  # PostgreSQL 18.1 (CNPG default)
 
 # =============================================================================
 # STORAGE CONFIGURATION
@@ -23,12 +26,113 @@ storage:
   className: "local-path"      # StorageClass name for PostgreSQL PVC
                                # Must match kleidia-platform storage.className
 
+# =============================================================================
+# POSTGRESQL CONFIGURATION
+# =============================================================================
+# Two modes available:
+#   1. cnpg.enabled=true (recommended) - CloudNativePG operator with auto TLS, backups, HA
+#   2. cnpg.enabled=false - Simple StatefulSet (legacy, no TLS, no auto backup)
+# =============================================================================
 postgres:
-  enabled: true
-  version: "18"               # PostgreSQL version
+  enabled: true               # Enable PostgreSQL (set to false only if using external DB)
   database: kleidia           # Database name
-  username: kleidiauser       # Database user (password is stored in a secret)
+  username: kleidiauser       # Database user
   storage:
-    size: 10Gi               # PVC size for Postgres data
+    size: 10Gi                # PVC size for Postgres data
 
-# Agents now communicate via HTTPS on localhost (frontend-mediated)
+# =============================================================================
+# CLOUDNATIVEPG CONFIGURATION (Recommended for K8s 1.32+)
+# =============================================================================
+# CloudNativePG v1.28.0 provides:
+#   - Automatic TLS with cert-manager integration
+#   - Certificate hot-reload (no pod restarts needed)
+#   - Continuous WAL archiving to S3
+#   - Point-in-time recovery (PITR)
+#   - High availability with automatic failover (2-node cluster by default)
+#
+# AUTOMATIC MODE SELECTION:
+#   - Kubernetes >= 1.32: CNPG operator is used (2-node HA cluster)
+#   - Kubernetes < 1.32:  Legacy StatefulSet is used (single node, no HA, no TLS)
+#   - Set cnpg.enabled=false to force legacy mode on any K8s version
+#
+# Prerequisites (for K8s 1.32+):
+#   1. CNPG operator is installed by kleidia-platform chart
+#   2. Configure S3 backup credentials via frontend UI (stored in OpenBao)
+#
+# Supported versions (CNPG v1.28.0):
+#   - Kubernetes: 1.32, 1.33, 1.34
+#   - PostgreSQL: 14, 15, 16, 17, 18 (default: 18.1)
+#
+# See: https://github.com/cloudnative-pg/cloudnative-pg/releases/tag/v1.28.0
+# =============================================================================
+cnpg:
+  enabled: true               # Auto-detect: true=use CNPG if K8s>=1.33, false=force legacy mode
+  
+  # PostgreSQL version (CNPG v1.28.0 default: 18.1)
+  version: "18"
+  
+  # Number of instances (2 = HA with automatic failover, default when CNPG is used)
+  # Set to 1 for single-node or 3 for higher availability
+  instances: 2
+  
+  # PostgreSQL configuration parameters
+  parameters:
+    shared_buffers: "256MB"
+    max_connections: "100"
+    effective_cache_size: "512MB"
+    work_mem: "16MB"
+    maintenance_work_mem: "64MB"
+  
+  # TLS Configuration
+  # When enabled, CNPG automatically manages certificates via cert-manager.
+  # Requires kleidia-mtls-issuer (created by kleidia-platform chart post-install hook).
+  tls:
+    enabled: true
+    # Use cert-manager to issue certificates (recommended)
+    certManager:
+      enabled: true
+      issuerRef:
+        name: kleidia-mtls-issuer
+        kind: Issuer
+    # Certificate duration and renewal
+    duration: "8760h"         # 1 year
+    renewBefore: "720h"       # 30 days before expiry
+  
+  # Backup Configuration
+  # Backups are managed via frontend UI which stores S3 credentials in OpenBao
+  # The backend creates the backup secret and CNPG uses it
+  # NOTE: Enable after S3 credentials are configured via frontend
+  backup:
+    enabled: false
+    # S3 credentials secret name (created by backend from OpenBao)
+    s3CredentialsSecret: "cnpg-backup-s3-credentials"
+    # Destination path prefix in S3 bucket
+    destinationPrefix: "cnpg"
+    # Retention policy
+    retentionPolicy: "30d"
+    # WAL compression
+    walCompression: gzip
+    # Data compression
+    dataCompression: gzip
+  
+  # Resource configuration
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+# =============================================================================
+# SCHEDULED BACKUP CONFIGURATION
+# =============================================================================
+# Schedule is configured via frontend UI and stored in a ConfigMap
+# The backend updates this ConfigMap when schedule changes
+# =============================================================================
+scheduledBackup:
+  enabled: true
+  # Default schedule (can be overridden via UI)
+  schedule: "0 2 * * *"       # Daily at 2 AM
+  # Backup owner reference (for garbage collection)
+  backupOwnerReference: self

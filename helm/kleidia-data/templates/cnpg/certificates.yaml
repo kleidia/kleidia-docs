@@ -1,0 +1,147 @@
+{{- $useCNPG := eq (include "kleidia-data.useCNPG" .) "true" }}
+{{- if and .Values.postgres.enabled $useCNPG .Values.cnpg.tls.enabled .Values.cnpg.tls.certManager.enabled }}
+---
+# =============================================================================
+# CNPG Server TLS Certificate
+# =============================================================================
+# Issued by cert-manager for PostgreSQL server
+# CNPG automatically hot-reloads certificates when renewed
+# =============================================================================
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kleidia-db-server-tls
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: postgres
+    app.kubernetes.io/component: tls-certificate
+spec:
+  secretName: kleidia-db-server-tls
+  duration: {{ .Values.cnpg.tls.duration }}
+  renewBefore: {{ .Values.cnpg.tls.renewBefore }}
+  issuerRef:
+    name: {{ .Values.cnpg.tls.certManager.issuerRef.name }}
+    kind: {{ .Values.cnpg.tls.certManager.issuerRef.kind }}
+  commonName: kleidia-db
+  dnsNames:
+    # CNPG service names
+    - kleidia-db-rw
+    - kleidia-db-r
+    - kleidia-db-ro
+    - kleidia-db-rw.{{ .Values.global.namespace }}
+    - kleidia-db-r.{{ .Values.global.namespace }}
+    - kleidia-db-ro.{{ .Values.global.namespace }}
+    - kleidia-db-rw.{{ .Values.global.namespace }}.svc
+    - kleidia-db-r.{{ .Values.global.namespace }}.svc
+    - kleidia-db-ro.{{ .Values.global.namespace }}.svc
+    - kleidia-db-rw.{{ .Values.global.namespace }}.svc.cluster.local
+    - kleidia-db-r.{{ .Values.global.namespace }}.svc.cluster.local
+    - kleidia-db-ro.{{ .Values.global.namespace }}.svc.cluster.local
+    # Legacy alias
+    - postgres
+    - postgres.{{ .Values.global.namespace }}
+    - postgres.{{ .Values.global.namespace }}.svc
+    - postgres.{{ .Values.global.namespace }}.svc.cluster.local
+    # Pod DNS names
+    - "*.kleidia-db"
+    - "*.kleidia-db.{{ .Values.global.namespace }}"
+  usages:
+    - server auth
+    - client auth
+    - digital signature
+    - key encipherment
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+---
+# =============================================================================
+# CNPG Replication TLS Certificate
+# =============================================================================
+# Used for streaming replication between PostgreSQL instances
+# =============================================================================
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kleidia-db-replication-tls
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: postgres
+    app.kubernetes.io/component: tls-certificate
+spec:
+  secretName: kleidia-db-replication-tls
+  duration: {{ .Values.cnpg.tls.duration }}
+  renewBefore: {{ .Values.cnpg.tls.renewBefore }}
+  issuerRef:
+    name: {{ .Values.cnpg.tls.certManager.issuerRef.name }}
+    kind: {{ .Values.cnpg.tls.certManager.issuerRef.kind }}
+  commonName: streaming_replica
+  usages:
+    - client auth
+    - digital signature
+    - key encipherment
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+---
+# =============================================================================
+# CNPG CA Certificate
+# =============================================================================
+# CA certificate for client verification
+# =============================================================================
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kleidia-db-ca
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: postgres
+    app.kubernetes.io/component: tls-ca
+spec:
+  secretName: kleidia-db-ca
+  duration: {{ .Values.cnpg.tls.duration }}
+  renewBefore: {{ .Values.cnpg.tls.renewBefore }}
+  issuerRef:
+    name: {{ .Values.cnpg.tls.certManager.issuerRef.name }}
+    kind: {{ .Values.cnpg.tls.certManager.issuerRef.kind }}
+  commonName: kleidia-db-ca
+  isCA: false  # Not a CA, just the issuer CA cert
+  usages:
+    - cert sign
+    - crl sign
+  privateKey:
+    algorithm: RSA
+    size: 2048
+---
+# =============================================================================
+# CNPG Client Certificate for Backend
+# =============================================================================
+# Used by backend to connect to PostgreSQL with mTLS
+# =============================================================================
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kleidia-db-client-tls
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: backend
+    app.kubernetes.io/component: tls-certificate
+spec:
+  secretName: kleidia-db-client-tls
+  duration: {{ .Values.cnpg.tls.duration }}
+  renewBefore: {{ .Values.cnpg.tls.renewBefore }}
+  issuerRef:
+    name: {{ .Values.cnpg.tls.certManager.issuerRef.name }}
+    kind: {{ .Values.cnpg.tls.certManager.issuerRef.kind }}
+  commonName: {{ .Values.postgres.username }}
+  usages:
+    - client auth
+    - digital signature
+    - key encipherment
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+{{- end }}
+

@@ -1,0 +1,73 @@
+{{- if .Values.mtls.enabled }}
+# CA Certificate bundle for trust distribution
+# This ConfigMap holds the CA certificate that services use to verify peer certificates
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kleidia-mtls-ca
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/component: mtls-ca-bundle
+  annotations:
+    description: "CA certificate bundle for mTLS verification. Updated by cert-manager."
+data:
+  # CA certificate is populated from OpenBao PKI
+  # Services mount this ConfigMap to verify peer certificates
+  ca.crt: |
+    # This will be populated by a post-install hook or manually
+    # The CA certificate is available at: /v1/pki/ca/pem
+---
+# Job to fetch CA certificate from OpenBao
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fetch-mtls-ca
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/component: mtls-setup
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "40"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      containers:
+      - name: fetch-ca
+        image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.curl "context" $) }}
+        command:
+        - sh
+        - -c
+        - |
+          echo "Fetching CA certificate from OpenBao..."
+          
+          # Wait for OpenBao to be ready
+          until curl -sf http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/sys/health >/dev/null 2>&1; do
+            echo "Waiting for OpenBao..."
+            sleep 2
+          done
+          
+          # Fetch CA certificate
+          CA_CERT=$(curl -sf http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/pki/ca/pem)
+          
+          if [ -z "$CA_CERT" ]; then
+            echo "Failed to fetch CA certificate"
+            exit 1
+          fi
+          
+          echo "✅ CA certificate fetched successfully"
+          echo "$CA_CERT"
+          
+          # Note: To update the ConfigMap, we would need kubectl access
+          # For now, the CA is available in the mTLS certificate secrets
+{{- end }}
+

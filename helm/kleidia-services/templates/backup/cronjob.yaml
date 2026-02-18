@@ -46,8 +46,7 @@ spec:
           - name: tmp
             emptyDir: {}
           containers:
-          # Database backup container
-          # Note: postgres images should include pg_dump and gzip
+          # Database backup container - uses postgres with pg_dump
           - name: db-backup
             image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.postgres "context" $) }}
             securityContext:
@@ -71,7 +70,7 @@ spec:
               INTERNAL_TOKEN="${BACKUP_RUNNER_TOKEN}"
               
               # Get presigned URL for database backup
-              # Using wget with JSON parsing via shell
+              # Using wget with JSON parsing via shell (no jq in minimal images)
               echo "Requesting presigned URL for database backup..."
               PRESIGN_RESPONSE=$(wget -q -O - --post-data="" --header="X-Internal-Token: ${INTERNAL_TOKEN}" \
                 "${BACKEND_URL}/api/admin/system/backup/presign?type=db" 2>/dev/null || echo "{}")
@@ -135,7 +134,6 @@ spec:
                 cpu: "500m"
           
           # Vault backup container (only if enabled)
-          # Using hashicorp/vault image for Vault backups
           # Note: vault container needs to install packages, so readOnlyRootFilesystem is disabled
           {{- if .Values.backup.enableVaultBackup }}
           - name: vault-backup

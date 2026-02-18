@@ -1,0 +1,15 @@
+{{- if .Values.mtls.enabled }}
+# =============================================================================
+# mTLS Issuer Reference (NOT a definition)
+# =============================================================================
+# The kleidia-mtls-issuer Issuer and cert-manager-sa ServiceAccount are
+# created by the kleidia-platform chart (post-install hook).
+#
+# This file is intentionally empty of resource definitions.
+# The mTLS Certificate resources in certificates.yaml reference
+# kleidia-mtls-issuer by name, which must already exist.
+#
+# If you see "issuer not found" errors, ensure kleidia-platform was
+# installed first and its post-install hooks completed successfully.
+# =============================================================================
+{{- end }}

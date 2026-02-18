@@ -1,0 +1,81 @@
+{{- $useCNPG := eq (include "kleidia-data.useCNPG" .) "true" }}
+{{- if and .Values.postgres.enabled $useCNPG .Values.cnpg.backup.enabled .Values.scheduledBackup.enabled }}
+---
+# =============================================================================
+# CNPG Scheduled Backup
+# =============================================================================
+# Automatically backs up the database on a schedule.
+# Schedule can be modified via:
+#   1. Frontend UI → Backend API → Kubernetes API
+#   2. Direct kubectl patch
+#
+# The backend monitors the cnpg-backup-config ConfigMap and updates
+# this ScheduledBackup resource when configuration changes.
+# =============================================================================
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: kleidia-db-scheduled
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: postgres
+    app.kubernetes.io/name: kleidia-postgres
+    app.kubernetes.io/component: scheduled-backup
+  annotations:
+    # Backend updates this resource when schedule changes via UI
+    kleidia.io/managed-by: backend
+spec:
+  # Schedule in cron format
+  # Default: daily at 2 AM
+  # Can be updated via frontend UI
+  schedule: {{ .Values.scheduledBackup.schedule | quote }}
+  
+  # Reference to the cluster
+  cluster:
+    name: kleidia-db
+  
+  # Backup owner reference for garbage collection
+  backupOwnerReference: {{ .Values.scheduledBackup.backupOwnerReference }}
+  
+  # Immediate backup on creation (disabled by default)
+  immediate: false
+  
+  # Suspend scheduled backups (can be toggled via UI)
+  suspend: false
+---
+# =============================================================================
+# CNPG Backup Configuration ConfigMap
+# =============================================================================
+# This ConfigMap stores backup configuration that can be modified via the
+# frontend UI. The backend reads this and updates CNPG resources accordingly.
+#
+# Fields:
+#   - schedule: Cron expression for scheduled backups
+#   - enabled: Whether scheduled backups are enabled
+#   - retention_days: How long to keep backups
+#   - destination_path: S3 path for backups
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cnpg-backup-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: postgres
+    app.kubernetes.io/component: backup-config
+  annotations:
+    kleidia.io/managed-by: backend
+data:
+  # Backup schedule (cron format)
+  schedule: {{ .Values.scheduledBackup.schedule | quote }}
+  # Whether backups are enabled
+  enabled: "true"
+  # Retention period in days
+  retention_days: "30"
+  # S3 destination path (set by backend from OpenBao config)
+  destination_path: ""
+  # Last backup status (updated by backend after checking CNPG status)
+  last_backup_status: "unknown"
+  last_backup_time: ""
+{{- end }}
+

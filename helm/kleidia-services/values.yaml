@@ -19,7 +19,7 @@ global:
 # Third-party image repositories (can be mirrored to private registry for air-gapped deployments)
 # When global.registry.host is set, these images will be pulled from: <registry.host>/<repository>:<tag>
 thirdPartyImages:
-  postgres: "postgres:18-alpine"     # Used for database backups and health checks
+  postgres: "postgres:18.1-alpine"   # Used for database backups (includes pg_dump)
   curl: "curlimages/curl:latest"     # Used for service health checks
   vault: "hashicorp/vault:latest"    # Used for vault backups (if enabled)
 
@@ -48,7 +48,7 @@ licenseService:
   enabled: true                 # Enable the license service pod (optional, backend falls back to TRIAL if disabled)
   replicas: 2                   # Horizontal scaling for high availability
   image: therinn/kleidia:license-latest  # License service image (garble-obfuscated)
-  imagePullPolicy: IfNotPresent # Use IfNotPresent to avoid pull errors if image doesn't exist
+  imagePullPolicy: Always       # Always pull to ensure latest image
   resources:
     requests:
       memory: "32Mi"            # Minimal memory footprint
@@ -63,4 +63,52 @@ backup:
   schedule: "0 2 * * *"        # Cron schedule for backups (default: daily at 2 AM)
   suspend: false                # Set to true to disable scheduled backups
   enableVaultBackup: true      # Include Vault Raft snapshot in backups
+
+# =============================================================================
+# SECURITY AUTOMATION
+# =============================================================================
+
+# External Secrets Operator configuration
+# Syncs secrets from OpenBao to Kubernetes Secrets automatically
+externalSecrets:
+  enabled: false                # Set to true to enable ESO integration
+                                # Requires ESO to be installed in cluster:
+                                # helm install external-secrets external-secrets/external-secrets -n external-secrets --create-namespace
+  refreshInterval: "1h"         # How often to sync secrets from OpenBao (default: 1 hour)
+
+# Mutual TLS configuration for inter-service communication
+# When enabled, all services communicate over HTTPS with certificate verification
+mtls:
+  enabled: true                 # mTLS enabled by default for security
+                                # Requires: 1) cert-manager installed in cluster
+                                #           2) kleidia-platform deployed with OpenBao initialized
+                                # Set to false only for development/testing without TLS
+  openbaoTLS: false             # Set to true if OpenBao uses TLS (matches openbao.internalTLS.enabled)
+  
+  # Certificate lifecycle
+  certificateDuration: "24h"    # How long certificates are valid
+  renewBefore: "4h"             # Renew certificates this long before expiry
+  
+  # TLS security settings
+  minVersion: "1.3"             # Minimum TLS version (TLS 1.3 required for security)
+  clientAuth: "require"         # Client auth mode: require, request, optional
+
+# =============================================================================
+# DATABASE TLS CONFIGURATION
+# =============================================================================
+# When CNPG is deployed with TLS enabled (kleidia-data chart), the backend
+# can connect to PostgreSQL using TLS encryption and client certificates.
+# This is automatically detected based on the existence of the client cert secret.
+#
+# NOTE: This only works with CNPG (K8s 1.32+). Legacy PostgreSQL does not support TLS.
+# =============================================================================
+database:
+  tls:
+    enabled: true               # Enable TLS for PostgreSQL connections
+                                # Requires: kleidia-db-client-tls secret from kleidia-data chart
+                                # If secret doesn't exist, falls back to non-TLS connection
+    sslMode: "verify-full"      # PostgreSQL SSL mode: disable, require, verify-ca, verify-full
+                                # verify-full: verify server cert and hostname (most secure)
+    clientCertSecret: "kleidia-db-client-tls"  # Secret containing client certificate
+    caSecret: "kleidia-db-ca"   # Secret containing CA certificate
 

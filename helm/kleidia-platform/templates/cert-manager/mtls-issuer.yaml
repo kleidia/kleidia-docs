@@ -1,0 +1,59 @@
+{{- if .Values.openbao.enabled }}
+# =============================================================================
+# Vault Issuer for mTLS Certificates (Single Source of Truth)
+# =============================================================================
+# Issues certificates from OpenBao PKI for inter-service mTLS.
+# This is the ONLY definition of kleidia-mtls-issuer across all charts.
+# Consumed by:
+#   - kleidia-data: CNPG PostgreSQL TLS certificates
+#   - kleidia-services: Backend/Frontend/License-Service mTLS certificates
+#
+# Created as a post-install hook so OpenBao PKI is ready first (weight 5).
+# Uses before-hook-creation only -- resource must persist for other charts.
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cert-manager-sa
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/component: mtls-issuer
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "9"
+    helm.sh/hook-delete-policy: before-hook-creation
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: kleidia-mtls-issuer
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/component: mtls-issuer
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    # Create after OpenBao is configured (post-install hook runs at weight 5)
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  vault:
+    {{- if .Values.openbao.internalTLS.enabled }}
+    server: "https://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200"
+    caBundle: ""
+    caBundleSecretRef:
+      name: openbao-internal-ca-tls
+      key: ca.crt
+    {{- else }}
+    server: "http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200"
+    {{- end }}
+    path: pki/sign/kleidia-component
+    auth:
+      kubernetes:
+        mountPath: /v1/auth/kubernetes
+        role: cert-manager
+        serviceAccountRef:
+          name: cert-manager-sa
+{{- end }}
+
