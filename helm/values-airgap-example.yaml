@@ -44,7 +44,7 @@ kleidia-platform:
       image:
         registry: ""  # Empty = use global.registry.host
         repository: "openbao/openbao"
-        tag: "2.4.1"
+        tag: "2.4.4"
     pki:
       mode: root
       rootCA:
@@ -65,7 +65,7 @@ kleidia-data:
   
   postgres:
     enabled: true
-    version: "15"
+    version: "18"
     database: kleidia
     username: kleidiauser
     storage:
@@ -128,18 +128,16 @@ kleidia-services:
 #    Run: ./mirror-images.sh registry.example.com:5000
 #    
 #    Or manually mirror these images:
-#    - quay.io/openbao/openbao:2.4.1
-#    - postgres:15-alpine
-#    - postgres:16-alpine
-#    - postgres:15
+#    - quay.io/openbao/openbao:2.4.4
+#    - ghcr.io/cloudnative-pg/postgresql:18.1
+#    - postgres:18.1-alpine
 #    - curlimages/curl:latest
-#    - hashicorp/vault:latest
 #    - rancher/local-path-provisioner:v0.0.24
 #    - alpine:latest
 #    - busybox:latest
-#    - yubimgr-backend:latest
-#    - yubimgr-frontend:latest
-#    - yubimgr-license:latest
+#    - kleidia-backend:latest
+#    - kleidia-frontend:latest
+#    - kleidia-license:latest
 #
 # 2. CREATE REGISTRY SECRET (if authentication required)
 #    kubectl create secret docker-registry regcred \

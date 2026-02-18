@@ -341,7 +341,7 @@ Monitor these metrics:
 Relational database for application data, user accounts, and audit logs.
 
 ### Technology
-- **Database**: PostgreSQL 15
+- **Database**: PostgreSQL 18
 - **ORM**: GORM (from Go backend)
 - **Storage**: Persistent volumes in Kubernetes
 

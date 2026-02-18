@@ -154,7 +154,7 @@
 ### PostgreSQL Database
 
 **Location**: Kubernetes cluster (StatefulSet with persistent storage)  
-**Technology**: PostgreSQL 15  
+**Technology**: PostgreSQL 18  
 **Responsibilities**:
 - User accounts and authentication
 - YubiKey device registration
