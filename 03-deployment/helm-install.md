@@ -95,7 +95,9 @@ Replace `nfs-client` with your cluster's StorageClass name (e.g., `longhorn`, `g
 **What this installs**:
 - OpenBao (Vault) with persistent storage
 - Local path provisioner (if enabled)
-- Vault configuration hooks with AppRole authentication
+- OpenBao configuration hooks with AppRole authentication
+
+> **Note**: The platform chart automatically installs **cert-manager v1.17.1** and the **CloudNativePG operator v1.28.1** if they are not already present in your cluster. If these operators are already installed, they will not be modified or upgraded.
 
 **Wait for**: OpenBao to be ready and unsealed (5-10 minutes)
 
@@ -142,13 +144,16 @@ helm install kleidia-data ./helm/kleidia-data \
 
 #### Step 3: Install Services (Backend, Frontend)
 
+> **Important**: You must set `global.siteUrl` to your public-facing URL. This configures CORS origins for the bootstrap flow (admin account creation) and OIDC redirect URIs. If omitted, it defaults to `https://<global.domain>`.
+
 **Basic Installation:**
 
 ```bash
 helm install kleidia-services ./helm/kleidia-services \
   --namespace kleidia \
   --set global.domain=kleidia.example.com \
-  --set global.namespace=kleidia
+  --set global.namespace=kleidia \
+  --set global.siteUrl=https://kleidia.example.com
 ```
 
 **With Database TLS (CloudNativePG, Kubernetes 1.32+):**
@@ -191,7 +196,7 @@ kubectl get services -n kleidia
 kubectl get pvc -n kleidia
 
 # Check OpenBao status
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 ```
 
 ### 5. Configure External Load Balancer
@@ -328,7 +333,7 @@ kubectl describe pod <pod-name> -n kleidia
 
 ```bash
 # Check OpenBao status
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 
 # If sealed, check auto-unseal configuration
 kubectl logs kleidia-platform-openbao-0 -n kleidia | grep -i unseal

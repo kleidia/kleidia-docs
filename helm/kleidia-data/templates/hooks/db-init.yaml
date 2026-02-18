@@ -46,9 +46,9 @@
 # - Optimized for 10% active agent scenarios
 
 # VERIFICATION:
-# kubectl exec postgres-0 -n kleidia -- psql -U yubiuser -d kleidia -c '\dt'
+# kubectl exec postgres-0 -n kleidia -- psql -U kleidiauser -d kleidia -c '\dt'
 # Expected: 16 tables total
-# kubectl exec postgres-0 -n kleidia -- psql -U yubiuser -d kleidia -c '\di'
+# kubectl exec postgres-0 -n kleidia -- psql -U kleidiauser -d kleidia -c '\di'
 # Expected: 25+ indexes for optimal performance
 # ============================================================================
 apiVersion: batch/v1

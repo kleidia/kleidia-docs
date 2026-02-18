@@ -26,11 +26,11 @@ Before upgrading:
 ```bash
 # Backup database
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  pg_dumpall -U yubiuser > backup-$(date +%Y%m%d).sql
+  pg_dumpall -U kleidiauser > backup-$(date +%Y%m%d).sql
 
 # Backup Vault
 kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  vault operator raft snapshot save /tmp/vault-backup.snap
+  bao operator raft snapshot save /tmp/vault-backup.snap
 
 kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \
   ./vault-backup-$(date +%Y%m%d).snap -n kleidia
@@ -63,7 +63,7 @@ helm upgrade kleidia-platform ./helm/kleidia-platform \
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=openbao -n kleidia --timeout=300s
 
 # Verify OpenBao status
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 ```
 
 ### 4. Upgrade Data Layer (PostgreSQL)
@@ -79,7 +79,7 @@ kubectl wait --for=condition=ready pod -l app=postgres-cluster -n kleidia --time
 
 # Verify database
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT version();"
+  psql -U kleidiauser -d kleidia -c "SELECT version();"
 ```
 
 ### 5. Upgrade Services (Backend, Frontend)
@@ -120,7 +120,7 @@ helm rollback kleidia-services 2 -n kleidia
 helm rollback kleidia-platform -n kleidia
 
 # Verify OpenBao
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 ```
 
 ### Rollback Data Layer
@@ -133,7 +133,7 @@ helm rollback kleidia-data -n kleidia
 
 # Verify database
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT version();"
+  psql -U kleidiauser -d kleidia -c "SELECT version();"
 ```
 
 ## Upgrade Strategies
@@ -201,7 +201,7 @@ curl https://kleidia.example.com/api/health | jq .version
 
 # Check database version
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT version();"
+  psql -U kleidiauser -d kleidia -c "SELECT version();"
 ```
 
 ### Compatibility Matrix
@@ -246,7 +246,7 @@ kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i migration
 
 # Check database connection
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "\dt"
+  psql -U kleidiauser -d kleidia -c "\dt"
 ```
 
 ## Best Practices

@@ -381,7 +381,7 @@ For environments without S3 access or for additional backup methods:
 ```bash
 # Create backup
 kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
-  pg_dumpall -U yubiuser > database-backup.sql
+  pg_dumpall -U kleidiauser > database-backup.sql
 
 # Compress
 gzip database-backup.sql
@@ -392,7 +392,7 @@ gzip database-backup.sql
 ```bash
 # Create snapshot (requires root token)
 kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  vault operator raft snapshot save /tmp/vault-backup.snap
+  bao operator raft snapshot save /tmp/vault-backup.snap
 
 # Copy locally
 kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \

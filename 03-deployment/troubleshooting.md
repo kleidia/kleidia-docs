@@ -71,7 +71,7 @@ kubectl logs -f kleidia-data-postgres-cluster-0 -n kleidia
 
 # Test database connection
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT 1;"
+  psql -U kleidiauser -d kleidia -c "SELECT 1;"
 
 # Check backend logs
 kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i postgres
@@ -106,7 +106,7 @@ kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i postgre
 kubectl get pods -l app.kubernetes.io/name=openbao -n kleidia
 
 # Check Vault status
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 
 # Check Vault logs
 kubectl logs -f kleidia-platform-openbao-0 -n kleidia
@@ -124,7 +124,7 @@ kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
    kubectl logs kleidia-platform-openbao-0 -n kleidia | grep -i unseal
    
    # Manual unseal (if needed)
-   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault operator unseal <key>
+   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao operator unseal <key>
    ```
 
 2. **AppRole Authentication Failed**
@@ -140,7 +140,7 @@ kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
 3. **Policy Issues**
    ```bash
    # Check backend policy
-   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault policy read kleidia-backend
+   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao policy read kleidia-backend
    ```
 
 ### SSL Certificate Issues
@@ -239,10 +239,10 @@ curl https://kleidia.example.com/api/health
 
 # Database health
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT 1;"
+  psql -U kleidiauser -d kleidia -c "SELECT 1;"
 
 # Vault health
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 
 # Frontend accessibility
 curl -I https://kleidia.example.com
@@ -278,7 +278,7 @@ kubectl rollout restart deployment -n kleidia
 ```bash
 # Restore from backup
 kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia < backup.sql
+  psql -U kleidiauser -d kleidia < backup.sql
 ```
 
 ### Vault Recovery
@@ -371,7 +371,7 @@ kubectl get role backend-secret-reader -n kleidia -o yaml
    kubectl logs -n kleidia -l app=openbao-init --tail=100
    
    # Verify OpenBao status
-   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
+   kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
    ```
 
 ### Lost OpenBao Bootstrap Keys
@@ -449,7 +449,7 @@ kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i bootstrap
    ```bash
    # Connect to database
    kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-     psql -U yubiuser -d kleidia
+     psql -U kleidiauser -d kleidia
    
    # Check locks
    SELECT * FROM bootstrap_locks WHERE expires_at > NOW();

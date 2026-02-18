@@ -216,7 +216,7 @@ kubectl logs deployment/kleidia-services-backend -n kleidia --since=1h | \
 ```bash
 # Check PostgreSQL slow queries
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "
+  psql -U kleidiauser -d kleidia -c "
     SELECT query, calls, total_time, mean_time
     FROM pg_stat_statements
     ORDER BY mean_time DESC

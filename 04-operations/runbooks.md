@@ -49,7 +49,7 @@ kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i agent
    
    # Check database for agent keys
    kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-     psql -U yubiuser -d kleidia -c "SELECT * FROM user_sessions WHERE agent_pubkey IS NOT NULL;"
+     psql -U kleidiauser -d kleidia -c "SELECT * FROM user_sessions WHERE agent_pubkey IS NOT NULL;"
    ```
 
 ## Device Revocation
@@ -70,7 +70,7 @@ Device needs to be revoked (lost, stolen, compromised, or user departure).
    ```bash
    # Check device status in database
    kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-     psql -U yubiuser -d kleidia -c \
+     psql -U kleidiauser -d kleidia -c \
      "SELECT id, serial, is_active, deleted_at FROM yubikeys WHERE serial = '<serial-number>';"
    ```
 
@@ -78,7 +78,7 @@ Device needs to be revoked (lost, stolen, compromised, or user departure).
    ```bash
    # Check Vault secrets (should be removed)
    kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-     vault kv list yubikeys/data/ | grep <serial-number>
+     bao kv list yubikeys/data/ | grep <serial-number>
    ```
 
 4. **Verify Certificates Revoked**:
@@ -119,7 +119,7 @@ Backend returns 403 errors when accessing Vault.
 
 ```bash
 # Check Vault status
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 
 # Check backend Vault authentication
 kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i vault
@@ -129,7 +129,7 @@ kubectl get secret vault-approle -n kleidia
 
 # Test Vault authentication
 kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  vault write auth/approle/login \
+  bao write auth/approle/login \
     role_id=<role-id> \
     secret_id=<secret-id>
 ```
@@ -140,11 +140,11 @@ kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
    ```bash
    # Check backend policy
    kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-     vault policy read kleidia-backend
+     bao policy read kleidia-backend
    
    # Update policy if needed
    kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-     vault policy write kleidia-backend - <<EOF
+     bao policy write kleidia-backend - <<EOF
    path "pki/sign/*" {
      capabilities = ["create", "read", "update"]
    }
@@ -274,11 +274,11 @@ Slow queries, high database load.
 ```bash
 # Check database connections
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT count(*) FROM pg_stat_activity;"
+  psql -U kleidiauser -d kleidia -c "SELECT count(*) FROM pg_stat_activity;"
 
 # Check slow queries
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "
+  psql -U kleidiauser -d kleidia -c "
     SELECT query, calls, total_time, mean_time
     FROM pg_stat_statements
     ORDER BY mean_time DESC
@@ -298,11 +298,11 @@ kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
    ```bash
    # Vacuum database
    kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-     psql -U yubiuser -d kleidia -c "VACUUM ANALYZE;"
+     psql -U kleidiauser -d kleidia -c "VACUUM ANALYZE;"
    
    # Check for missing indexes
    kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-     psql -U yubiuser -d kleidia -c "
+     psql -U kleidiauser -d kleidia -c "
        SELECT schemaname, tablename, attname, n_distinct, correlation
        FROM pg_stats
        WHERE schemaname = 'public'
@@ -367,7 +367,7 @@ kubectl scale deployment/kleidia-services-backend --replicas=0 -n kleidia
 # Restore from backup
 gunzip -c backups/20250115/database.sql.gz | \
   kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia
+  psql -U kleidiauser -d kleidia
 
 # Restart backend
 kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia
@@ -384,7 +384,7 @@ kubectl cp backups/20250115/vault-backup.snap \
   kleidia-platform-openbao-0:/tmp/vault-backup.snap -n kleidia
 
 kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  vault operator raft snapshot restore /tmp/vault-backup.snap
+  bao operator raft snapshot restore /tmp/vault-backup.snap
 
 # Restart backend
 kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia

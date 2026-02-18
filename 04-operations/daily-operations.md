@@ -56,18 +56,18 @@ kubectl top nodes
 ```bash
 # Check PostgreSQL status
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT version();"
+  psql -U kleidiauser -d kleidia -c "SELECT version();"
 
 # Check database connections
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT count(*) FROM pg_stat_activity;"
+  psql -U kleidiauser -d kleidia -c "SELECT count(*) FROM pg_stat_activity;"
 ```
 
 ### Vault Health
 
 ```bash
 # Check Vault status
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- vault status
+kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 
 # Expected output:
 # Key             Value
@@ -212,7 +212,7 @@ echo | openssl s_client -connect kleidia.example.com:443 2>/dev/null | \
 
 # Or manually update in Vault
 kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  vault kv put secret/kleidia/jwt-secret secret="new-secret"
+  bao kv put secret/kleidia/jwt-secret secret="new-secret"
 ```
 
 ### Database Maintenance
@@ -220,11 +220,11 @@ kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
 ```bash
 # Vacuum database
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "VACUUM ANALYZE;"
+  psql -U kleidiauser -d kleidia -c "VACUUM ANALYZE;"
 
 # Check database size
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT pg_size_pretty(pg_database_size('kleidia'));"
+  psql -U kleidiauser -d kleidia -c "SELECT pg_size_pretty(pg_database_size('kleidia'));"
 ```
 
 ## Troubleshooting Common Issues
@@ -245,7 +245,7 @@ kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i "out of me
 ```bash
 # Check database query performance
 kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
-  psql -U yubiuser -d kleidia -c "SELECT * FROM pg_stat_statements ORDER BY total_time DESC LIMIT 10;"
+  psql -U kleidiauser -d kleidia -c "SELECT * FROM pg_stat_statements ORDER BY total_time DESC LIMIT 10;"
 
 # Check network latency
 ping kleidia.example.com

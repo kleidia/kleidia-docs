@@ -88,7 +88,7 @@ postgres:
   enabled: true
   version: "15"                         # PostgreSQL version
   database: kleidia                     # Database name
-  username: yubiuser                    # Database user
+  username: kleidiauser                  # Database user
   storage:
     size: 10Gi                          # Storage size
 ```
@@ -206,7 +206,7 @@ Backend configuration via environment variables (set in Helm values):
 backend:
   env:
     - name: DATABASE_URL
-      value: "postgresql://yubiuser:password@postgres-cluster:5432/kleidia"
+      value: "postgresql://kleidiauser:password@postgres-cluster:5432/kleidia"
     - name: VAULT_ADDR
       value: "http://kleidia-platform-openbao:8200"
     - name: VAULT_AUTH_METHOD
