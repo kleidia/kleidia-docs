@@ -86,7 +86,7 @@ openbao:
 ```yaml
 postgres:
   enabled: true
-  version: "15"                         # PostgreSQL version
+  version: "18"                         # PostgreSQL version
   database: kleidia                     # Database name
   username: kleidiauser                  # Database user
   storage:
@@ -217,6 +217,43 @@ backend:
           name: kleidia-secrets
           key: jwt-secret
 ```
+
+### OIDC Environment Variables
+
+OIDC is primarily configured through the **Admin UI** (settings stored in the database). Environment variables provide initial/fallback values and control advanced settings not exposed in the UI.
+
+**Core OIDC settings** (UI-configurable, env vars used as initial values):
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OIDC_ENABLED` | Enable OIDC authentication | `false` |
+| `OIDC_PROVIDER` | Provider type: `keycloak`, `azure_entra`, `google`, `okta`, `generic` | `generic` |
+| `OIDC_ISSUER` | Issuer URL (base URL of OIDC provider) | — |
+| `OIDC_DISCOVERY_ENDPOINT` | Full discovery URL override (optional) | — |
+| `OIDC_CLIENT_ID` | OAuth 2.0 client ID | — |
+| `OIDC_CLIENT_SECRET` | OAuth 2.0 client secret | — |
+| `OIDC_REDIRECT_URI` | Authorization callback URL | — |
+| `OIDC_SCOPES` | Space-separated scopes | `openid profile email` |
+| `OIDC_DISABLE_LOCAL_LOGIN` | Hide local login when OIDC enabled | `false` |
+
+**Advanced settings** (env vars only, not in Admin UI):
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OIDC_PKCE_ENABLED` | Enable PKCE (RFC 7636) | `true` |
+| `OIDC_STATE_VALIDATION` | Validate OAuth state parameter | `true` |
+| `OIDC_NONCE_VALIDATION` | Validate OpenID nonce | `true` |
+| `OIDC_RESPONSE_TYPE` | OAuth response type | `code` |
+| `OIDC_RESPONSE_MODE` | Response mode (`query`, `fragment`) | `query` |
+| `OIDC_PROMPT` | Prompt behavior | `consent` |
+| `OIDC_ACCESS_TYPE` | Access type | `offline` |
+| `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | Client auth method | `client_secret_post` |
+| `OIDC_SKIP_TLS_VERIFY` | Skip TLS verification (non-production only) | `false` |
+| `OIDC_CA_CERT_FILE` | Custom CA certificate file path | — |
+| `OIDC_MFA_REQUIRED` | Require MFA | `false` |
+| `OIDC_CONDITIONAL_ACCESS` | Enable conditional access | `false` |
+
+See [Admin Guide - OIDC Configuration](../05-using-the-system/admin-guide.md) for provider-specific settings and setup instructions.
 
 ### Frontend Environment Variables
 

@@ -427,6 +427,140 @@ If the test fails, the error message usually indicates whether:
 
 Local users (created via the Kleidia admin UI with a password) remain fully manageable through the existing user management actions.
 
+#### Provider-Specific Setup
+
+Kleidia supports five OIDC providers. Select the matching provider type during configuration for optimized defaults.
+
+##### Azure Entra ID
+
+1. In Azure Portal → **App registrations** → Create new registration
+2. Set **Redirect URI** to `https://<your-kleidia-domain>/oidc/callback` (Web platform)
+3. Under **Certificates & secrets**, create a client secret
+4. Note the **Application (client) ID** and **Directory (tenant) ID**
+
+In Kleidia OIDC settings:
+- **Issuer URL**: `https://login.microsoftonline.com/<tenant-id>/v2.0`
+- **Client ID**: Application (client) ID from Azure
+- **Client Secret**: The secret value (not the secret ID)
+- **Scopes**: `openid profile email` (add `offline_access` if refresh tokens needed)
+
+Azure-specific options (set via environment if needed):
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OIDC_AZURE_TENANT_ID` | Azure tenant GUID | — |
+| `OIDC_AZURE_TENANT_TYPE` | `common`, `organizations`, or specific tenant | `common` |
+| `OIDC_AZURE_CONDITIONAL_ACCESS` | Enable conditional access support | `true` |
+| `OIDC_AZURE_MFA_REQUIRED` | Require MFA | `true` |
+| `OIDC_AZURE_GROUP_CLAIMS` | Group claim names (comma-separated) | `groups,roles` |
+
+##### Keycloak
+
+1. In Keycloak admin → **Clients** → Create client
+2. Set **Client type**: OpenID Connect, **Client authentication**: On
+3. Set **Valid redirect URIs** to `https://<your-kleidia-domain>/oidc/callback`
+
+In Kleidia OIDC settings:
+- **Issuer URL**: `https://<keycloak-host>/realms/<realm-name>`
+- **Client ID**: The Keycloak client ID
+- **Client Secret**: From the **Credentials** tab
+
+Keycloak-specific options:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OIDC_KEYCLOAK_REALM` | Keycloak realm name | — |
+| `OIDC_KEYCLOAK_ADMIN_URL` | Admin console URL | — |
+| `OIDC_KEYCLOAK_GROUP_MAPPINGS` | Group to role mappings | — |
+
+##### Google Workspace
+
+1. In Google Cloud Console → **APIs & Services** → **Credentials** → Create OAuth 2.0 Client
+2. Set **Authorized redirect URIs** to `https://<your-kleidia-domain>/oidc/callback`
+
+In Kleidia OIDC settings:
+- **Issuer URL**: `https://accounts.google.com`
+- **Client ID**: OAuth client ID from Google
+- **Client Secret**: OAuth client secret from Google
+- **Scopes**: `openid profile email`
+
+Google-specific options:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OIDC_GOOGLE_HOSTED_DOMAIN` | Restrict to Google Workspace domain | — |
+| `OIDC_GOOGLE_HD` | Alternative hosted domain parameter | — |
+| `OIDC_GOOGLE_INCLUDE_GRANTED_SCOPES` | Incremental authorization | `true` |
+| `OIDC_GOOGLE_LOGIN_HINT` | Pre-fill email hint | — |
+
+##### Okta
+
+1. In Okta admin → **Applications** → Create App Integration → OIDC Web Application
+2. Set **Sign-in redirect URIs** to `https://<your-kleidia-domain>/oidc/callback`
+
+In Kleidia OIDC settings:
+- **Issuer URL**: `https://<org>.okta.com` (or custom authorization server URL)
+- **Client ID**: From Okta application
+- **Client Secret**: From Okta application
+
+Okta-specific options:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OIDC_OKTA_DOMAIN` | Okta domain | — |
+| `OIDC_OKTA_API_KEY` | Admin API key (for group sync) | — |
+| `OIDC_OKTA_MFA_REQUIRED` | Require MFA | `true` |
+
+##### Generic OIDC Provider
+
+For any standards-compliant OIDC provider not listed above, select the **Generic** provider type. Configuration is through the standard fields (Issuer, Client ID/Secret, Redirect URI, Scopes).
+
+Generic-specific options for custom claim mapping:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OIDC_GENERIC_GROUPS_CLAIM` | Claim name for user groups | `groups` |
+| `OIDC_GENERIC_DEPARTMENT_CLAIM` | Claim name for department | — |
+| `OIDC_GENERIC_MANAGER_CLAIM` | Claim name for manager | — |
+| `OIDC_GENERIC_MFA_STATUS_CLAIM` | Claim name for MFA status | — |
+
+#### Advanced OIDC Settings
+
+These settings are configured via environment variables and apply to all OIDC providers. They control protocol-level behavior and are typically left at defaults.
+
+##### Security Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OIDC_PKCE_ENABLED` | Enable Proof Key for Code Exchange (RFC 7636) | `true` |
+| `OIDC_STATE_VALIDATION` | Validate OAuth state parameter | `true` |
+| `OIDC_NONCE_VALIDATION` | Validate OpenID nonce parameter | `true` |
+| `OIDC_MFA_REQUIRED` | Require multi-factor authentication | `false` |
+| `OIDC_CONDITIONAL_ACCESS` | Enable conditional access evaluation | `false` |
+
+##### Protocol Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OIDC_RESPONSE_TYPE` | OAuth response type | `code` |
+| `OIDC_RESPONSE_MODE` | How the authorization response is returned | `query` |
+| `OIDC_PROMPT` | Prompt behavior (`consent`, `login`, `none`) | `consent` |
+| `OIDC_ACCESS_TYPE` | Access type (`offline` for refresh tokens) | `offline` |
+| `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | Client authentication method | `client_secret_post` |
+
+##### TLS Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OIDC_SKIP_TLS_VERIFY` | Skip TLS verification (non-production only) | `false` |
+| `OIDC_CA_CERT_FILE` | Path to custom CA certificate file | — |
+
+> **Warning**: Never set `OIDC_SKIP_TLS_VERIFY=true` in production. Use `OIDC_CA_CERT_FILE` instead for self-signed or internal CA certificates.
+
+#### OIDC Configuration Storage
+
+OIDC settings are primarily stored in the **database** and configured through the Admin UI. Environment variables serve as initial/fallback values:
+
+- On first startup with `OIDC_ENABLED=true`, settings from environment variables are used
+- Once configured through the Admin UI, database settings take precedence
+- Environment variables still apply for advanced/TLS settings not exposed in the UI
+- Provider-specific environment variables supplement the UI configuration
+
 #### Entra ID Sync (Graph API)
 
 Use **Entra ID Sync** when you want Kleidia to periodically **pull users** from Entra ID.
