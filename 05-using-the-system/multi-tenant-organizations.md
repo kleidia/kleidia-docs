@@ -1,6 +1,6 @@
 # Multi-Tenant Organizations
 
-Kleidia supports multi-tenant organization isolation, allowing subsidiaries or departments to be isolated so that Org-Admins can only see and manage YubiKeys belonging to users in their organization.
+Kleidia supports multi-tenant organization isolation, allowing subsidiaries or departments to be isolated so that Org Managers can only see and manage YubiKeys belonging to users in their organization.
 
 ## Overview
 
@@ -15,12 +15,12 @@ Multi-tenancy enables enterprise deployments where:
 | Role | Scope | Capabilities |
 |------|-------|--------------|
 | **Global Admin** | Global | Full system access. Manage all organizations, users, and system settings. |
-| **Org-Admin** | Organization | View/manage YubiKeys and users within their organization only. Access compliance reports and audit logs scoped to their org. |
+| **Org Manager** (`org_manager`) | Organization | View/manage YubiKeys and users within their organization only. Access compliance reports and audit logs scoped to their org. |
 | **User** | Self | Manage their own YubiKey only. |
 
 ### Menu Access by Role
 
-| Menu Item | Global Admin | Org-Admin | User |
+| Menu Item | Global Admin | Org Manager | User |
 |-----------|-------------|-----------|------|
 | Dashboard | ✓ | ✓ | ✓ |
 | My YubiKeys | ✓ | ✓ | ✓ |
@@ -65,7 +65,7 @@ Configure which OIDC claims Kleidia should use:
 
 Roles are assigned in the following order of precedence:
 
-1. **IdP Groups (Highest Priority)** – If the user is a member of a configured global admin or org-admin group
+1. **IdP Groups (Highest Priority)** – If the user is a member of a configured global admin or org manager group
 2. **Role Claim Value** – If the role claim matches configured values
 3. **Default** – User role
 
@@ -76,7 +76,7 @@ For security-sensitive environments, use IdP groups to manage privileged access:
 | Setting | Description | Example |
 |---------|-------------|---------|
 | **Global Admin Groups** | IdP groups that grant Global Admin access | `kleidia-global admins, global-admins` |
-| **Org-Admin Groups** | IdP groups that grant Org-Admin access | `kleidia-org-admins, department-admins` |
+| **Org Manager Groups** | IdP groups that grant Org Manager access | `kleidia-org-managers, department-managers` |
 
 **Benefits:**
 - Centralized access management in your IdP
@@ -91,7 +91,7 @@ If not using group-based assignment:
 | Setting | Description | Default |
 |---------|-------------|---------|
 | **Global Admin Value** | Role claim value for Global Admin | `global_admin` |
-| **Org-Admin Value** | Role claim value for Org-Admin | `org_admin` |
+| **Org Manager Value** | Role claim value for Org Manager | `org_manager` |
 
 ## Managing Organizations
 
@@ -147,14 +147,14 @@ In your App Registration:
 
 Create security groups in Entra ID:
 - `kleidia-global admins` – For global administrators
-- `kleidia-org-admins` – For organization administrators
+- `kleidia-org-managers` – For organization managers
 
 ### 3. Configure Kleidia
 
 In Kleidia's Multi-Tenant settings:
 - **Groups Claim**: `groups`
 - **Global Admin Groups**: Enter the Group IDs (GUIDs) for global admin groups
-- **Org-Admin Groups**: Enter the Group IDs (GUIDs) for org-admin groups
+- **Org Manager Groups**: Enter the Group IDs (GUIDs) for org manager groups
 
 ### 4. Organization Claim (Optional)
 
@@ -194,14 +194,14 @@ In your Okta Application:
 
 Create groups in Okta:
 - `kleidia-global admins`
-- `kleidia-org-admins`
+- `kleidia-org-managers`
 
 ### 3. Configure Kleidia
 
 In Kleidia's Multi-Tenant settings:
 - **Groups Claim**: `groups`
 - **Global Admin Groups**: `kleidia-global admins`
-- **Org-Admin Groups**: `kleidia-org-admins`
+- **Org Manager Groups**: `kleidia-org-managers`
 
 ## Audit Trail
 
@@ -229,9 +229,9 @@ Access audit logs from **Admin Panel** → **Audit Logs**.
 3. Check if **Role Override** is enabled for manual role assignment
 4. Review role claim value mappings
 
-### Org-Admin Cannot See Users
+### Org Manager Cannot See Users
 
-1. Verify the Org-Admin is assigned to the correct organization
+1. Verify the Org Manager is assigned to the correct organization
 2. Ensure multi-tenant mode is enabled
 3. Check that users have the same `organization_id`
 

@@ -8,15 +8,19 @@
 
 ### Roles
 
-#### Admin Role
+Kleidia uses a three-tier role model. Role values are stored in the JWT `role` claim.
+
+#### Global Admin (`global_admin`)
+
+**Scope**: System-wide (no scoping)
 
 **Permissions**:
 - Full system access
-- User management (create, edit, delete, disable)
+- User and organization management (create, edit, delete, disable)
 - Device management (view all, revoke, return)
 - Policy management (create, edit, delete)
-- System configuration
-- Audit log access
+- System configuration (OIDC, multi-tenant, identity providers)
+- Audit log access across all organizations
 - Report generation
 
 **Access**:
@@ -25,7 +29,30 @@
 - System settings
 - Audit logs
 
-#### User Role
+#### Org Manager (`org_manager`)
+
+**Scope**: Organization-scoped (filtered by `organization_id`)
+
+**Permissions**:
+- View/manage users and YubiKeys within their organization
+- Device management (org-scoped: view, revoke, return)
+- Access compliance reports and audit logs scoped to their org
+- Register YubiKeys on behalf of org users
+
+**Access**:
+- Admin panel (org-scoped)
+- Manage YubiKeys (org only)
+- Compliance reports (org only)
+- Audit logs (org only)
+
+**Restrictions**:
+- Cannot manage other organizations or system settings
+- Cannot create/manage users outside their organization
+- Cannot access OIDC or multi-tenant configuration
+
+#### User (`user`)
+
+**Scope**: Self-only (filtered by own `user_id`)
 
 **Permissions**:
 - Personal YubiKey management

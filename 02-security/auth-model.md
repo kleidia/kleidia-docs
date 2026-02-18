@@ -48,7 +48,13 @@ The `/admin-login` page provides an escape hatch for administrators when:
   "user_id": 1,
   "username": "admin",
   "is_admin": true,
+  "role": "global_admin",
+  "organization_id": null,
+  "organization_name": "",
   "session_id": 123,
+  "machine_id": "",
+  "device_id": "a1b2c3d4e5f6",
+  "ip_address": "192.168.1.100",
   "exp": 1640997000,
   "iat": 1640995200,
   "iss": "kleidia",
@@ -57,10 +63,14 @@ The `/admin-login` page provides an escape hatch for administrators when:
 ```
 
 **Properties**:
-- **Lifetime**: 30 minutes (configurable)
+- **Lifetime**: 30 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`)
 - **Algorithm**: HS256 (HMAC-SHA256)
-- **Claims**: User ID, username, admin status, session ID
+- **Claims**: User ID, username, role, organization, session ID, device binding
 - **Expiration**: Automatic expiration after configured time
+- **`is_admin`**: Legacy field (true when `role` is `global_admin`), kept for backward compatibility
+- **`role`**: One of `global_admin`, `org_manager`, `user`
+- **`organization_id`/`organization_name`**: Populated for org-scoped users
+- **`device_id`**: SHA256-derived identifier for device binding
 
 #### Refresh Token
 
@@ -136,15 +146,22 @@ Kleidia uses **Argon2id** for password hashing:
 
 #### Roles
 
-1. **Admin**
-   - Full system access
-   - User management
-   - Policy management
-   - System configuration
-   - Audit log access
-   - Can not delete data (users, logs)
+1. **Global Admin** (`global_admin`)
+   - Full system access, no scoping
+   - User and organization management
+   - Policy and system configuration
+   - Audit log access across all organizations
+   - OIDC and multi-tenant configuration
+   - Cannot delete data (users, logs)
 
-2. **User**
+2. **Org Manager** (`org_manager`)
+   - Organization-scoped access
+   - View/manage users and YubiKeys within their organization
+   - Access compliance reports and audit logs scoped to their org
+   - Cannot manage other organizations or system settings
+
+3. **User** (`user`)
+   - Self-only access
    - Personal YubiKey management
    - Own device operations
    - Certificate generation
@@ -152,10 +169,11 @@ Kleidia uses **Argon2id** for password hashing:
 
 #### Permissions
 
-Permissions are enforced at the API level:
+Permissions are enforced at the API level via org-scoping middleware:
 
-- **User Operations**: Users can only access their own resources
-- **Admin Operations**: Admins can access all resources
+- **Global Admin**: No query filters — sees all resources
+- **Org Manager**: Queries filtered by `organization_id`
+- **User**: Queries filtered by own `user_id`
 - **Policy Enforcement**: Backend validates permissions on each request
 
 ### API Authorization
