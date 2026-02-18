@@ -1,0 +1,47 @@
+{{- if and .Values.licenseService.enabled .Values.licenseService.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: license-service-policy
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: license-service
+    app.kubernetes.io/name: kleidia-license
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: license-service
+spec:
+  podSelector:
+    matchLabels:
+      app: license-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow traffic from backend only
+  - from:
+    - podSelector:
+        matchLabels:
+          app: backend
+    ports:
+    - protocol: TCP
+      port: 8081
+  egress:
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow connection to OpenBao/Vault
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: openbao
+    ports:
+    - protocol: TCP
+      port: 8200
+{{- end }}
+
