@@ -1,7 +1,7 @@
 global:
   namespace: kleidia          # Kubernetes namespace to install into
-  domain: ""                  # Domain name (e.g., "backend.kleidia.io"). If set, siteUrl defaults to https://<domain>
-  siteUrl: ""                 # Full site URL (e.g., "https://backend.kleidia.io"). Overrides domain if set.
+  domain: ""                  # Domain name (e.g., "kleidia.example.com"). If set, siteUrl defaults to https://<domain>
+  siteUrl: ""                 # Full site URL (e.g., "https://kleidia.example.com"). Overrides domain if set.
                               # Used for OIDC redirects and CORS configuration
   registry:
     host: ""                  # Optional: container registry host for all images (required for air-gapped environments)
