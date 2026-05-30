@@ -441,30 +441,6 @@ helm template kleidia-services ./helm/kleidia-services \
   --values my-values.yaml
 ```
 
-## Best Practices
-
-### Configuration Management
-
-- ✅ Use version-controlled values files
-- ✅ Separate values files per environment
-- ✅ Document all custom configurations
-- ✅ Test configuration changes in dev first
-- ✅ Use specific image tags in production
-
-### Security
-
-- ✅ Never commit secrets to version control
-- ✅ Use Kubernetes secrets for sensitive data
-- ✅ Rotate secrets regularly
-- ✅ Use least-privilege access
-
-### Performance
-
-- ✅ Set appropriate resource limits
-- ✅ Configure storage sizes appropriately
-- ✅ Use multiple replicas for high availability
-- ✅ Monitor resource usage
-
 ## Related Documentation
 
 - [Helm Installation](helm-install.md)

@@ -249,31 +249,6 @@ kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "\dt"
 ```
 
-## Best Practices
-
-### Upgrade Planning
-
-- ✅ Test upgrades in development first
-- ✅ Schedule upgrades during maintenance windows
-- ✅ Have rollback plan ready
-- ✅ Communicate upgrades to users
-- ✅ Monitor system after upgrade
-
-### Backup Strategy
-
-- ✅ Backup before every upgrade
-- ✅ Test backup restoration
-- ✅ Keep multiple backup versions
-- ✅ Store backups securely
-
-### Monitoring
-
-- ✅ Monitor pod health during upgrade
-- ✅ Check application logs
-- ✅ Verify API endpoints
-- ✅ Monitor resource usage
-- ✅ Check error rates
-
 ## Related Documentation
 
 - [Helm Installation](helm-install.md)

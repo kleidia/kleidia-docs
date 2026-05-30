@@ -753,16 +753,6 @@ Before your license expires:
 - **Slow Performance**: Check database performance, review slow queries
 - **Certificate Errors**: Check certificate expiration, renew if needed
 
-## Best Practices
-
-- ✅ Review audit logs regularly
-- ✅ Monitor system health daily
-- ✅ Keep user accounts current
-- ✅ Enforce security policies
-- ✅ Rotate secrets regularly
-- ✅ Generate compliance reports monthly
-- ✅ Keep documentation updated
-
 ## Multi-Tenant Organizations
 
 For enterprise deployments requiring subsidiary/department isolation:

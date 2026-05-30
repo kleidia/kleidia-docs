@@ -4,6 +4,8 @@
 **Prerequisites**: None  
 **Outcome**: Understand what Kleidia is and what it does
 
+> **In a hurry?** The [Quickstart](quickstart.md) gets Kleidia deployed and you logged into the dashboard in about 15 minutes.
+
 ## What is Kleidia?
 
 Kleidia is an enterprise-grade YubiKey management platform that enables centralized management of YubiKey devices across your organization. The system provides secure, web-based administration while ensuring that sensitive cryptographic operations are performed locally on user workstations.
@@ -62,26 +64,6 @@ Kleidia uses a **hybrid architecture** that combines:
 - **PostgreSQL**: Database for users, devices, sessions, and audit logs
 - **OpenBao**: Secrets management and PKI certificate authority
 - **Kubernetes**: Container orchestration platform
-
-## Value Proposition
-
-### For Organizations
-- **Centralized Control**: Manage all YubiKeys from a single platform
-- **Security Compliance**: Complete audit trails and policy enforcement
-- **Scalability**: Supports thousands of users and devices
-- **Enterprise Integration**: Works with existing PKI and identity providers
-
-### For Administrators
-- **Easy Deployment**: Helm chart-based deployment with automated setup
-- **Operational Simplicity**: Kubernetes-native architecture with standard tooling
-- **Monitoring**: Built-in health checks and logging
-- **Maintenance**: Automated backups and upgrade procedures
-
-### For End Users
-- **Self-Service**: Manage your own YubiKey devices
-- **Simple Interface**: Intuitive web interface for common operations
-- **Secure Operations**: All operations performed securely on your workstation
-- **Zero Configuration**: Agent works automatically after installation
 
 ## Use Cases
 

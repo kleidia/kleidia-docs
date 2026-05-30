@@ -264,17 +264,6 @@ curl http://localhost:30805/
 curl https://kleidia.example.com/api/health
 ```
 
-## Best Practices
-
-- ✅ Perform daily health checks
-- ✅ Monitor logs regularly
-- ✅ Review audit logs weekly
-- ✅ Keep backups current
-- ✅ Monitor resource usage
-- ✅ Test disaster recovery procedures
-- ✅ Keep documentation updated
-- ✅ Communicate changes to users
-
 ## Related Documentation
 
 - [Monitoring and Logs](monitoring-and-logs.md)

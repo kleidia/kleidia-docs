@@ -226,17 +226,6 @@ curl "https://kleidia.example.com/api/admin/audit-logs?action=login&status=faile
   -H "Authorization: Bearer <admin-token>"
 ```
 
-## Best Practices
-
-- ✅ Monitor health endpoints regularly
-- ✅ Set up automated health checks
-- ✅ Review logs daily
-- ✅ Archive important logs
-- ✅ Monitor resource usage
-- ✅ Set up alerting for critical metrics
-- ✅ Review audit logs weekly
-- ✅ Keep log retention policies current
-
 ## Related Documentation
 
 - [Daily Operations](daily-operations.md)

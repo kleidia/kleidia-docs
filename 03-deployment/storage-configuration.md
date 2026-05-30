@@ -338,14 +338,6 @@ postgres:
     size: 50Gi
 ```
 
-## Best Practices
-
-1. **Production**: Always use a production-grade StorageClass (NFS, Longhorn, cloud provider)
-2. **Backups**: Implement regular backups regardless of storage type
-3. **Monitoring**: Monitor storage usage and set alerts for capacity
-4. **Testing**: Test storage failover in non-production before production deployment
-5. **Documentation**: Document your storage configuration for disaster recovery
-
 ## Related Documentation
 
 - [Helm Installation](helm-install.md)

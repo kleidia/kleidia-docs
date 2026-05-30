@@ -62,6 +62,10 @@ This documentation is designed for **Kleidia customers** who need to:
 
 ## Quick Start
 
+**Just want it running?** Follow the [Quickstart](00-overview/quickstart.md) — deploy, create your admin, and reach the dashboard in about 15 minutes.
+
+For everything else:
+
 1. **New to Kleidia?** Start with [Overview](00-overview/index.md)
 2. **Planning deployment?** Read [Deployment Guide](03-deployment/prerequisites.md)
 3. **Need to configure?** See [Configuration](03-deployment/configuration.md)
