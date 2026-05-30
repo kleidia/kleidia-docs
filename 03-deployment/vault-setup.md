@@ -156,20 +156,20 @@ path "yubikeys/metadata/*" {
   capabilities = ["list", "read", "delete"]
 }
 
-path "secret/data/kleidia/jwt-secret" {
+path "yubikeys/data/jwt-secret" {
   capabilities = ["create", "read", "update"]
 }
 
-path "secret/data/kleidia/encryption-key" {
+path "yubikeys/data/encryption-key" {
   capabilities = ["create", "read", "update"]
 }
 
-path "secret/data/kleidia/database" {
+path "yubikeys/data/database" {
   capabilities = ["create", "read", "update"]
 }
 
 # Explicit deny for license secrets
-path "secret/data/kleidia/licenses/*" {
+path "yubikeys/data/license/*" {
   capabilities = ["deny"]
 }
 
@@ -218,7 +218,7 @@ kubectl exec -it $VAULT_POD -n kleidia -- bao status
 # Expected output:
 # Key             Value
 # ---             -----
-# Seal Type      shamir
+# Seal Type      static
 # Initialized    true
 # Sealed         false
 # ...
@@ -395,22 +395,25 @@ kubectl exec -it $VAULT_POD -n kleidia -- grep "permission denied" /openbao/audi
 
 ### Backup Vault Data
 
-```bash
-# Create snapshot
-kubectl exec -it $VAULT_POD -n kleidia -- bao operator raft snapshot save /tmp/vault-backup.snap
+OpenBao uses `storage "file"` (not raft), so back it up by archiving its on-disk data directory:
 
-# Copy snapshot locally
-kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap ./vault-backup-$(date +%Y%m%d).snap -n kleidia
+```bash
+# Archive the OpenBao data directory inside the pod
+kubectl exec -n kleidia kleidia-platform-openbao-0 -- tar czf /tmp/openbao-data.tgz -C /openbao/data .
+
+# Copy the archive locally
+kubectl cp kleidia-platform-openbao-0:/tmp/openbao-data.tgz ./openbao-data-$(date +%Y%m%d).tgz -n kleidia
 ```
 
 ### Restore Vault Data
 
 ```bash
-# Copy snapshot to pod
-kubectl cp ./vault-backup.snap kleidia-platform-openbao-0:/tmp/vault-backup.snap -n kleidia
+# Copy the archive back to the pod
+kubectl cp ./openbao-data.tgz kleidia-platform-openbao-0:/tmp/openbao-data.tgz -n kleidia
 
-# Restore snapshot
-kubectl exec -it $VAULT_POD -n kleidia -- bao operator raft snapshot restore /tmp/vault-backup.snap
+# Restore the data directory, then restart OpenBao to reload it
+kubectl exec -n kleidia kleidia-platform-openbao-0 -- sh -c 'tar xzf /tmp/openbao-data.tgz -C /openbao/data'
+kubectl rollout restart statefulset/kleidia-platform-openbao -n kleidia
 ```
 
 ### Backup AppRole Credentials

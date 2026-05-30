@@ -56,7 +56,7 @@
 - `/api/health` - Health check
 - `/api/auth/login` - User login
 - `/api/auth/logout` - User logout
-- `/api/yubikey` - YubiKey management
+- `/api/yubikeys` - YubiKey management
 - `/api/admin/*` - Admin operations
 
 ### Frontend Endpoints

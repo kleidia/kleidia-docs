@@ -25,15 +25,15 @@ Before upgrading:
 
 ```bash
 # Backup database
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   pg_dumpall -U kleidiauser > backup-$(date +%Y%m%d).sql
 
-# Backup Vault
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  bao operator raft snapshot save /tmp/vault-backup.snap
+# Backup OpenBao (storage "file" — archive the data dir, not a raft snapshot)
+kubectl exec -n kleidia kleidia-platform-openbao-0 -- \
+  tar czf /tmp/openbao-data.tgz -C /openbao/data .
 
-kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \
-  ./vault-backup-$(date +%Y%m%d).snap -n kleidia
+kubectl cp kleidia-platform-openbao-0:/tmp/openbao-data.tgz \
+  ./openbao-data-$(date +%Y%m%d).tgz -n kleidia
 
 # Save current Helm values
 helm get values kleidia-platform -n kleidia > platform-values-$(date +%Y%m%d).yaml
@@ -75,10 +75,10 @@ helm upgrade kleidia-data ./helm/kleidia-data \
   --values data-values.yaml
 
 # Wait for upgrade
-kubectl wait --for=condition=ready pod -l app=postgres-cluster -n kleidia --timeout=300s
+kubectl wait --for=condition=ready pod -l cnpg.io/cluster=kleidia-db -n kleidia --timeout=300s
 
 # Verify database
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "SELECT version();"
 ```
 
@@ -91,8 +91,8 @@ helm upgrade kleidia-services ./helm/kleidia-services \
   --values services-values.yaml
 
 # Wait for rollout
-kubectl rollout status deployment/kleidia-services-backend -n kleidia
-kubectl rollout status deployment/kleidia-services-frontend -n kleidia
+kubectl rollout status deployment/backend -n kleidia
+kubectl rollout status deployment/frontend -n kleidia
 
 # Verify services
 curl https://kleidia.example.com/api/health
@@ -132,7 +132,7 @@ kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 helm rollback kleidia-data -n kleidia
 
 # Verify database
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "SELECT version();"
 ```
 
@@ -181,11 +181,11 @@ Backend automatically runs migrations on startup:
 
 ```bash
 # Check migration status
-kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i migrate
+kubectl logs deployment/backend -n kleidia | grep -i migrate
 
 # Run migrations manually (if needed)
-kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
-  /app/kleidia-backend migrate
+kubectl exec -it deployment/backend -n kleidia -- \
+  /kleidia-backend migrate
 ```
 
 ## Version Compatibility
@@ -200,7 +200,7 @@ helm list -n kleidia
 curl https://kleidia.example.com/api/health | jq .version
 
 # Check database version
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "SELECT version();"
 ```
 
@@ -210,7 +210,7 @@ kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
 |-----------|-------------|-------------|-------|
 | Kubernetes | 1.24+ | Latest | Any compatible Kubernetes |
 | Helm | 3.8+ | Latest | |
-| PostgreSQL | 13+ | 15+ | |
+| PostgreSQL | 14+ | 18 | Charts default to PostgreSQL 18 |
 | OpenBao | 2.4+ | Latest | |
 
 ## Troubleshooting Upgrades
@@ -242,10 +242,10 @@ kubectl get pod <pod-name> -n kleidia -o jsonpath='{.spec.containers[*].image}'
 
 ```bash
 # Check migration logs
-kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i migration
+kubectl logs deployment/backend -n kleidia | grep -i migration
 
 # Check database connection
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "\dt"
 ```
 

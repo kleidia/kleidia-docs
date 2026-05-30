@@ -87,7 +87,7 @@ Kleidia is designed with security-first principles:
 
 #### User Authentication
 - **Method**: JWT tokens with Argon2id password hashing
-- **Expiration**: Configurable (default 8 hours)
+- **Expiration**: Configurable (default 30 minutes, via `ACCESS_TOKEN_EXPIRE_MINUTES`)
 - **Refresh**: Automatic token refresh
 - **Revocation**: Immediate on logout
 
@@ -98,7 +98,7 @@ Kleidia is designed with security-first principles:
 - **Rotation**: New keys on agent restart
 
 #### RBAC (Role-Based Access Control)
-- **Roles**: Admin, User
+- **Roles**: `global_admin`, `org_manager`, `user`
 - **Permissions**: Granular permissions per role
 - **Enforcement**: Backend API authorization
 - **Audit**: All permission checks logged
@@ -118,7 +118,7 @@ All secrets stored in OpenBao, not in database:
 
 - `yubikeys/data/{serial}/secrets` - YubiKey PIN/PUK/management keys
 - `yubikeys/metadata/{serial}` - Secret metadata and versions
-- Application secrets in separate Vault paths
+- Application secrets at separate paths under the same `yubikeys/` mount (`yubikeys/data/jwt-secret`, `yubikeys/data/encryption-key`, `yubikeys/data/database`, `yubikeys/data/license/*`)
 
 ### Secret Encryption
 

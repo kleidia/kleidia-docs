@@ -187,8 +187,11 @@ path "auth/token/renew-self" {
 - ❌ **Cannot modify policies or auth configuration**
 
 **Policy (`kleidia-backend`)**:
+
+All application secrets live under the `yubikeys` KV mount (not a separate `secret/` mount).
+
 ```hcl
-# PKI operations
+# PKI certificate signing
 path "pki/sign/*" {
   capabilities = ["create", "read", "update"]
 }
@@ -198,44 +201,71 @@ path "pki/issue/*" {
 path "pki/cert/ca" {
   capabilities = ["read"]
 }
-path "pki/revoke" {
-  capabilities = ["update"]
+
+# PKI CA management (intermediate CA reconfiguration)
+path "pki/issuers/generate/intermediate/existing" {
+  capabilities = ["create", "update"]
 }
-path "pki/certs" {
-  capabilities = ["list"]
+path "pki/intermediate/set-signed" {
+  capabilities = ["create", "update"]
+}
+path "pki/config/urls" {
+  capabilities = ["read", "update"]
+}
+path "pki/config/issuers" {
+  capabilities = ["read"]
+}
+path "pki/issuer/*" {
+  capabilities = ["read"]
 }
 
-# YubiKey secrets (full access)
-path "yubikeys/data/*" {
-  capabilities = ["create", "read", "update", "delete", "list"]
+# Application secrets (specific paths only - least privilege)
+path "yubikeys/data/jwt-secret" {
+  capabilities = ["read", "update"]
 }
-path "yubikeys/metadata/*" {
-  capabilities = ["list", "read", "delete"]
+path "yubikeys/data/encryption-key" {
+  capabilities = ["read", "update"]
 }
-
-# Application secrets (specific paths only)
-path "secret/data/kleidia/jwt-secret" {
+path "yubikeys/data/database" {
+  capabilities = ["read"]
+}
+path "yubikeys/data/backend/*" {
+  capabilities = ["create", "read", "update", "delete"]
+}
+path "yubikeys/data/backend-encryption-key" {
   capabilities = ["create", "read", "update"]
 }
-path "secret/data/kleidia/encryption-key" {
-  capabilities = ["create", "read", "update"]
-}
-path "secret/data/kleidia/database" {
-  capabilities = ["create", "read", "update"]
-}
-path "secret/data/kleidia/backend/*" {
-  capabilities = ["create", "read", "update"]
-}
-path "secret/data/kleidia/backend-encryption-key" {
-  capabilities = ["create", "read", "update"]
-}
-path "secret/metadata/kleidia/*" {
+path "yubikeys/metadata/backend/*" {
   capabilities = ["list", "read"]
 }
 
-# Explicit deny for license secrets
-path "secret/data/kleidia/licenses/*" {
+# System metadata
+path "yubikeys/data/system/*" {
+  capabilities = ["create", "read", "update"]
+}
+path "yubikeys/metadata/system/*" {
+  capabilities = ["list", "read"]
+}
+
+# Backup S3 credentials
+path "yubikeys/data/backup/*" {
+  capabilities = ["create", "read", "update", "delete"]
+}
+path "yubikeys/metadata/backup/*" {
+  capabilities = ["list", "read"]
+}
+
+# Explicitly deny license paths
+path "yubikeys/data/license/*" {
   capabilities = ["deny"]
+}
+path "yubikeys/metadata/license/*" {
+  capabilities = ["deny"]
+}
+
+# System endpoints (for health checks)
+path "sys/auth" {
+  capabilities = ["read"]
 }
 
 # Token renewal
@@ -262,29 +292,35 @@ path "auth/token/renew-self" {
 - ❌ **Cannot perform PKI operations**
 
 **Policy (`license-service`)**:
+
+License data lives under the `yubikeys` KV mount at the `license/` prefix.
+
 ```hcl
-# License secrets only
-path "secret/data/kleidia/licenses/*" {
+# Allow full access to license data paths
+path "yubikeys/data/license/*" {
   capabilities = ["create", "read", "update", "delete", "list"]
 }
-path "secret/metadata/kleidia/licenses/*" {
-  capabilities = ["list", "read", "delete"]
+path "yubikeys/metadata/license/*" {
+  capabilities = ["read", "list"]
 }
 
-# Explicit deny for backend secrets
-path "yubikeys/*" {
+# Deny access to other yubikeys paths (defense in depth)
+path "yubikeys/data/yubikeys/*" {
   capabilities = ["deny"]
 }
-path "secret/data/kleidia/jwt-secret" {
+path "yubikeys/data/devices/*" {
   capabilities = ["deny"]
 }
-path "secret/data/kleidia/encryption-key" {
+path "yubikeys/data/certs/*" {
   capabilities = ["deny"]
 }
-path "secret/data/kleidia/database" {
+path "yubikeys/data/jwt-secret" {
   capabilities = ["deny"]
 }
-path "secret/data/kleidia/backend/*" {
+path "yubikeys/data/encryption-key" {
+  capabilities = ["deny"]
+}
+path "yubikeys/data/backend/*" {
   capabilities = ["deny"]
 }
 
@@ -406,7 +442,7 @@ kubectl exec -it $VAULT_POD -n kleidia -- grep "yubikeys/data" /openbao/audit/au
 
 - `/api/auth/login` - Login (no authentication)
 - `/api/auth/logout` - Logout (user authentication)
-- `/api/yubikey` - YubiKey operations (user authentication)
+- `/api/yubikeys` - YubiKey operations (user authentication)
 - `/api/session/*` - Session management (user authentication)
 
 ### Admin Endpoints

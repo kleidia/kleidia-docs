@@ -235,7 +235,7 @@
 
 ```
 1. User → Frontend: Request PIN change
-2. Frontend → Backend: GET /api/yubikey/{serial}/secrets
+2. Frontend → Backend: GET /api/yubikeys/{serial}/secrets
 3. Backend → OpenBao: Retrieve PIN from yubikeys/data/{serial}/secrets
 4. Backend → PostgreSQL: Get agent_pubkey from user_sessions
 5. Backend: Encrypt PIN with agent's RSA public key (RSA-OAEP)
@@ -255,7 +255,7 @@
 2. Frontend → Agent: POST http://127.0.0.1:56123/piv/generate-csr
 3. Agent: Generate CSR using YubiKey's private key
 4. Agent → Frontend: { csr: "-----BEGIN CERTIFICATE REQUEST-----..." }
-5. Frontend → Backend: POST /api/yubikey/{serial}/sign-csr
+5. Frontend → Backend: POST /api/yubikeys/{serial}/sign-csr
 6. Backend → OpenBao: Sign CSR using PKI engine
 7. OpenBao → Backend: Signed certificate
 8. Backend → Frontend: { certificate: "-----BEGIN CERTIFICATE-----..." }

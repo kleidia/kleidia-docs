@@ -19,20 +19,18 @@ Kleidia uses OpenBao as a Certificate Authority (CA) or intermediate for signing
 
 ### PKI Role Configuration
 
-The system uses a PKI role named `kleidia` with the following settings:
+The system uses a general-purpose PKI role named `yubikey-piv`, plus slot-specific roles (`yubikey-piv-auth`, `yubikey-piv-code-signing`, `yubikey-piv-email-signing`) used for the corresponding PIV slots. The base `yubikey-piv` role uses the following settings:
 
-| Setting             | Value   | Purpose                                  |
-|---------------------|---------|------------------------------------------|
-| `allow_any_name`    | `true`  | Allows certificates with any common name |
-| `enforce_hostnames` | `false` | Disables hostname validation             |
-| `allow_subdomains`  | `true`  | Permits subdomain certificates           |
-| `allow_localhost`   | `true`  | Allows localhost certificates            |
-| `allow_ip_sans`     | `true`  | Permits IP address SANs                  |
-| `require_cn`        | `true`  | Requires Common Name in certificates     |
-| `key_type`          | `rsa`   | RSA key type (YubiKey standard)          |
-| `key_bits`          | `2048`  | 2048-bit RSA keys                        |
-| `max_ttl`           | `8760h` | Maximum certificate lifetime (1 year)    |
-| `ttl`               | `8760h` | Default certificate lifetime (1 year)    |
+| Setting             | Value    | Purpose                                  |
+|---------------------|----------|------------------------------------------|
+| `allow_any_name`    | `true`   | Allows certificates with any common name |
+| `enforce_hostnames` | `false`  | Disables hostname validation             |
+| `server_flag`       | `true`   | Permits server-auth certificates         |
+| `client_flag`       | `true`   | Permits client-auth certificates         |
+| `key_type`          | `rsa`    | RSA key type (YubiKey standard)          |
+| `key_bits`          | `2048`   | 2048-bit RSA keys                        |
+| `ttl`               | `8760h`  | Default certificate lifetime (1 year)    |
+| `max_ttl`           | `87600h` | Maximum certificate lifetime (10 years)  |
 
 ## Certificate Lifecycle
 
@@ -55,9 +53,9 @@ The system uses a PKI role named `kleidia` with the following settings:
 
 **Location**: Backend server  
 **Process**:
-1. Frontend sends CSR to backend: `POST /api/yubikey/{serial}/sign-csr`
+1. Frontend sends CSR to backend: `POST /api/yubikeys/{serial}/sign-csr`
 2. Backend authenticates to Vault using AppRole
-3. Backend submits CSR to Vault PKI: `POST /v1/pki/sign/kleidia`
+3. Backend submits CSR to Vault PKI: `POST /v1/pki/sign/yubikey-piv` (or a slot-specific role such as `yubikey-piv-auth`)
 4. Vault signs CSR using root CA
 5. Backend receives signed certificate
 
@@ -103,10 +101,10 @@ Certificates can be used for:
 PKI is automatically configured during Helm deployment:
 
 1. **Enable PKI Engine**: `vault secrets enable -path=pki pki`
-2. **Configure TTL**: `vault secrets tune -max-lease-ttl=8760h pki`
+2. **Configure TTL**: `vault secrets tune -max-lease-ttl=87600h pki`
 3. **Generate Root CA**: Create self-signed root certificate
 4. **Configure URLs**: Set issuing certificate and CRL URLs
-5. **Create PKI Role**: Create `kleidia` role with appropriate settings
+5. **Create PKI Roles**: Create the `yubikey-piv` role (and slot-specific roles) with appropriate settings
 
 ## Certificate Operations
 

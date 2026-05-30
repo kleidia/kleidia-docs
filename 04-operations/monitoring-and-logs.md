@@ -20,11 +20,8 @@ curl https://kleidia.example.com/api/health
 
 # Response:
 {
-  "status": "ok",
-  "version": "2.2.0",
-  "database": "connected",
-  "vault": "connected",
-  "timestamp": "2025-01-15T10:30:00Z"
+  "status": "healthy",
+  "service": "Kleidia"
 }
 ```
 
@@ -34,11 +31,8 @@ curl https://kleidia.example.com/api/health
 # Database health
 curl https://kleidia.example.com/api/admin/system/database
 
-# Vault health
-curl https://kleidia.example.com/api/admin/system/vault
-
-# System health (all components)
-curl https://kleidia.example.com/api/admin/system/health
+# OpenBao (Vault) health
+curl https://kleidia.example.com/api/admin/system/openbao
 ```
 
 ### Kubernetes Health
@@ -70,13 +64,13 @@ kubectl top nodes
 
 ```bash
 # Backend logs
-kubectl logs -f deployment/kleidia-services-backend -n kleidia
+kubectl logs -f deployment/backend -n kleidia
 
 # Frontend logs
-kubectl logs -f deployment/kleidia-services-frontend -n kleidia
+kubectl logs -f deployment/frontend -n kleidia
 
 # Database logs
-kubectl logs -f kleidia-data-postgres-cluster-0 -n kleidia
+kubectl logs -f kleidia-db-1 -n kleidia
 
 # OpenBao logs
 kubectl logs -f kleidia-platform-openbao-0 -n kleidia
@@ -94,16 +88,16 @@ kubectl logs -f kleidia-platform-openbao-0 -n kleidia
 
 ```bash
 # Filter by level
-kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i error
+kubectl logs deployment/backend -n kleidia | grep -i error
 
 # Filter by time
-kubectl logs deployment/kleidia-services-backend -n kleidia --since=1h
+kubectl logs deployment/backend -n kleidia --since=1h
 
 # Filter by component
-kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i vault
+kubectl logs deployment/backend -n kleidia | grep -i vault
 
 # Filter by user
-kubectl logs deployment/kleidia-services-backend -n kleidia | grep "user_id=123"
+kubectl logs deployment/backend -n kleidia | grep "user_id=123"
 ```
 
 ## Audit Logging
@@ -115,11 +109,11 @@ kubectl logs deployment/kleidia-services-backend -n kleidia | grep "user_id=123"
 # Navigate to Admin → Audit Logs
 
 # Via API
-curl https://kleidia.example.com/api/admin/audit \
+curl https://kleidia.example.com/api/admin/audit-logs \
   -H "Authorization: Bearer <admin-token>"
 
 # Filter by date range
-curl "https://kleidia.example.com/api/admin/audit?start=2025-01-01&end=2025-01-31" \
+curl "https://kleidia.example.com/api/admin/audit-logs?start=2025-01-01&end=2025-01-31" \
   -H "Authorization: Bearer <admin-token>"
 ```
 
@@ -203,11 +197,11 @@ While Kleidia doesn't include built-in alerting, you can:
 
 ```bash
 # Count errors in last hour
-kubectl logs deployment/kleidia-services-backend -n kleidia --since=1h | \
+kubectl logs deployment/backend -n kleidia --since=1h | \
   grep -i error | wc -l
 
 # Group errors by type
-kubectl logs deployment/kleidia-services-backend -n kleidia --since=1h | \
+kubectl logs deployment/backend -n kleidia --since=1h | \
   grep -i error | sort | uniq -c
 ```
 
@@ -215,7 +209,7 @@ kubectl logs deployment/kleidia-services-backend -n kleidia --since=1h | \
 
 ```bash
 # Check PostgreSQL slow queries
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "
     SELECT query, calls, total_time, mean_time
     FROM pg_stat_statements
@@ -228,7 +222,7 @@ kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
 
 ```bash
 # Check failed login attempts
-curl "https://kleidia.example.com/api/admin/audit?action=login&status=failed" \
+curl "https://kleidia.example.com/api/admin/audit-logs?action=login&status=failed" \
   -H "Authorization: Bearer <admin-token>"
 ```
 

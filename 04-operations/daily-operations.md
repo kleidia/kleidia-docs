@@ -11,7 +11,7 @@
 - [ ] Check system health: `curl https://kleidia.example.com/api/health`
 - [ ] Verify all pods are running: `kubectl get pods -n kleidia`
 - [ ] Check disk space: `df -h`
-- [ ] Review error logs: `kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i error`
+- [ ] Review error logs: `kubectl logs -f deployment/backend -n kleidia | grep -i error`
 - [ ] Check certificate expiration: `echo | openssl s_client -connect kleidia.example.com:443 2>/dev/null | openssl x509 -noout -dates`
 
 ### Ongoing Monitoring
@@ -31,7 +31,7 @@
 curl https://kleidia.example.com/api/health
 
 # Expected response:
-# {"status":"ok","version":"2.2.0","database":"connected","vault":"connected"}
+# {"status":"healthy","service":"Kleidia"}
 ```
 
 ### Component Health
@@ -55,11 +55,11 @@ kubectl top nodes
 
 ```bash
 # Check PostgreSQL status
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "SELECT version();"
 
 # Check database connections
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "SELECT count(*) FROM pg_stat_activity;"
 ```
 
@@ -72,7 +72,7 @@ kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 # Expected output:
 # Key             Value
 # ---             -----
-# Seal Type       shamir
+# Seal Type       static
 # Initialized     true
 # Sealed          false
 # ...
@@ -84,13 +84,13 @@ kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 
 ```bash
 # Backend logs
-kubectl logs -f deployment/kleidia-services-backend -n kleidia
+kubectl logs -f deployment/backend -n kleidia
 
 # Frontend logs
-kubectl logs -f deployment/kleidia-services-frontend -n kleidia
+kubectl logs -f deployment/frontend -n kleidia
 
 # Database logs
-kubectl logs -f kleidia-data-postgres-cluster-0 -n kleidia
+kubectl logs -f kleidia-db-1 -n kleidia
 
 # OpenBao logs
 kubectl logs -f kleidia-platform-openbao-0 -n kleidia
@@ -100,13 +100,13 @@ kubectl logs -f kleidia-platform-openbao-0 -n kleidia
 
 ```bash
 # Filter errors
-kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i error
+kubectl logs deployment/backend -n kleidia | grep -i error
 
 # Filter by time
-kubectl logs deployment/kleidia-services-backend -n kleidia --since=1h
+kubectl logs deployment/backend -n kleidia --since=1h
 
 # Filter by component
-kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i vault
+kubectl logs deployment/backend -n kleidia | grep -i vault
 ```
 
 ## User Management
@@ -148,10 +148,10 @@ curl -X PATCH https://kleidia.example.com/api/admin/users/{id} \
 
 ```bash
 # Restart backend
-kubectl rollout restart deployment/kleidia-services-backend -n kleidia
+kubectl rollout restart deployment/backend -n kleidia
 
 # Restart frontend
-kubectl rollout restart deployment/kleidia-services-frontend -n kleidia
+kubectl rollout restart deployment/frontend -n kleidia
 
 # Restart all services
 kubectl rollout restart deployment -n kleidia
@@ -212,18 +212,18 @@ echo | openssl s_client -connect kleidia.example.com:443 2>/dev/null | \
 
 # Or manually update in Vault
 kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  bao kv put secret/kleidia/jwt-secret secret="new-secret"
+  bao kv put yubikeys/jwt-secret secret="new-secret"
 ```
 
 ### Database Maintenance
 
 ```bash
 # Vacuum database
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "VACUUM ANALYZE;"
 
 # Check database size
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "SELECT pg_size_pretty(pg_database_size('kleidia'));"
 ```
 
@@ -237,14 +237,14 @@ kubectl top pods -n kleidia --sort-by=memory
 kubectl top pods -n kleidia --sort-by=cpu
 
 # Check for memory leaks
-kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i "out of memory"
+kubectl logs deployment/backend -n kleidia | grep -i "out of memory"
 ```
 
 ### Slow Response Times
 
 ```bash
 # Check database query performance
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "SELECT * FROM pg_stat_statements ORDER BY total_time DESC LIMIT 10;"
 
 # Check network latency

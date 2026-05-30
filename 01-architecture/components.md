@@ -57,7 +57,7 @@ Web-based user interface for managing YubiKeys and user accounts.
 REST API server handling authentication, authorization, secret encryption, and Vault integration.
 
 ### Technology
-- **Language**: Go 1.21+
+- **Language**: Go 1.26+
 - **Framework**: Gin web framework
 - **Database**: PostgreSQL (via GORM)
 - **Vault**: OpenBao integration
@@ -90,10 +90,10 @@ REST API server handling authentication, authorization, secret encryption, and V
 - `GET /api/session/{id}` - Get session info
 
 #### YubiKeys
-- `GET /api/yubikey` - List YubiKeys
-- `GET /api/yubikey/{serial}` - Get YubiKey details
-- `GET /api/yubikey/{serial}/secrets` - Get encrypted secrets
-- `POST /api/yubikey/{serial}/sign-csr` - Sign certificate request
+- `GET /api/yubikeys` - List YubiKeys
+- `GET /api/yubikeys/{serial}` - Get YubiKey details
+- `GET /api/yubikeys/{serial}/secrets` - Get encrypted secrets
+- `POST /api/yubikeys/{serial}/sign-csr` - Sign certificate request
 
 #### Admin
 - `GET /api/admin/users` - List users
@@ -119,7 +119,7 @@ Local HTTP server on user workstations for executing YubiKey operations.
 ### Technology
 - **Language**: Go
 - **Protocol**: HTTP (localhost:56123)
-- **YubiKey Access**: Utilizes system-installed ykman binary
+- **YubiKey Access**: Uses the `ykman` binary bundled with the agent installer
 
 ### Responsibilities
 - Generate ephemeral RSA keypair on startup
@@ -193,7 +193,7 @@ Cryptographically-signed license validation and management service for controlli
 - **Trial Mode**: Automatic 30-day trial on first installation
 - **Vault Storage**: Licenses stored encrypted in Vault KV v2
 - **Stateless Operation**: No database dependencies
-- **Fallback Behavior**: Falls back to TRIAL mode if service unavailable
+- **Fallback Behavior**: Falls back to TRIAL mode if the service is unavailable, but only on systems that were never licensed (a previously-licensed system does not silently revert to TRIAL)
 
 ### License Status Types
 - **TRIAL**: 30-day free trial (system-generated)
@@ -232,10 +232,10 @@ Cryptographically-signed license validation and management service for controlli
 - **Installation ID**: Cryptographic hash binds license to specific deployment
 
 #### Vault Integration
-- **Kubernetes Auth**: Authenticates using ServiceAccount token
+- **AppRole Auth**: Authenticates using the `license-openbao` AppRole (role_id + secret_id from Kubernetes secret `openbao-license-approle`)
 - **Limited Policy**: Access only to `yubikeys/data/license/*` path
 - **Encrypted Storage**: Licenses stored in Vault KV v2 (encrypted at rest)
-- **24-hour TTL**: Vault token refreshed automatically
+- **24-hour TTL**: Vault token (periodic, `token_period` 24h) refreshed automatically
 
 #### Network Isolation
 - **ClusterIP Service**: Only accessible within Kubernetes cluster
@@ -419,7 +419,7 @@ Secrets management and PKI certificate authority. Installed as CA, configurable 
 
 ### PKI Configuration
 - Root CA: 10-year self-signed certificate
-- PKI Role: `kleidia` with flexible certificate policies
+- PKI Roles: `yubikey-piv` plus slot-specific roles (`yubikey-piv-auth`, `yubikey-piv-code-signing`, `yubikey-piv-email-signing`) with flexible certificate policies
 - Certificate TTL: Configurable (default 1 year)
 
 ### Deployment
@@ -447,7 +447,7 @@ Secrets management and PKI certificate authority. Installed as CA, configurable 
 4. Backend → PostgreSQL: Store agent_pubkey
 
 ### YubiKey Operation Flow
-1. Frontend → Backend: GET /api/yubikey/{serial}/secrets
+1. Frontend → Backend: GET /api/yubikeys/{serial}/secrets
 2. Backend → OpenBao: Retrieve secrets
 3. Backend → PostgreSQL: Get agent_pubkey
 4. Backend: Encrypt secrets with agent public key

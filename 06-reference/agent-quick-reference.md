@@ -9,7 +9,7 @@
 
 ```powershell
 # Silent install with backend URL
-msiexec /i kleidia-agent-0.4.6-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
+msiexec /i kleidia-agent-0.4.9-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
 
 # Check service status
 Get-Service -Name "KleidiaAgent"
@@ -27,14 +27,14 @@ Get-Content "C:\ProgramData\Kleidia\agent\agent.toml"
 Get-EventLog -LogName Application -Source "KleidiaAgent" -Newest 20
 
 # Uninstall
-msiexec /x kleidia-agent-0.4.6-unsigned.msi /qn
+msiexec /x kleidia-agent-0.4.9-unsigned.msi /qn
 ```
 
 ### macOS
 
 ```bash
 # Silent install with backend URL
-BACKEND_URL="kleidia.example.com" sudo installer -pkg kleidia-agent-0.4.6.pkg -target /
+BACKEND_URL="kleidia.example.com" sudo installer -pkg kleidia-agent-0.4.9.pkg -target /
 
 # Check service status
 sudo launchctl list | grep com.kleidia.agent
@@ -97,12 +97,12 @@ level = "info"
 
 ### Windows Install Command
 ```powershell
-msiexec /i kleidia-agent-0.4.6-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
+msiexec /i kleidia-agent-0.4.9-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
 ```
 
 ### Windows Uninstall Command
 ```powershell
-msiexec /x kleidia-agent-0.4.6-unsigned.msi /qn
+msiexec /x kleidia-agent-0.4.9-unsigned.msi /qn
 ```
 
 ### Windows Detection Script
@@ -157,7 +157,7 @@ New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 Copy-Item "\\DC\Software\Kleidia\agent.toml" "$configDir\agent.toml" -Force
 
 # Install agent
-Start-Process msiexec.exe -ArgumentList "/i \\DC\Software\Kleidia\kleidia-agent-0.4.6-unsigned.msi /qn /norestart" -Wait -NoNewWindow
+Start-Process msiexec.exe -ArgumentList "/i \\DC\Software\Kleidia\kleidia-agent-0.4.9-unsigned.msi /qn /norestart" -Wait -NoNewWindow
 
 exit $LASTEXITCODE
 ```
@@ -274,7 +274,7 @@ sudo launchctl kickstart -k system/com.kleidia.agent
 
 ---
 
-**Version**: 0.4.6  
+**Version**: 0.4.9  
 **Last Updated**: 2025-11-10
 
 For detailed installation instructions, see [Agent Installation Guide](../05-using-the-system/agent-installation.md)

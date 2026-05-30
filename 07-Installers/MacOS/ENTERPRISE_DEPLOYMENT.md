@@ -74,13 +74,10 @@ The installer will:
 # Check if service is running
 sudo launchctl list | grep com.kleidia.agent
 
-# Check agent status
-/usr/local/bin/kleidia-agent --version
-
 # View configuration
 cat /etc/kleidia/agent/agent.toml
 
-# Check local listener
+# Check local listener (also reports the agent version)
 curl http://127.0.0.1:56123/health
 ```
 
@@ -93,7 +90,7 @@ For scripted installations without GUI prompts:
 export BACKEND_URL="kleidia.example.com"
 
 # Install package silently
-sudo installer -pkg kleidia-agent-0.4.6.pkg -target /
+sudo installer -pkg kleidia-agent-0.4.9.pkg -target /
 
 # Verify
 sudo launchctl list | grep com.kleidia.agent
@@ -490,7 +487,7 @@ AGENT_BIN="/usr/local/bin/kleidia-agent"
 RESULT="Not Installed"
 
 if [ -f "$AGENT_BIN" ]; then
-    VERSION=$("$AGENT_BIN" --version 2>/dev/null | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "unknown")
+    VERSION=$(curl -s http://127.0.0.1:56123/health 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
     
     if /bin/launchctl list | grep -q com.kleidia.agent; then
         RESULT="Installed and Running ($VERSION)"
@@ -640,7 +637,7 @@ fi
 
 ```bash
 # Import package
-munkiimport kleidia-agent-0.4.6.pkg
+munkiimport kleidia-agent-0.4.9.pkg
 
 # During import, configure:
 # - Name: KleidiaAgent
@@ -699,7 +696,7 @@ exit 0
     <key>unattended_install</key>
     <true/>
     <key>version</key>
-    <string>0.4.6</string>
+    <string>0.4.9</string>
 </dict>
 </plist>
 ```
@@ -840,9 +837,6 @@ end
 # Check if agent binary exists
 ls -l /usr/local/bin/kleidia-agent
 
-# Check agent version
-/usr/local/bin/kleidia-agent --version
-
 # Check if LaunchDaemon is loaded
 sudo launchctl list | grep com.kleidia.agent
 
@@ -891,7 +885,7 @@ RESULTS=()
 
 # Check binary exists
 if [ -f "$AGENT_BIN" ]; then
-    VERSION=$("$AGENT_BIN" --version 2>/dev/null | grep -o 'v[0-9.]\+' || echo "unknown")
+    VERSION=$(curl -s http://127.0.0.1:56123/health 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
     RESULTS+=("✅ Binary installed: $VERSION")
 else
     RESULTS+=("❌ Binary not found")
@@ -1025,7 +1019,7 @@ sudo rm -rf /etc/kleidia/agent
 sudo rm -rf /var/log/kleidia-agent
 
 # Reinstall
-sudo installer -pkg kleidia-agent-0.4.6.pkg -target /
+sudo installer -pkg kleidia-agent-0.4.9.pkg -target /
 ```
 
 ---
@@ -1152,7 +1146,7 @@ Or deploy via MDM script/profile.
 - **SIGNING_GUIDE.md** - Code signing instructions
 - **NOTARIZATION_GUIDE.md** - Apple notarization process
 - **agent.toml.example** - Configuration file example
-- **GitHub Issues**: https://github.com/yourusername/kleidia/issues
+- **GitHub Issues**: https://github.com/kleidia/kleidia/issues
 
 ### Logs and Diagnostics
 - Installation: `/var/log/kleidia-agent/postinstall.log`
@@ -1184,14 +1178,14 @@ sudo launchctl bootstrap system /Library/LaunchDaemons/com.kleidia.agent.plist
 # Logs
 tail -f /var/log/kleidia-agent/stderr.log
 
-# Version
-/usr/local/bin/kleidia-agent --version
+# Version (reported by the local health endpoint)
+curl -s http://127.0.0.1:56123/health
 ```
 
 ---
 
 **Document Version**: 1.0  
 **Last Updated**: 2025-11-10  
-**Agent Version**: 0.4.6+  
+**Agent Version**: 0.4.9+  
 **Platforms**: macOS 10.15 (Catalina) and later
 

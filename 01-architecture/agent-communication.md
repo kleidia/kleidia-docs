@@ -76,7 +76,7 @@ Ready State:
 
 ```
 1. User → Frontend: Request PIN change
-2. Frontend → Backend: GET /api/yubikey/{serial}/secrets
+2. Frontend → Backend: GET /api/yubikeys/{serial}/secrets
 3. Backend:
    - Retrieves PIN from Vault
    - Gets agent_pubkey from PostgreSQL

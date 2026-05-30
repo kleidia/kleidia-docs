@@ -91,7 +91,7 @@ The `/admin-login` page provides an escape hatch for administrators when:
    - Session token (random string)
    - IP address
    - User agent
-   - Expiration time (1 hour)
+   - Expiration time (matches access-token lifetime, 30 minutes by default)
    - Agent public key (after registration)
 
 #### Session Validation
@@ -104,8 +104,8 @@ The `/admin-login` page provides an escape hatch for administrators when:
 
 #### Session Expiration
 
-- **Access Token**: Expires after 30 minutes
-- **Session**: Expires after 1 hour
+- **Access Token**: Expires after 30 minutes (default)
+- **Session**: Expires with the access token (30 minutes by default)
 - **Automatic Refresh**: Frontend refreshes token before expiration
 - **Logout**: Immediate session invalidation
 

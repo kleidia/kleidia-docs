@@ -53,12 +53,12 @@ Secrets stored at path: `yubikeys/data/{serial}/secrets`
 
 ### Application Secrets
 
-Application secrets stored in separate Vault paths:
+Application secrets are stored under the same `yubikeys/` KV v2 mount:
 
-- JWT signing keys (`secret/data/kleidia/jwt-secret`)
-- Encryption keys (`secret/data/kleidia/encryption-key`)
-- Database passwords (`secret/data/kleidia/database`)
-- License data (`secret/data/kleidia/licenses/*`)
+- JWT signing keys (`yubikeys/data/jwt-secret`)
+- Encryption keys (`yubikeys/data/encryption-key`)
+- Database passwords (`yubikeys/data/database`)
+- License data (`yubikeys/data/license/*`)
 
 ## Authentication Model
 
@@ -90,8 +90,7 @@ The backend service authenticates using the `backend-openbao` AppRole:
 
 - **Role ID**: Stored in Kubernetes secret `openbao-backend-approle`
 - **Secret ID**: Stored in Kubernetes secret `openbao-backend-approle`
-- **Token TTL**: 1 hour (auto-renewed)
-- **Token Max TTL**: 4 hours
+- **Token TTL**: 24 hours (periodic token, `token_period` 24h, auto-renewed)
 
 **Permissions**:
 - Read/write YubiKey secrets
@@ -105,8 +104,7 @@ The license service authenticates using the `license-openbao` AppRole:
 
 - **Role ID**: Stored in Kubernetes secret `openbao-license-approle`
 - **Secret ID**: Stored in Kubernetes secret `openbao-license-approle`
-- **Token TTL**: 1 hour (auto-renewed)
-- **Token Max TTL**: 4 hours
+- **Token TTL**: 24 hours (periodic token, `token_period` 24h, auto-renewed)
 
 **Permissions**:
 - Read/write license secrets
@@ -160,20 +158,24 @@ path "yubikeys/metadata/*" {
 }
 
 # Application secrets (specific paths only)
-path "secret/data/kleidia/jwt-secret" {
-  capabilities = ["create", "read", "update"]
+path "yubikeys/data/jwt-secret" {
+  capabilities = ["read", "update"]
 }
 
-path "secret/data/kleidia/encryption-key" {
-  capabilities = ["create", "read", "update"]
+path "yubikeys/data/encryption-key" {
+  capabilities = ["read", "update"]
 }
 
-path "secret/data/kleidia/database" {
-  capabilities = ["create", "read", "update"]
+path "yubikeys/data/database" {
+  capabilities = ["read"]
 }
 
 # Explicit deny for license secrets
-path "secret/data/kleidia/licenses/*" {
+path "yubikeys/data/license/*" {
+  capabilities = ["deny"]
+}
+
+path "yubikeys/metadata/license/*" {
   capabilities = ["deny"]
 }
 ```
@@ -182,20 +184,20 @@ path "secret/data/kleidia/licenses/*" {
 
 ```hcl
 # License secrets only
-path "secret/data/kleidia/licenses/*" {
+path "yubikeys/data/license/*" {
   capabilities = ["create", "read", "update", "delete", "list"]
 }
 
-path "secret/metadata/kleidia/licenses/*" {
+path "yubikeys/metadata/license/*" {
   capabilities = ["list", "read", "delete"]
 }
 
 # Explicit deny for backend secrets
-path "yubikeys/*" {
+path "yubikeys/data/jwt-secret" {
   capabilities = ["deny"]
 }
 
-path "secret/data/kleidia/jwt-secret" {
+path "yubikeys/data/encryption-key" {
   capabilities = ["deny"]
 }
 ```
@@ -213,7 +215,7 @@ path "secret/data/kleidia/jwt-secret" {
 ### Secret Retrieval
 
 1. User requests YubiKey operation
-2. Frontend requests secrets: `GET /api/yubikey/{serial}/secrets`
+2. Frontend requests secrets: `GET /api/yubikeys/{serial}/secrets`
 3. Backend authenticates to Vault (AppRole)
 4. Backend retrieves secrets from Vault
 5. Backend encrypts secrets with agent public key (RSA-OAEP)
@@ -440,6 +442,8 @@ When administrators enter unseal keys in the web interface (for manual unseal or
 | Backend | ✅ Full | ❌ Denied | ✅ Full | ❌ No |
 | License Service | ❌ Denied | ✅ Full | ❌ No | ❌ No |
 | Helm Admin | ❌ No Access | ❌ No Access | ✅ Roles only | ✅ Limited |
+
+> **Note**: "YubiKey Secrets" here refers to device secrets at `yubikeys/data/{serial}/secrets`, and "License Secrets" refers to `yubikeys/data/license/*`. Both live under the single `yubikeys/` KV v2 mount; access is scoped by path within that mount, not by separate mounts. The license service is granted `yubikeys/data/license/*` and denied other YubiKey paths; the backend is the inverse.
 
 ### Operational Security
 

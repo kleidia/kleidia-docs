@@ -23,7 +23,7 @@ curl http://127.0.0.1:56123/health
 curl http://127.0.0.1:56123/.well-known/kleidia-agent
 
 # Check backend logs
-kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i agent
+kubectl logs -f deployment/backend -n kleidia | grep -i agent
 ```
 
 ### Resolution
@@ -45,10 +45,10 @@ kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i agent
 3. **Key Registration Failed**
    ```bash
    # Check backend logs for registration errors
-   kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i register
+   kubectl logs -f deployment/backend -n kleidia | grep -i register
    
    # Check database for agent keys
-   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+   kubectl exec -it kleidia-db-1 -n kleidia -- \
      psql -U kleidiauser -d kleidia -c "SELECT * FROM user_sessions WHERE agent_pubkey IS NOT NULL;"
    ```
 
@@ -69,7 +69,7 @@ Device needs to be revoked (lost, stolen, compromised, or user departure).
 2. **Verify Revocation**:
    ```bash
    # Check device status in database
-   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+   kubectl exec -it kleidia-db-1 -n kleidia -- \
      psql -U kleidiauser -d kleidia -c \
      "SELECT id, serial, is_active, deleted_at FROM yubikeys WHERE serial = '<serial-number>';"
    ```
@@ -84,7 +84,7 @@ Device needs to be revoked (lost, stolen, compromised, or user departure).
 4. **Verify Certificates Revoked**:
    ```bash
    # Check audit logs for certificate revocation
-   kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i "revoke.*certificate"
+   kubectl logs -f deployment/backend -n kleidia | grep -i "revoke.*certificate"
    ```
 
 ### Automatic Wipe Behavior
@@ -122,10 +122,10 @@ Backend returns 403 errors when accessing Vault.
 kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 
 # Check backend Vault authentication
-kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i vault
+kubectl logs -f deployment/backend -n kleidia | grep -i vault
 
 # Check AppRole credentials
-kubectl get secret vault-approle -n kleidia
+kubectl get secret openbao-backend-approle -n kleidia
 
 # Test Vault authentication
 kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
@@ -163,7 +163,7 @@ kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
 3. **Token Expired**
    ```bash
    # Restart backend to get new token
-   kubectl rollout restart deployment/kleidia-services-backend -n kleidia
+   kubectl rollout restart deployment/backend -n kleidia
    ```
 
 ## TLS Certificate Expiry
@@ -208,7 +208,7 @@ curl http://127.0.0.1:56123/health
 curl http://127.0.0.1:56123/.well-known/kleidia-agent
 
 # Check backend logs
-kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i agent
+kubectl logs -f deployment/backend -n kleidia | grep -i agent
 ```
 
 ### Resolution
@@ -273,11 +273,11 @@ Slow queries, high database load.
 
 ```bash
 # Check database connections
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "SELECT count(*) FROM pg_stat_activity;"
 
 # Check slow queries
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "
     SELECT query, calls, total_time, mean_time
     FROM pg_stat_statements
@@ -297,11 +297,11 @@ kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
 2. **Slow Queries**
    ```bash
    # Vacuum database
-   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+   kubectl exec -it kleidia-db-1 -n kleidia -- \
      psql -U kleidiauser -d kleidia -c "VACUUM ANALYZE;"
    
    # Check for missing indexes
-   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+   kubectl exec -it kleidia-db-1 -n kleidia -- \
      psql -U kleidiauser -d kleidia -c "
        SELECT schemaname, tablename, attname, n_distinct, correlation
        FROM pg_stats
@@ -362,33 +362,41 @@ kubectl rollout restart deployment -n kleidia
 
 ```bash
 # Stop backend
-kubectl scale deployment/kleidia-services-backend --replicas=0 -n kleidia
+kubectl scale deployment/backend --replicas=0 -n kleidia
 
 # Restore from backup
 gunzip -c backups/20250115/database.sql.gz | \
-  kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
+  kubectl exec -i kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia
 
 # Restart backend
-kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia
+kubectl scale deployment/backend --replicas=2 -n kleidia
 ```
 
 ### Vault Recovery
 
+OpenBao uses `storage "file"`, so recovery is done by restoring its on-disk data directory (`/openbao/data`) from a backup archive — there is no raft snapshot restore. For most scenarios, prefer the built-in restore (KV secrets) plus the PostgreSQL restore above.
+
 ```bash
 # Stop backend
-kubectl scale deployment/kleidia-services-backend --replicas=0 -n kleidia
+kubectl scale deployment/backend --replicas=0 -n kleidia
 
-# Restore Vault snapshot
-kubectl cp backups/20250115/vault-backup.snap \
-  kleidia-platform-openbao-0:/tmp/vault-backup.snap -n kleidia
+# Copy the data-directory archive into the pod
+kubectl cp backups/20250115/openbao-data.tar.gz \
+  kleidia-platform-openbao-0:/tmp/openbao-data.tar.gz -n kleidia
 
+# Restore the data directory (OpenBao must be restarted afterwards to re-read it)
 kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  bao operator raft snapshot restore /tmp/vault-backup.snap
+  sh -c "tar xzf /tmp/openbao-data.tar.gz -C /openbao"
+
+# Restart OpenBao so it loads the restored data and auto-unseals
+kubectl rollout restart statefulset/kleidia-platform-openbao -n kleidia
 
 # Restart backend
-kubectl scale deployment/kleidia-services-backend --replicas=2 -n kleidia
+kubectl scale deployment/backend --replicas=2 -n kleidia
 ```
+
+> **Note**: The restored data directory is only usable by an OpenBao instance with the same static unseal key.
 
 ## Related Documentation
 

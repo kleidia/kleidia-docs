@@ -64,17 +64,17 @@ kubectl get events -n kleidia --sort-by=.metadata.creationTimestamp
 
 ```bash
 # Check PostgreSQL pod status
-kubectl get pods -l app=postgres-cluster -n kleidia
+kubectl get pods -l cnpg.io/cluster=kleidia-db -n kleidia
 
 # Check PostgreSQL logs
-kubectl logs -f kleidia-data-postgres-cluster-0 -n kleidia
+kubectl logs -f kleidia-db-1 -n kleidia
 
 # Test database connection
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "SELECT 1;"
 
 # Check backend logs
-kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i postgres
+kubectl logs -f deployment/backend -n kleidia | grep -i postgres
 ```
 
 #### Solutions
@@ -82,7 +82,7 @@ kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i postgre
 1. **PostgreSQL Not Ready**
    ```bash
    # Wait for PostgreSQL to be ready
-   kubectl wait --for=condition=ready pod -l app=postgres-cluster -n kleidia --timeout=300s
+   kubectl wait --for=condition=ready pod -l cnpg.io/cluster=kleidia-db -n kleidia --timeout=300s
    ```
 
 2. **Wrong Credentials**
@@ -90,7 +90,7 @@ kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i postgre
    - Verify backend environment variables
 
 3. **Network Issues**
-   - Verify service name: `postgres-cluster.kleidia.svc.cluster.local`
+   - Verify service name: `postgres.kleidia.svc.cluster.local`
    - Check network policies
 
 ### Vault Connection Issues
@@ -112,7 +112,7 @@ kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- bao status
 kubectl logs -f kleidia-platform-openbao-0 -n kleidia
 
 # Test Vault connectivity
-kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
+kubectl exec -it deployment/backend -n kleidia -- \
   curl http://kleidia-platform-openbao:8200/v1/sys/health
 ```
 
@@ -130,10 +130,10 @@ kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
 2. **AppRole Authentication Failed**
    ```bash
    # Check AppRole secret
-   kubectl get secret vault-approle -n kleidia
+   kubectl get secret openbao-backend-approle -n kleidia
    
    # Verify backend can authenticate
-   kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
+   kubectl exec -it deployment/backend -n kleidia -- \
      env | grep VAULT
    ```
 
@@ -238,7 +238,7 @@ df -h
 curl https://kleidia.example.com/api/health
 
 # Database health
-kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -it kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia -c "SELECT 1;"
 
 # Vault health
@@ -252,13 +252,13 @@ curl -I https://kleidia.example.com
 
 ```bash
 # Backend logs
-kubectl logs -f deployment/kleidia-services-backend -n kleidia
+kubectl logs -f deployment/backend -n kleidia
 
 # Frontend logs
-kubectl logs -f deployment/kleidia-services-frontend -n kleidia
+kubectl logs -f deployment/frontend -n kleidia
 
 # Database logs
-kubectl logs -f kleidia-data-postgres-cluster-0 -n kleidia
+kubectl logs -f kleidia-db-1 -n kleidia
 
 # OpenBao logs
 kubectl logs -f kleidia-platform-openbao-0 -n kleidia
@@ -277,18 +277,19 @@ kubectl rollout restart deployment -n kleidia
 
 ```bash
 # Restore from backup
-kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -i kleidia-db-1 -n kleidia -- \
   psql -U kleidiauser -d kleidia < backup.sql
 ```
 
 ### Vault Recovery
 
 ```bash
-# Restore Vault snapshot
-kubectl cp ./vault-backup.snap kleidia-platform-openbao-0:/tmp/vault-backup.snap -n kleidia
+# Restore OpenBao data (storage is "file", not raft — restore the data dir archive)
+kubectl cp ./openbao-data.tgz kleidia-platform-openbao-0:/tmp/openbao-data.tgz -n kleidia
 
-kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  vault operator raft snapshot restore /tmp/vault-backup.snap
+kubectl exec -n kleidia kleidia-platform-openbao-0 -- \
+  sh -c 'tar xzf /tmp/openbao-data.tgz -C /openbao/data'
+kubectl rollout restart statefulset/kleidia-platform-openbao -n kleidia
 ```
 
 ## Bootstrap and First-Time Setup Issues
@@ -303,7 +304,7 @@ kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
 
 ```bash
 # Check if admin users exist
-kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
+kubectl exec -it deployment/backend -n kleidia -- \
   curl http://localhost:8080/api/bootstrap/status
 
 # Expected: {"pending": true} if no admin exists
@@ -321,7 +322,7 @@ kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
    - Check backend can connect to database
    - Verify database is ready
    ```bash
-   kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i bootstrap
+   kubectl logs deployment/backend -n kleidia | grep -i bootstrap
    ```
 
 ### OpenBao Bootstrap Keys Modal Issues
@@ -338,7 +339,7 @@ kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
 kubectl get secret openbao-init-keys -n kleidia
 
 # Check backend logs for key retrieval
-kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i "OPENBAO_KEYS"
+kubectl logs deployment/backend -n kleidia | grep -i "OPENBAO_KEYS"
 
 # Check backend has RBAC permissions
 kubectl get role backend-secret-reader -n kleidia -o yaml
@@ -392,7 +393,7 @@ kubectl get role backend-secret-reader -n kleidia -o yaml
 kubectl get secret openbao-init-keys -n kleidia
 
 # Check audit logs for key access
-kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
+kubectl exec -it deployment/backend -n kleidia -- \
   curl http://localhost:8080/api/admin/audit-logs | grep openbao.keys
 ```
 
@@ -432,11 +433,11 @@ kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
 
 ```bash
 # Check active bootstrap locks
-kubectl exec -it deployment/kleidia-services-backend -n kleidia -- \
+kubectl exec -it deployment/backend -n kleidia -- \
   curl http://localhost:8080/api/bootstrap/status
 
 # Check backend logs
-kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i bootstrap
+kubectl logs deployment/backend -n kleidia | grep -i bootstrap
 ```
 
 #### Solutions
@@ -448,7 +449,7 @@ kubectl logs deployment/kleidia-services-backend -n kleidia | grep -i bootstrap
 2. **Clear Expired Locks** (Database Access)
    ```bash
    # Connect to database
-   kubectl exec -it kleidia-data-postgres-cluster-0 -n kleidia -- \
+   kubectl exec -it kleidia-db-1 -n kleidia -- \
      psql -U kleidiauser -d kleidia
    
    # Check locks

@@ -91,7 +91,7 @@ For scripted or remote deployment:
   export BACKEND_URL="kleidia.example.com"
   
   # Install package
-  sudo installer -pkg kleidia-agent-0.4.6.pkg -target /
+  sudo installer -pkg kleidia-agent-0.4.9.pkg -target /
   
   # Verify installation
   sudo launchctl list | grep com.kleidia.agent
@@ -121,15 +121,15 @@ After installation, verify the agent is running:
    Should show: com.kleidia.agent (with PID)
 
 2. Check agent version:
-   
-   /usr/local/bin/kleidia-agent --version
-   
-   Should show: Kleidia Agent vX.Y.Z
+
+   curl -s http://127.0.0.1:56123/health
+
+   The JSON response includes the agent "version" field
 
 3. Test local listener:
-   
+
    curl http://127.0.0.1:56123/health
-   
+
    Should return: HTTP 200 OK
 
 4. View configuration:
@@ -251,7 +251,7 @@ Installation fails:
   cat /var/log/kleidia-agent/postinstall.log
   
   # Verify package signature
-  pkgutil --check-signature kleidia-agent-0.4.6.pkg
+  pkgutil --check-signature kleidia-agent-0.4.9.pkg
 
 ================================================================================
 LOGS AND DIAGNOSTICS
@@ -324,12 +324,12 @@ Service Management:
 
 Agent Commands:
 
-  # Check version
-  /usr/local/bin/kleidia-agent --version
-  
-  # View help
-  /usr/local/bin/kleidia-agent --help
-  
+  # Check version (reported by the local health endpoint)
+  curl -s http://127.0.0.1:56123/health
+
+  # Run with a specific config file (only supported flag)
+  /usr/local/bin/kleidia-agent --config /etc/kleidia/agent/agent.toml
+
   # Test local listener
   curl http://127.0.0.1:56123/health
 
@@ -409,7 +409,7 @@ Documentation:
   - README.md - General information
 
 For issues and support:
-  - GitHub: https://github.com/yourusername/kleidia/issues
+  - GitHub: https://github.com/kleidia/kleidia/issues
   - Check logs: /var/log/kleidia-agent/
   - Include installation logs when reporting issues
 
@@ -449,7 +449,7 @@ QUICK REFERENCE
 ================================================================================
 
 Installation:
-  sudo installer -pkg kleidia-agent-0.4.6.pkg -target /
+  sudo installer -pkg kleidia-agent-0.4.9.pkg -target /
 
 Verify:
   sudo launchctl list | grep com.kleidia.agent

@@ -380,26 +380,28 @@ For environments without S3 access or for additional backup methods:
 
 ```bash
 # Create backup
-kubectl exec -i kleidia-data-postgres-cluster-0 -n kleidia -- \
+kubectl exec -i kleidia-db-1 -n kleidia -- \
   pg_dumpall -U kleidiauser > database-backup.sql
 
 # Compress
 gzip database-backup.sql
 ```
 
-### OpenBao Snapshot
+### OpenBao Data Directory Backup
+
+OpenBao is configured with `storage "file"` (not raft), so there is no `operator raft snapshot` command. To back up OpenBao manually, archive its on-disk data directory (`/openbao/data`):
 
 ```bash
-# Create snapshot (requires root token)
+# Archive the OpenBao data directory inside the pod
 kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  bao operator raft snapshot save /tmp/vault-backup.snap
+  tar czf /tmp/openbao-data.tar.gz -C /openbao data
 
 # Copy locally
-kubectl cp kleidia-platform-openbao-0:/tmp/vault-backup.snap \
-  vault-backup.snap -n kleidia
+kubectl cp kleidia-platform-openbao-0:/tmp/openbao-data.tar.gz \
+  openbao-data.tar.gz -n kleidia
 ```
 
-> **Note**: OpenBao raft snapshots include the master key encryption layer and can only be restored to the same OpenBao instance or one initialized with the same unseal keys.
+> **Note**: The OpenBao file storage is encrypted at rest using the static seal key. A data-directory archive can only be restored to an OpenBao instance using the same unseal key. For most disaster-recovery scenarios, prefer the built-in backup system (which exports KV secrets) plus a `pg_dump` of the PostgreSQL database.
 
 ## API Reference
 
@@ -409,31 +411,30 @@ The backup system exposes the following REST API endpoints:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/backup/trigger` | Trigger a manual backup |
-| `GET` | `/api/backup/list` | List available backups |
-| `DELETE` | `/api/backup/{key}` | Delete a specific backup |
-| `GET` | `/api/backup/test-connection` | Test S3 connectivity |
+| `POST` | `/api/admin/system/backup/run` | Trigger a manual backup |
+| `GET` | `/api/admin/system/backup/list` | List available backups |
+| `DELETE` | `/api/admin/system/backup` | Delete a specific backup |
+| `POST` | `/api/admin/system/backup/test-s3` | Test S3 connectivity |
 
 ### Restore Operations
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/backup/restore` | Initiate a restore |
-| `POST` | `/api/backup/restore/validate-password` | Validate restore password |
-| `GET` | `/api/backup/restore/status` | Get current restore status |
+| `POST` | `/api/admin/system/backup/restore` | Initiate a restore |
+| `POST` | `/api/admin/system/backup/restore/validate` | Validate restore password |
+| `GET` | `/api/admin/system/backup/restore/status` | Get current restore status |
 
 ### Job Management
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/backup/jobs` | List backup/restore jobs |
-| `GET` | `/api/backup/jobs/{id}` | Get specific job details |
-| `GET` | `/api/backup/jobs/running` | Get currently running jobs |
+| `GET` | `/api/admin/system/backup/jobs` | List backup/restore jobs |
+| `GET` | `/api/admin/system/backup/jobs/{id}` | Get specific job details |
 
 ### Example: Trigger Backup via API
 
 ```bash
-curl -X POST https://kleidia.example.com/api/backup/trigger \
+curl -X POST https://kleidia.example.com/api/admin/system/backup/run \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"type": "full"}'
@@ -442,7 +443,7 @@ curl -X POST https://kleidia.example.com/api/backup/trigger \
 ### Example: List Backups
 
 ```bash
-curl -X GET "https://kleidia.example.com/api/backup/list?limit=10" \
+curl -X GET "https://kleidia.example.com/api/admin/system/backup/list?limit=10" \
   -H "Authorization: Bearer $TOKEN"
 ```
 

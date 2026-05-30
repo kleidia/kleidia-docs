@@ -40,21 +40,22 @@ For enterprise deployments, use the **MSI packages** with your management tools.
 
 2. **Copy the MSI files** to the share:
    ```powershell
-   Copy-Item "kleidia-agent-0.4.5-unsigned.msi" "\\DC\Software\Kleidia\"
+   Copy-Item "kleidia-agent-0.4.9-unsigned.msi" "\\DC\Software\Kleidia\"
    Copy-Item "yubikey-manager.msi" "\\DC\Software\Kleidia\"
    ```
 
 3. **Create the agent.toml configuration file** with your backend URL:
    ```toml
    # agent.toml
-   backend_url = "https://kleidia.example.com"
-   backend_host = "kleidia.example.com"
-   log_level = "info"
-   
-   [local_listener]
-   enabled = true
-   host = "127.0.0.1"
    port = 56123
+   name = "Kleidia Agent"
+   backend_url = "https://kleidia.example.com"
+   allowed_origins = [
+       "https://kleidia.example.com"
+   ]
+
+   [logging]
+   level = "info"
    ```
 
 4. **Save agent.toml to the share**:
@@ -128,7 +129,7 @@ try {
     
     # Install Kleidia Agent
     Write-Log "Installing Kleidia Agent..."
-    $agentMsi = "\\DC\Software\Kleidia\kleidia-agent-0.4.5-unsigned.msi"
+    $agentMsi = "\\DC\Software\Kleidia\kleidia-agent-0.4.9-unsigned.msi"
     Start-Process msiexec.exe -ArgumentList "/i `"$agentMsi`" /qn /norestart /L*v `"C:\Windows\Temp\kleidia-install.log`"" -Wait -NoNewWindow
     
     if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3010) {
@@ -207,7 +208,7 @@ try {
 2. **Create a source folder** with all required files:
    ```
    C:\Kleidia-Intune\
-   ├── kleidia-agent-0.4.5-unsigned.msi
+   ├── kleidia-agent-0.4.9-unsigned.msi
    ├── yubikey-manager.msi
    ├── agent.toml
    └── install.ps1
@@ -230,7 +231,7 @@ try {
    Copy-Item "$scriptDir\agent.toml" "$configDir\agent.toml" -Force
    
    # Install Kleidia Agent
-   Start-Process msiexec.exe -ArgumentList "/i `"$scriptDir\kleidia-agent-0.4.5-unsigned.msi`" /qn /norestart" -Wait -NoNewWindow
+   Start-Process msiexec.exe -ArgumentList "/i `"$scriptDir\kleidia-agent-0.4.9-unsigned.msi`" /qn /norestart" -Wait -NoNewWindow
    
    exit $LASTEXITCODE
    ```
@@ -276,7 +277,7 @@ try {
    - **Name**: Kleidia Agent
    - **Description**: YubiKey management agent for enterprise environments
    - **Publisher**: Kleidia
-   - **App Version**: 0.4.5
+   - **App Version**: 0.4.9
 
 4. **Configure program**:
    - **Install command**:
@@ -342,8 +343,8 @@ try {
 
 1. **Create source directory** on network share:
    ```
-   \\SCCM\Source$\Kleidia\0.4.5\
-   ├── kleidia-agent-0.4.5-unsigned.msi
+   \\SCCM\Source$\Kleidia\0.4.9\
+   ├── kleidia-agent-0.4.9-unsigned.msi
    ├── yubikey-manager.msi
    ├── agent.toml
    └── install.cmd
@@ -365,7 +366,7 @@ try {
    copy /Y "%~dp0agent.toml" "C:\ProgramData\Kleidia\agent\agent.toml"
    
    REM Install Kleidia Agent
-   msiexec.exe /i "%~dp0kleidia-agent-0.4.5-unsigned.msi" /qn /norestart /L*v "%TEMP%\kleidia-install.log"
+   msiexec.exe /i "%~dp0kleidia-agent-0.4.9-unsigned.msi" /qn /norestart /L*v "%TEMP%\kleidia-install.log"
    EXIT /B %ERRORLEVEL%
    ```
 
@@ -374,7 +375,7 @@ try {
    @echo off
    REM SCCM uninstallation script for Kleidia Agent
    
-   msiexec.exe /x "%~dp0kleidia-agent-0.4.5-unsigned.msi" /qn /norestart
+   msiexec.exe /x "%~dp0kleidia-agent-0.4.9-unsigned.msi" /qn /norestart
    EXIT /B %ERRORLEVEL%
    ```
 
@@ -391,14 +392,14 @@ try {
 3. **Configure General Information**:
    - **Name**: Kleidia Agent
    - **Publisher**: Kleidia
-   - **Software Version**: 0.4.5
+   - **Software Version**: 0.4.9
    - **Optional reference**: YubiKey management agent
    - Click **Next**
 
 4. **Add Deployment Type**:
    - Click **Add** → **Script Installer**
    - **Name**: Kleidia Agent - Windows Installer
-   - **Content location**: `\\SCCM\Source$\Kleidia\0.4.5\`
+   - **Content location**: `\\SCCM\Source$\Kleidia\0.4.9\`
    - **Installation program**: `install.cmd`
    - **Uninstall program**: `uninstall.cmd`
    - Click **Next**
@@ -506,14 +507,15 @@ $configDir = "C:\ProgramData\Kleidia\agent"
 New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 
 $configContent = @"
-backend_url = "$BackendUrl"
-backend_host = "$($BackendUrl -replace 'https?://', '')"
-log_level = "info"
-
-[local_listener]
-enabled = true
-host = "127.0.0.1"
 port = 56123
+name = "Kleidia Agent"
+backend_url = "$BackendUrl"
+allowed_origins = [
+    "$BackendUrl"
+]
+
+[logging]
+level = "info"
 "@
 
 $configContent | Out-File -FilePath "$configDir\agent.toml" -Encoding UTF8
@@ -559,16 +561,16 @@ foreach ($computer in $computers) {
 
 ```powershell
 # Install with all defaults
-msiexec /i kleidia-agent-0.4.5-unsigned.msi /qn
+msiexec /i kleidia-agent-0.4.9-unsigned.msi /qn
 
 # Install with backend URL
-msiexec /i kleidia-agent-0.4.5-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
+msiexec /i kleidia-agent-0.4.9-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
 
 # Install with logging
-msiexec /i kleidia-agent-0.4.5-unsigned.msi /qn /L*v C:\install.log
+msiexec /i kleidia-agent-0.4.9-unsigned.msi /qn /L*v C:\install.log
 
 # Install without restart
-msiexec /i kleidia-agent-0.4.5-unsigned.msi /qn /norestart
+msiexec /i kleidia-agent-0.4.9-unsigned.msi /qn /norestart
 ```
 
 ### Silent Uninstallation
@@ -579,7 +581,7 @@ $app = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -eq "Kleidia 
 $app.Uninstall()
 
 # Or by MSI file
-msiexec /x kleidia-agent-0.4.5-unsigned.msi /qn
+msiexec /x kleidia-agent-0.4.9-unsigned.msi /qn
 
 # Or by product code
 msiexec /x {PRODUCT-CODE-GUID} /qn
@@ -841,7 +843,7 @@ $app.Uninstall()
 Remove-Item -Path "C:\ProgramData\Kleidia\agent" -Recurse -Force
 
 # Reinstall
-msiexec /i kleidia-agent-0.4.5-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
+msiexec /i kleidia-agent-0.4.9-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
 ```
 
 ---
@@ -906,8 +908,8 @@ Deploy certificates via GPO Preferences or your configuration management tool.
 
 ### Getting Help
 
-- **Documentation**: https://github.com/yourusername/kleidia/tree/main/docs
-- **Issues**: https://github.com/yourusername/kleidia/issues
+- **Documentation**: https://github.com/kleidia/kleidia/tree/main/docs
+- **Issues**: https://github.com/kleidia/kleidia/issues
 - **Logs**: `C:\Windows\Temp\kleidia-install.log` and Windows Event Viewer
 
 ### Updating the Agent
@@ -956,7 +958,7 @@ Deploy certificates via GPO Preferences or your configuration management tool.
 
 These are set during MSI build:
 
-- **Version**: Agent version (e.g., `0.4.5`)
+- **Version**: Agent version (e.g., `0.4.9`)
 - **Manufacturer**: Publisher name
 - **UpgradeCode**: GUID for upgrade detection
 
@@ -980,5 +982,5 @@ For advanced scenarios:
 
 **Document Version**: 1.0  
 **Last Updated**: 2025-11-10  
-**Agent Version**: 0.4.5+
+**Agent Version**: 0.4.9+
 

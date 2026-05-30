@@ -8,7 +8,7 @@
 
 The Kleidia Agent runs on user workstations to enable YubiKey management through your web browser. The agent provides a secure bridge between the browser and locally-connected YubiKey devices.
 
-**Current Version**: 0.4.6
+**Current Version**: 0.4.9
 
 ---
 
@@ -36,17 +36,17 @@ The Kleidia Agent runs on user workstations to enable YubiKey management through
 
 1. Sign in to **Microsoft Endpoint Manager** (https://endpoint.microsoft.com)
 2. Navigate to **Apps → Windows → Add → Windows app (Win32)**
-3. Upload `kleidia-agent-0.4.6-unsigned.msi`
+3. Upload `kleidia-agent-0.4.9-unsigned.msi`
 4. Configure application:
    - **Name**: Kleidia Agent
    - **Publisher**: Kleidia
    - **Install command**:
      ```powershell
-     msiexec /i kleidia-agent-0.4.6-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
+     msiexec /i kleidia-agent-0.4.9-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
      ```
    - **Uninstall command**:
      ```powershell
-     msiexec /x kleidia-agent-0.4.6-unsigned.msi /qn
+     msiexec /x kleidia-agent-0.4.9-unsigned.msi /qn
      ```
 
 #### Detection Rule
@@ -81,7 +81,7 @@ exit 1
    ```
 
 2. **Copy installation files**:
-   - `kleidia-agent-0.4.6-unsigned.msi`
+   - `kleidia-agent-0.4.9-unsigned.msi`
    - `yubikey-manager.msi`
 
 3. **Create agent.toml** configuration in the share:
@@ -112,7 +112,7 @@ New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 Copy-Item "\\DC\Software\Kleidia\agent.toml" "$configDir\agent.toml" -Force
 
 # Install agent
-Start-Process msiexec.exe -ArgumentList "/i \\DC\Software\Kleidia\kleidia-agent-0.4.6-unsigned.msi /qn /norestart" -Wait -NoNewWindow
+Start-Process msiexec.exe -ArgumentList "/i \\DC\Software\Kleidia\kleidia-agent-0.4.9-unsigned.msi /qn /norestart" -Wait -NoNewWindow
 
 exit $LASTEXITCODE
 ```
@@ -137,7 +137,7 @@ exit $LASTEXITCODE
 
 1. Sign in to **Jamf Pro**
 2. Navigate to **Settings → Computer Management → Packages**
-3. Click **New** and upload `kleidia-agent-0.4.6.pkg`
+3. Click **New** and upload `kleidia-agent-0.4.9.pkg`
 4. Configure:
    - **Display Name**: Kleidia Agent
    - **Category**: Productivity
@@ -206,7 +206,7 @@ AGENT_BIN="/usr/local/bin/kleidia-agent"
 RESULT="Not Installed"
 
 if [ -f "$AGENT_BIN" ]; then
-    VERSION=$("$AGENT_BIN" --version 2>/dev/null | grep -o 'v[0-9.]\+' || echo "unknown")
+    VERSION=$(curl -s http://127.0.0.1:56123/health 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
     if /bin/launchctl list | grep -q com.kleidia.agent; then
         RESULT="Installed and Running ($VERSION)"
     else
@@ -227,7 +227,7 @@ echo "<result>$RESULT</result>"
 
 1. Sign in to **Microsoft Endpoint Manager** (https://endpoint.microsoft.com)
 2. Navigate to **Apps → macOS → Add → macOS app (PKG)**
-3. Upload `kleidia-agent-0.4.6.pkg`
+3. Upload `kleidia-agent-0.4.9.pkg`
 4. Configure:
    - **Name**: Kleidia Agent
    - **Publisher**: Kleidia
@@ -288,10 +288,7 @@ exit 1
 # Check service status
 Get-Service -Name "KleidiaAgent"
 
-# Check version
-& "C:\Program Files\Kleidia\Agent\kleidia-agent.exe" --version
-
-# Test health endpoint
+# Test health endpoint (also reports the agent version)
 Invoke-WebRequest -Uri "http://127.0.0.1:56123/health"
 
 # View configuration
@@ -304,10 +301,7 @@ Get-Content "C:\ProgramData\Kleidia\agent\agent.toml"
 # Check service status
 sudo launchctl list | grep com.kleidia.agent
 
-# Check version
-/usr/local/bin/kleidia-agent --version
-
-# Test health endpoint
+# Test health endpoint (also reports the agent version)
 curl http://127.0.0.1:56123/health
 
 # View configuration
@@ -491,7 +485,7 @@ sudo rm -rf /etc/kleidia/agent
 
 ---
 
-**Version**: 0.4.6  
+**Version**: 0.4.9  
 **Last Updated**: 2025-11-10  
 **Platforms**: Windows 10+, macOS 10.15+
 

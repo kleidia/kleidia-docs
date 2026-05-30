@@ -86,18 +86,20 @@ openbao:
 ```yaml
 postgres:
   enabled: true
-  version: "18"                         # PostgreSQL version
   database: kleidia                     # Database name
   username: kleidiauser                  # Database user
   storage:
     size: 10Gi                          # Storage size
+
+cnpg:
+  version: "18"                         # PostgreSQL version (CloudNativePG mode)
 ```
 
 ### Database TLS Configuration (CloudNativePG)
 
 > ⚠️ **Kubernetes Version Requirement**: Database TLS is only available when using CloudNativePG, which requires **Kubernetes 1.32+**. On older Kubernetes versions, the legacy PostgreSQL StatefulSet is used, which does not support TLS (connections remain unencrypted but within the internal Kubernetes network).
 
-When using CloudNativePG (K8s 1.32+), enable TLS for secure database connections:
+When using CloudNativePG (K8s 1.32+), TLS is enabled for database connections. `database.tls.enabled` defaults to `true`; if the client certificate secret is not present (e.g. legacy PostgreSQL), the backend automatically falls back to a non-TLS connection:
 
 ```yaml
 database:
@@ -200,23 +202,31 @@ openbao:
 
 ### Backend Environment Variables
 
-Backend configuration via environment variables (set in Helm values):
+The backend's environment is managed by the `kleidia-services` chart and is **not** overridable via a `backend.env` list in values. The deployment sets these automatically:
 
-```yaml
-backend:
-  env:
-    - name: DATABASE_URL
-      value: "postgresql://kleidiauser:password@postgres-cluster:5432/kleidia"
-    - name: VAULT_ADDR
-      value: "http://kleidia-platform-openbao:8200"
-    - name: VAULT_AUTH_METHOD
-      value: "approle"
-    - name: JWT_SECRET_KEY
-      valueFrom:
-        secretKeyRef:
-          name: kleidia-secrets
-          key: jwt-secret
-```
+**Database connection** (derived from the `kleidia-data` chart):
+
+| Variable | Value/Source |
+|----------|--------------|
+| `DB_HOST` | `postgres.<namespace>.svc.cluster.local` |
+| `DB_PORT` | `5432` |
+| `DB_USER` | `kleidiauser` |
+| `DB_NAME` | `kleidia` |
+| `DB_PASSWORD` | secret `kleidia-db-app`, key `password` |
+| `DB_SSL_MODE` | from `database.tls.sslMode` (or `disable` when TLS is off) |
+
+**OpenBao connection** (AppRole auth):
+
+| Variable | Value/Source |
+|----------|--------------|
+| `VAULT_ADDR` | `http://kleidia-platform-openbao.<namespace>.svc.cluster.local:8200` |
+| `VAULT_AUTH_METHOD` | `approle` |
+| `VAULT_ROLE_ID` | secret `openbao-backend-approle`, key `role_id` |
+| `VAULT_SECRET_ID` | secret `openbao-backend-approle`, key `secret_id` |
+
+The JWT signing key, encryption key, and database secret are stored in OpenBao KV (mount `yubikeys`, paths `jwt-secret`/`encryption-key`/`database`) and read at runtime via the AppRole credentials — they are not injected as plain environment variables.
+
+The customer-tunable backend settings exposed in values are `backend.corsOrigins`, `backend.oidc.*`, `backend.replicas`, `backend.image.*`, and `backend.resources.*`.
 
 ### OIDC Environment Variables
 
@@ -257,13 +267,18 @@ See [Admin Guide - OIDC Configuration](../05-using-the-system/admin-guide.md) fo
 
 ### Frontend Environment Variables
 
+The frontend's URLs are derived from `global.siteUrl` (or `global.domain`); there is no `frontend.env` override list. The chart sets:
+
+| Variable | Source |
+|----------|--------|
+| `NUXT_PUBLIC_SITE_URL` | `global.siteUrl` (used for absolute URLs and OIDC redirects) |
+| `NUXT_PUBLIC_API_BASE` | derived from the site URL (`/api`) |
+
+To change these, set `global.siteUrl`:
+
 ```yaml
-frontend:
-  env:
-    - name: API_BASE_URL
-      value: "https://kleidia.example.com/api"
-    - name: WS_BASE_URL
-      value: "wss://kleidia.example.com"
+global:
+  siteUrl: "https://kleidia.example.com"
 ```
 
 ## Secrets Management
@@ -277,23 +292,14 @@ Helm charts automatically generate secrets:
 - Vault AppRole credentials
 - Encryption keys
 
-### Custom Secrets
+### Secret References
 
-To use custom secrets:
+The chart wires the backend to fixed Kubernetes secrets created during installation. The backend reads its credentials from:
 
-```yaml
-backend:
-  secrets:
-    jwtSecret:
-      secretName: custom-jwt-secret
-      secretKey: jwt-key
-    vaultRoleId:
-      secretName: custom-vault-secret
-      secretKey: role-id
-    vaultSecretId:
-      secretName: custom-vault-secret
-      secretKey: secret-id
-```
+- `kleidia-db-app` (key `password`) — PostgreSQL application password
+- `openbao-backend-approle` (keys `role_id`, `secret_id`) — OpenBao AppRole credentials
+
+The JWT signing key and encryption key are stored in OpenBao (KV mount `yubikeys`), not in Kubernetes secrets. These secret names are not currently configurable via Helm values; to rotate credentials, update the underlying secret (or OpenBao entry) and restart the backend pods.
 
 ## Storage Configuration
 

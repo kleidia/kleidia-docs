@@ -89,7 +89,7 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
 │         │ HTTPS   │          │         │ (Vault)  │         │ localhost│
 └─────────┘         └──────────┘         └──────────┘         └──────────┘
      │                    │                    │                    │
-     │ GET /api/yubikey/  │                    │                    │
+     │ GET /api/yubikeys/  │                    │                    │
      │ {serial}/secrets   │                    │                    │
      │───────────────────▶│                    │                    │
      │                    │ Get agent_pubkey   │                    │
@@ -120,7 +120,7 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
 
 **Steps**:
 1. User requests PIN change in frontend
-2. Frontend requests secrets: `GET /api/yubikey/{serial}/secrets`
+2. Frontend requests secrets: `GET /api/yubikeys/{serial}/secrets`
 3. Backend retrieves agent public key from PostgreSQL
 4. Backend retrieves PIN from OpenBao Vault
 5. Backend encrypts PIN using agent's RSA public key (RSA-OAEP)
@@ -154,7 +154,7 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
      │◀───────────────────│                    │                    │
      │ CSR (PEM)          │                    │                    │
      │                    │                    │                    │
-     │ POST /api/yubikey/ │                    │                    │
+     │ POST /api/yubikeys/ │                    │                    │
      │ {serial}/sign-csr  │                    │                    │
      │────────────────────┼───────────────────▶│                    │
      │                    │                    │ Sign CSR via PKI   │
@@ -178,7 +178,7 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
 2. Frontend calls agent: `POST http://127.0.0.1:56123/piv/generate-csr`
 3. Agent generates CSR using YubiKey's private key (slot 9a)
 4. Agent returns CSR to frontend
-5. Frontend sends CSR to backend: `POST /api/yubikey/{serial}/sign-csr`
+5. Frontend sends CSR to backend: `POST /api/yubikeys/{serial}/sign-csr`
 6. Backend retrieves management key from Vault
 7. Backend signs CSR using OpenBao PKI engine
 8. Backend returns signed certificate to frontend
@@ -201,7 +201,7 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
 │         │ HTTPS   │          │         │ (Vault)  │
 └─────────┘         └──────────┘         └──────────┘
      │                    │                    │
-     │ POST /api/yubikey/ │                    │
+     │ POST /api/yubikeys/ │                    │
      │ {serial}/secrets   │                    │
      │───────────────────▶│                    │
      │                    │ Store in KV v2     │
@@ -216,7 +216,7 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
 
 **Steps**:
 1. Admin registers YubiKey and provides PIN/PUK/management key
-2. Frontend sends secrets to backend: `POST /api/yubikey/{serial}/secrets`
+2. Frontend sends secrets to backend: `POST /api/yubikeys/{serial}/secrets`
 3. Backend encrypts secrets (if needed) and stores in Vault
 4. Backend stores at path: `yubikeys/data/{serial}/secrets`
 5. Vault encrypts data at rest

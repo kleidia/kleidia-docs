@@ -263,7 +263,7 @@ kubectl get pods -n kleidia
 # Expected output:
 # NAME                                    READY   STATUS    RESTARTS   AGE
 # kleidia-platform-openbao-0              1/1     Running   0          5m
-# kleidia-data-postgres-cluster-0         1/1     Running   0          3m
+# kleidia-db-1                            1/1     Running   0          3m
 # kleidia-services-backend-xxx            1/1     Running   0          2m
 # kleidia-services-frontend-xxx           1/1     Running   0          2m
 ```
@@ -276,10 +276,10 @@ kubectl get services -n kleidia
 
 # Expected output:
 # NAME                        TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)
-# backend-service             NodePort    10.x.x.x       <none>        8080:32570/TCP
-# frontend-service            NodePort    10.x.x.x       <none>        3000:30805/TCP
+# backend                     NodePort    10.x.x.x       <none>        8080:32570/TCP
+# frontend                    NodePort    10.x.x.x       <none>        80:30805/TCP
 # kleidia-platform-openbao    ClusterIP   10.x.x.x       <none>        8200/TCP
-# postgres-cluster            ClusterIP   10.x.x.x       <none>        5432/TCP
+# postgres                    ClusterIP   10.x.x.x       <none>        5432/TCP
 ```
 
 ### Test Application
@@ -392,10 +392,10 @@ kubectl logs kleidia-platform-openbao-0 -n kleidia | grep -i unseal
 
 ```bash
 # Check PostgreSQL logs
-kubectl logs -f kleidia-data-postgres-cluster-0 -n kleidia
+kubectl logs -f kleidia-db-1 -n kleidia
 
 # Check backend logs for connection errors
-kubectl logs -f deployment/kleidia-services-backend -n kleidia | grep -i postgres
+kubectl logs -f deployment/backend -n kleidia | grep -i postgres
 ```
 
 ## Upgrading
