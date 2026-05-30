@@ -23,13 +23,62 @@ See [Prerequisites](prerequisites.md) for detailed requirements.
 
 ## Installation Steps
 
-### 1. Clone Repository
+Kleidia ships **three Helm charts installed in order — platform → data → services**. Install them straight from the public OCI registry (recommended, no clone) or from a local checkout.
+
+### Quick install via OCI registry (recommended)
+
+The charts are published publicly to Docker Hub and need **no authentication**:
+
+| Chart | OCI reference | Version |
+|---|---|---|
+| Platform | `oci://registry-1.docker.io/therinn/kleidia-platform` | `1.0.0` |
+| Data | `oci://registry-1.docker.io/therinn/kleidia-data` | `2.0.0` |
+| Services | `oci://registry-1.docker.io/therinn/kleidia-services` | `1.0.0` |
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/kleidia.git
-cd kleidia
+DOMAIN=kleidia.example.com   # your public domain
+SC=local-path                # your StorageClass (e.g. local-path, longhorn, gp2)
+
+# 1/3 — Platform (OpenBao + cert-manager/CNPG bootstrap)
+helm install kleidia-platform oci://registry-1.docker.io/therinn/kleidia-platform --version 1.0.0 \
+  --namespace kleidia --create-namespace \
+  --set global.domain=$DOMAIN --set global.namespace=kleidia \
+  --set storage.className=$SC \
+  --set openbao.server.dataStorage.storageClass=$SC \
+  --set openbao.server.auditStorage.storageClass=$SC
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=openbao -n kleidia --timeout=600s
+
+# 2/3 — Data (PostgreSQL via CloudNativePG on K8s 1.32+)
+helm install kleidia-data oci://registry-1.docker.io/therinn/kleidia-data --version 2.0.0 \
+  --namespace kleidia \
+  --set global.domain=$DOMAIN --set global.namespace=kleidia \
+  --set storage.className=$SC
+kubectl wait --for=condition=Ready cluster/kleidia-db -n kleidia --timeout=300s
+
+# 3/3 — Services (backend, frontend, license)
+helm install kleidia-services oci://registry-1.docker.io/therinn/kleidia-services --version 1.0.0 \
+  --namespace kleidia \
+  --set global.domain=$DOMAIN --set global.namespace=kleidia \
+  --set global.siteUrl=https://$DOMAIN
 ```
+
+> **Single-node clusters:** add `--set backend.replicas=1 --set frontend.replicas=1 --set licenseService.replicas=1` to the services install so the second replicas don't sit `Pending` for lack of CPU.
+
+> The `kubectl wait` lines gate each step on the real readiness signal (OpenBao pod ready; the CloudNativePG `Cluster` reporting `Ready`) instead of a fixed sleep — safe to paste into a pipeline.
+
+Then jump to [Verify Installation](#4-verify-installation). To customise values files or air-gap the images, use the source method below.
+
+### 1. Get the charts (source method)
+
+The charts are also bundled in the **public docs repository**:
+
+```bash
+git clone https://github.com/kleidia/kleidia-docs.git
+cd kleidia-docs
+# charts are under ./helm/kleidia-{platform,data,services}
+```
+
+The detailed step-by-step commands below use these local `./helm/kleidia-<chart>` paths.
 
 ### 2. Configure Values
 

@@ -31,19 +31,24 @@ This guide provides instructions for installing Kleidia using Helm charts on Kub
 
 ## Installation
 
-### Option 1: Automated Deployment (Recommended)
+### Option 1: OCI registry (recommended)
+
+Install the three charts directly from the **public OCI registry** — no clone, no scripts. See the **[Helm Installation Guide](../03-deployment/helm-install.md)** for the full copy-paste sequence (platform → data → services, with readiness gates and single-node notes).
+
+| Chart | OCI reference | Version |
+|---|---|---|
+| `kleidia-platform` | `oci://registry-1.docker.io/therinn/kleidia-platform` | `1.0.0` |
+| `kleidia-data` | `oci://registry-1.docker.io/therinn/kleidia-data` | `2.0.0` |
+| `kleidia-services` | `oci://registry-1.docker.io/therinn/kleidia-services` | `1.0.0` |
+
+### Option 2: From a local chart checkout
+
+The charts are also bundled in the public docs repo. Clone it and install from local paths:
 
 ```bash
-cd helm
-export DOMAIN="kleidia.example.com"
-./cleanup-and-deploy.sh
+git clone https://github.com/kleidia/kleidia-docs.git
+cd kleidia-docs/helm
 ```
-
-This script handles cleanup of any prior installation, installs all three charts in the correct order, waits for each component to be ready, and verifies the deployment.
-
-**Expected time**: ~6 minutes on a clean cluster.
-
-### Option 2: Manual Step-by-Step
 
 #### Step 1: Install Platform (OpenBao, cert-manager, CNPG operator)
 
