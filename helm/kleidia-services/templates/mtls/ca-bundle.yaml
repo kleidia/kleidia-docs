@@ -1,29 +1,91 @@
 {{- if .Values.mtls.enabled }}
-# CA Certificate bundle for trust distribution
-# This ConfigMap holds the CA certificate that services use to verify peer certificates
+# =============================================================================
+# CA Certificate Bundle for mTLS Trust Distribution
+# =============================================================================
+# This ConfigMap holds the CA certificate chain that services use to verify
+# peer certificates. It is automatically populated by the fetch-mtls-ca Job
+# after OpenBao PKI is initialized.
+#
+# For intermediate CA mode: contains the full chain (intermediate + root)
+# For root CA mode: contains just the root CA
+# =============================================================================
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kleidia-mtls-ca
   namespace: {{ .Values.global.namespace }}
   labels:
+    app.kubernetes.io/name: kleidia
     app.kubernetes.io/component: mtls-ca-bundle
   annotations:
-    description: "CA certificate bundle for mTLS verification. Updated by cert-manager."
+    description: "CA certificate chain for mTLS verification. Auto-populated by fetch-mtls-ca job."
 data:
-  # CA certificate is populated from OpenBao PKI
-  # Services mount this ConfigMap to verify peer certificates
-  ca.crt: |
-    # This will be populated by a post-install hook or manually
-    # The CA certificate is available at: /v1/pki/ca/pem
+  ca.crt: ""
 ---
-# Job to fetch CA certificate from OpenBao
+# ServiceAccount for the CA fetch job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mtls-ca-updater
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/name: kleidia
+    app.kubernetes.io/component: mtls-setup
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "35"
+    "helm.sh/hook-delete-policy": before-hook-creation
+---
+# Role to update the CA ConfigMap
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mtls-ca-updater
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/name: kleidia
+    app.kubernetes.io/component: mtls-setup
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "35"
+    "helm.sh/hook-delete-policy": before-hook-creation
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["kleidia-mtls-ca"]
+  verbs: ["get", "update", "patch"]
+---
+# RoleBinding for the CA updater
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mtls-ca-updater
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/name: kleidia
+    app.kubernetes.io/component: mtls-setup
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "35"
+    "helm.sh/hook-delete-policy": before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mtls-ca-updater
+subjects:
+- kind: ServiceAccount
+  name: mtls-ca-updater
+  namespace: {{ .Values.global.namespace }}
+---
+# Job to fetch CA certificate chain from OpenBao and update ConfigMap
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: fetch-mtls-ca
   namespace: {{ .Values.global.namespace }}
   labels:
+    app.kubernetes.io/name: kleidia
     app.kubernetes.io/component: mtls-setup
   annotations:
     "helm.sh/hook": post-install,post-upgrade
@@ -31,9 +93,14 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   ttlSecondsAfterFinished: 300
-  backoffLimit: 3
+  backoffLimit: 5
   template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kleidia
+        app.kubernetes.io/component: mtls-setup
     spec:
+      serviceAccountName: mtls-ca-updater
       restartPolicy: OnFailure
       {{- if .Values.global.imagePullSecrets }}
       imagePullSecrets:
@@ -43,31 +110,86 @@ spec:
       {{- end }}
       containers:
       - name: fetch-ca
-        image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.curl "context" $) }}
+        image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}alpine/k8s:1.28.4
         command:
         - sh
         - -c
         - |
-          echo "Fetching CA certificate from OpenBao..."
+          set -e
           
-          # Wait for OpenBao to be ready
-          until curl -sf http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/sys/health >/dev/null 2>&1; do
-            echo "Waiting for OpenBao..."
+          NAMESPACE="{{ .Values.global.namespace }}"
+          OPENBAO_ADDR="http://kleidia-platform-openbao.${NAMESPACE}.svc.cluster.local:8200"
+          CONFIGMAP_NAME="kleidia-mtls-ca"
+          
+          echo "=== Fetching CA Certificate Chain from OpenBao ==="
+          echo "OpenBao address: ${OPENBAO_ADDR}"
+          
+          # Wait for OpenBao to be ready and unsealed
+          echo "Waiting for OpenBao to be ready..."
+          RETRIES=0
+          MAX_RETRIES=60
+          until curl -sf "${OPENBAO_ADDR}/v1/sys/health" 2>/dev/null | grep -q '"initialized":true'; do
+            RETRIES=$((RETRIES + 1))
+            if [ $RETRIES -ge $MAX_RETRIES ]; then
+              echo "ERROR: OpenBao not ready after ${MAX_RETRIES} attempts"
+              exit 1
+            fi
+            echo "Waiting for OpenBao... (attempt ${RETRIES}/${MAX_RETRIES})"
             sleep 2
           done
+          echo "✅ OpenBao is ready"
           
-          # Fetch CA certificate
-          CA_CERT=$(curl -sf http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/pki/ca/pem)
+          # Wait for PKI to be mounted and have a CA
+          echo "Waiting for PKI CA to be available..."
+          RETRIES=0
+          until curl -sf "${OPENBAO_ADDR}/v1/pki/ca/pem" 2>/dev/null | grep -q "BEGIN CERTIFICATE"; do
+            RETRIES=$((RETRIES + 1))
+            if [ $RETRIES -ge $MAX_RETRIES ]; then
+              echo "ERROR: PKI CA not available after ${MAX_RETRIES} attempts"
+              exit 1
+            fi
+            echo "Waiting for PKI CA... (attempt ${RETRIES}/${MAX_RETRIES})"
+            sleep 2
+          done
+          echo "✅ PKI CA is available"
           
-          if [ -z "$CA_CERT" ]; then
-            echo "Failed to fetch CA certificate"
+          # Try to fetch the full CA chain first (for intermediate CA mode)
+          # Falls back to single CA if chain endpoint returns empty or error
+          echo "Fetching CA certificate chain..."
+          CA_CHAIN=$(curl -sf "${OPENBAO_ADDR}/v1/pki/ca_chain" 2>/dev/null || true)
+          
+          if [ -z "$CA_CHAIN" ] || ! echo "$CA_CHAIN" | grep -q "BEGIN CERTIFICATE"; then
+            echo "CA chain not available, fetching single CA certificate..."
+            CA_CHAIN=$(curl -sf "${OPENBAO_ADDR}/v1/pki/ca/pem")
+          fi
+          
+          if [ -z "$CA_CHAIN" ] || ! echo "$CA_CHAIN" | grep -q "BEGIN CERTIFICATE"; then
+            echo "ERROR: Failed to fetch CA certificate"
             exit 1
           fi
           
-          echo "✅ CA certificate fetched successfully"
-          echo "$CA_CERT"
+          # Count certificates in chain
+          CERT_COUNT=$(echo "$CA_CHAIN" | grep -c "BEGIN CERTIFICATE" || echo "0")
+          echo "✅ Fetched CA chain with ${CERT_COUNT} certificate(s)"
           
-          # Note: To update the ConfigMap, we would need kubectl access
-          # For now, the CA is available in the mTLS certificate secrets
+          # Update the ConfigMap with the CA chain
+          echo "Updating ConfigMap ${CONFIGMAP_NAME}..."
+          
+          # Create a temporary file with the CA chain
+          TEMP_FILE=$(mktemp)
+          echo "$CA_CHAIN" > "$TEMP_FILE"
+          
+          # Patch the ConfigMap using kubectl
+          kubectl create configmap "${CONFIGMAP_NAME}" \
+            --from-file=ca.crt="$TEMP_FILE" \
+            --dry-run=client -o yaml | \
+            kubectl apply -f - -n "${NAMESPACE}"
+          
+          rm -f "$TEMP_FILE"
+          
+          echo "✅ ConfigMap ${CONFIGMAP_NAME} updated successfully"
+          
+          # Verify the update
+          STORED_CERTS=$(kubectl get configmap "${CONFIGMAP_NAME}" -n "${NAMESPACE}" -o jsonpath='{.data.ca\.crt}' | grep -c "BEGIN CERTIFICATE" || echo "0")
+          echo "✅ Verified: ConfigMap contains ${STORED_CERTS} certificate(s)"
 {{- end }}
-

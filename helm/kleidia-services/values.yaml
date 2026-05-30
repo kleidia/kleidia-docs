@@ -35,6 +35,13 @@ backend:
                                 # REQUIRED for production deployments with external load balancers
   oidc:
     skipTlsVerify: true         # Skip TLS verification for OIDC discovery (set to false in production with proper certificates)
+  resources:
+    requests:
+      memory: "512Mi"           # Memory request (increase for large backups)
+      cpu: "100m"
+    limits:
+      memory: "1Gi"             # Memory limit - must handle pg_dump + encryption of full database
+      cpu: "500m"
 
 frontend:
   replicas: 2                 # Horizontal scaling for the frontend
