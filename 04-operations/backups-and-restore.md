@@ -387,21 +387,31 @@ kubectl exec -i kleidia-db-1 -n kleidia -- \
 gzip database-backup.sql
 ```
 
-### OpenBao Data Directory Backup
+### OpenBao Snapshot Backup
 
-OpenBao is configured with `storage "file"` (not raft), so there is no `operator raft snapshot` command. To back up OpenBao manually, archive its on-disk data directory (`/openbao/data`):
+Current deployments run OpenBao on integrated **raft** storage, which supports
+consistent snapshots — the supported DR path:
 
 ```bash
-# Archive the OpenBao data directory inside the pod
+# Take a raft snapshot inside the pod
 kubectl exec -it kleidia-platform-openbao-0 -n kleidia -- \
-  tar czf /tmp/openbao-data.tar.gz -C /openbao data
+  sh -c 'BAO_TOKEN=<root> bao operator raft snapshot save /tmp/openbao.snap'
 
 # Copy locally
-kubectl cp kleidia-platform-openbao-0:/tmp/openbao-data.tar.gz \
-  openbao-data.tar.gz -n kleidia
+kubectl cp kleidia-platform-openbao-0:/tmp/openbao.snap openbao.snap -n kleidia
 ```
 
-> **Note**: The OpenBao file storage is encrypted at rest using the static seal key. A data-directory archive can only be restored to an OpenBao instance using the same unseal key. For most disaster-recovery scenarios, prefer the built-in backup system (which exports KV secrets) plus a `pg_dump` of the PostgreSQL database.
+> **Legacy file-storage deployments:** If `bao status` reports `Storage Type file`,
+> your deployment predates the native-DR release and has **no** snapshot API — its
+> scheduled backups never ran. Migrate to raft first; see
+> [Upgrading an Existing Deployment](../03-deployment/upgrade-file-to-raft.md). Until
+> you migrate, the only manual backup is a tar of the on-disk data directory
+> (`kubectl exec ... tar czf /tmp/openbao-data.tar.gz -C /openbao data`).
+
+> **Note**: An OpenBao snapshot (or data archive) is encrypted with the static seal
+> key and can only be restored to an instance using the **same unseal key** — keep it
+> in off-cluster custody. For most disaster-recovery scenarios, prefer the built-in
+> backup system (which exports KV secrets) plus a `pg_dump` of the PostgreSQL database.
 
 ## API Reference
 
