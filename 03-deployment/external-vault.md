@@ -59,6 +59,8 @@ path "kleidia-pki/issue/*"   { capabilities = ["create", "update"] }
 path "kleidia-pki/cert/ca"   { capabilities = ["read"] }
 path "kleidia-pki/ca/pem"    { capabilities = ["read"] }
 path "kleidia-pki/crl*"      { capabilities = ["read"] }
+path "sys/auth"              { capabilities = ["read"] }
+path "auth/token/lookup-self" { capabilities = ["read"] }
 path "auth/token/renew-self" { capabilities = ["update"] }
 ```
 
