@@ -16,18 +16,35 @@ global:
   imagePullSecrets: []        # Optional: list of imagePullSecrets to attach to pods. Example: ["regcred"]
                              # If set, these take precedence over global.registry.authSecret.
 
+  # Secrets backend: where Kleidia stores secrets and issues certificates.
+  #   bundled  - Kleidia installs and operates OpenBao (default; kleidia-platform chart).
+  #   external - Customer-managed Vault/OpenBao; Kleidia only consumes an endpoint + AppRole creds.
+  #              The customer owns provisioning, PKI, sealing, HA, and backup/DR.
+  #              See docs/EXTERNAL_VAULT.md for the required mounts/roles/policy.
+  secretsBackend:
+    mode: bundled
+  externalVault:
+    address: ""                 # REQUIRED in external mode, e.g. "https://vault.corp.example:8200"
+    namespace: ""               # Vault Enterprise namespace (X-Vault-Namespace); empty for OSS/OpenBao
+    kvMount: "yubikeys"         # KV v2 mount Kleidia reads/writes on the external Vault
+    pkiMount: "pki"             # PKI mount Kleidia signs/issues against on the external Vault
+    appRoleSecret: "kleidia-vault-approle"  # customer-created k8s Secret with keys: role_id, secret_id
+    caSecret: ""                # optional k8s Secret holding ca.crt for TLS to the external Vault
+    tlsSkipVerify: false        # dev/test only
+
 # Third-party image repositories (can be mirrored to private registry for air-gapped deployments)
 # When global.registry.host is set, these images will be pulled from: <registry.host>/<repository>:<tag>
 thirdPartyImages:
-  postgres: "postgres:18.1-alpine"   # Used for database backups (includes pg_dump)
-  curl: "curlimages/curl:latest"     # Used for service health checks
-  vault: "hashicorp/vault:latest"    # Used for vault backups (if enabled)
+  postgres: "postgres:18.1-alpine"   # Ad-hoc psql/pg_dump utility (DB backups are now CNPG-native)
+  curl: "curlimages/curl:latest"     # Health checks + the backup CronJob trigger
+  # NOTE: OpenBao snapshots are taken by the backend (Go OpenBao client), not a
+  # vault CLI container, so no vault/openbao image is needed for backups.
 
 backend:
   replicas: 2                 # Horizontal scaling for the backend API
   image:
     repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-backend)
-    tag: backend-latest                   # Image tag. In production pin to a version, e.g. v2.2.0
+    tag: backend-2.2.1                    # Pinned to the 2.2.1 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
   service:
     nodePort: 32570             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
   corsOrigins: ""               # CORS allowed origins (comma-separated). If empty, uses global.siteUrl
@@ -35,6 +52,9 @@ backend:
                                 # REQUIRED for production deployments with external load balancers
   oidc:
     skipTlsVerify: true         # Skip TLS verification for OIDC discovery (set to false in production with proper certificates)
+  # CNPG backup S3 credentials secret name (the backend creates/patches against it).
+  # Keep in sync with kleidia-data's cnpg.backup.s3CredentialsSecret if you change it.
+  cnpgS3SecretName: "cnpg-backup-s3-credentials"
   resources:
     requests:
       memory: "512Mi"           # Memory request (increase for large backups)
@@ -47,14 +67,14 @@ frontend:
   replicas: 2                 # Horizontal scaling for the frontend
   image:
     repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-frontend)
-    tag: frontend-latest                    # Image tag. In production pin to a version, e.g. v2.2.0
+    tag: frontend-2.2.1                   # Pinned to the 2.2.1 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
   service:
     nodePort: 30805             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
 
 licenseService:
   enabled: true                 # Enable the license service pod (optional, backend falls back to TRIAL if disabled)
   replicas: 2                   # Horizontal scaling for high availability
-  image: therinn/kleidia:license-latest  # License service image (garble-obfuscated)
+  image: therinn/kleidia:license-2.2.1  # License service image (garble-obfuscated); pinned to the 2.2.1 release
   imagePullPolicy: Always       # Always pull to ensure latest image
   resources:
     requests:
@@ -67,9 +87,12 @@ licenseService:
     enabled: true               # Enable network policy to restrict access to backend only
 
 backup:
-  schedule: "0 2 * * *"        # Cron schedule for backups (default: daily at 2 AM)
-  suspend: false                # Set to true to disable scheduled backups
-  enableVaultBackup: true      # Include Vault Raft snapshot in backups
+  # Scheduled OpenBao raft-snapshot backup. DB backups are CNPG-native (see the
+  # kleidia-data chart: barmanObjectStore + ScheduledBackup), not part of this job.
+  schedule: "0 2 * * *"        # Cron schedule (default: daily at 2 AM)
+  suspend: false                # Set to true to pause the scheduled snapshot
+  enableVaultBackup: true       # Render the OpenBao raft-snapshot CronJob
+                                # (requires raft storage; backend performs the snapshot)
 
 # =============================================================================
 # SECURITY AUTOMATION

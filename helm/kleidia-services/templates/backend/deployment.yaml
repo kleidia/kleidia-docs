@@ -121,7 +121,12 @@ spec:
         - -c
         - |
           echo "Waiting for OpenBao..."
-          until curl -sf http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/sys/health >/dev/null 2>&1; do
+          {{- if eq (.Values.global.secretsBackend.mode | default "bundled") "external" }}
+          BAO_HEALTH="{{ required "global.externalVault.address is required in external mode" .Values.global.externalVault.address }}/v1/sys/health"
+          {{- else }}
+          BAO_HEALTH="http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/sys/health"
+          {{- end }}
+          until curl -sf "$BAO_HEALTH" >/dev/null 2>&1; do
             echo "OpenBao not ready yet..."
             sleep 2
           done
@@ -196,13 +201,46 @@ spec:
           value: "disable"
         {{- end }}
         
-        # OpenBao connection (AppRole auth for security isolation)
+        # Secrets backend (AppRole auth). Mode = bundled (in-cluster OpenBao) or external (customer Vault).
+        {{- $ext := eq (.Values.global.secretsBackend.mode | default "bundled") "external" }}
         - name: VAULT_ENABLED
           value: "true"
-        - name: VAULT_ADDR
-          value: http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200
+        - name: SECRETS_BACKEND_MODE
+          value: {{ .Values.global.secretsBackend.mode | default "bundled" | quote }}
         - name: VAULT_AUTH_METHOD
           value: approle
+        {{- if $ext }}
+        - name: VAULT_ADDR
+          value: {{ required "global.externalVault.address is required when secretsBackend.mode=external" .Values.global.externalVault.address | quote }}
+        - name: VAULT_ROLE_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.global.externalVault.appRoleSecret | default "kleidia-vault-approle" }}
+              key: role_id
+        - name: VAULT_SECRET_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.global.externalVault.appRoleSecret | default "kleidia-vault-approle" }}
+              key: secret_id
+        - name: VAULT_KV_MOUNT
+          value: {{ .Values.global.externalVault.kvMount | default "yubikeys" | quote }}
+        - name: VAULT_PKI_MOUNT
+          value: {{ .Values.global.externalVault.pkiMount | default "pki" | quote }}
+        {{- if .Values.global.externalVault.namespace }}
+        - name: VAULT_NAMESPACE
+          value: {{ .Values.global.externalVault.namespace | quote }}
+        {{- end }}
+        {{- if .Values.global.externalVault.caSecret }}
+        - name: VAULT_CACERT
+          value: /etc/vault-tls/ca.crt
+        {{- end }}
+        {{- if .Values.global.externalVault.tlsSkipVerify }}
+        - name: VAULT_SKIP_VERIFY
+          value: "true"
+        {{- end }}
+        {{- else }}
+        - name: VAULT_ADDR
+          value: http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200
         - name: VAULT_ROLE_ID
           valueFrom:
             secretKeyRef:
@@ -213,10 +251,9 @@ spec:
             secretKeyRef:
               name: openbao-backend-approle
               key: secret_id
-        
-        # OpenBao KV paths (each secret in its own path with "value" field)
         - name: VAULT_KV_MOUNT
           value: "yubikeys"
+        {{- end }}
         - name: VAULT_KV_JWT_PATH
           value: "jwt-secret"
         - name: VAULT_KV_ENCRYPTION_PATH
@@ -281,7 +318,11 @@ spec:
             secretKeyRef:
               name: backup-runner-token
               key: token
-        
+        # CNPG backup S3 credentials secret name. Must match the kleidia-data
+        # chart's cnpg.backup.s3CredentialsSecret if you override its default.
+        - name: CNPG_S3_SECRET_NAME
+          value: "{{ .Values.backend.cnpgS3SecretName | default "cnpg-backup-s3-credentials" }}"
+
         readinessProbe:
           httpGet:
             path: /health
@@ -316,6 +357,11 @@ spec:
             mountPath: /db-tls
             readOnly: true
         {{- end }}
+        {{- if and (eq (.Values.global.secretsBackend.mode | default "bundled") "external") .Values.global.externalVault.caSecret }}
+          - name: vault-ca
+            mountPath: /etc/vault-tls
+            readOnly: true
+        {{- end }}
         # Graceful shutdown: wait for load balancer to drain connections
         lifecycle:
           preStop:
@@ -329,6 +375,15 @@ spec:
           capabilities:
             drop: ["ALL"]
       volumes:
+      {{- if and (eq (.Values.global.secretsBackend.mode | default "bundled") "external") .Values.global.externalVault.caSecret }}
+        - name: vault-ca
+          secret:
+            secretName: {{ .Values.global.externalVault.caSecret }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+            defaultMode: 0400
+      {{- end }}
       {{- if .Values.mtls.enabled }}
         - name: mtls-certs
           secret:

@@ -1,0 +1,141 @@
+{{- if and .Values.postgres.enabled .Values.cnpg.enabled .Values.cnpg.tls.enabled .Values.cnpg.tls.certManager.enabled }}
+# =============================================================================
+# mTLS issuer readiness gate (pre-install / pre-upgrade)
+# =============================================================================
+# kleidia-data's CNPG PostgreSQL certificates are issued by `kleidia-mtls-issuer`,
+# a cert-manager Vault(OpenBao) Issuer created by the kleidia-platform chart's
+# post-install hook (which also configures the OpenBao PKI role + kubernetes auth
+# it depends on). If that issuer is missing or NotReady, the CNPG Certificate
+# resources hang forever and the database never starts -- a confusing failure
+# that looks like a kleidia-data problem but is really an upstream platform one.
+#
+# This gate fails the kleidia-data release FAST with a clear message if the issuer
+# isn't Ready, instead of letting certificates silently hang.
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kleidia-mtls-gate
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: kleidia-mtls-gate
+    component: database
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-20"
+    helm.sh/hook-delete-policy: before-hook-creation
+{{- if .Values.global.imagePullSecrets }}
+imagePullSecrets:
+{{- range .Values.global.imagePullSecrets }}
+  - name: {{ . }}
+{{- end }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kleidia-mtls-gate
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: kleidia-mtls-gate
+    component: database
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-20"
+    helm.sh/hook-delete-policy: before-hook-creation
+rules:
+  - apiGroups: ["cert-manager.io"]
+    resources: ["issuers"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kleidia-mtls-gate
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: kleidia-mtls-gate
+    component: database
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-20"
+    helm.sh/hook-delete-policy: before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kleidia-mtls-gate
+subjects:
+  - kind: ServiceAccount
+    name: kleidia-mtls-gate
+    namespace: {{ .Values.global.namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kleidia-wait-mtls-issuer
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: kleidia-mtls-gate
+    component: database
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      name: kleidia-wait-mtls-issuer
+    spec:
+      restartPolicy: Never
+      serviceAccountName: kleidia-mtls-gate
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- else if .Values.global.registry.authSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.registry.authSecret }}
+      {{- end }}
+      {{- if .Values.global.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.global.nodeSelector | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: wait-issuer
+        image: {{ include "kleidia-data.thirdPartyImage" (dict "image" .Values.thirdPartyImages.kubectl "context" $) }}
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          NS="{{ .Values.global.namespace }}"
+          ISSUER="{{ .Values.cnpg.tls.certManager.issuerRef.name }}"
+          echo "Gating kleidia-data on cert-manager issuer '$ISSUER' (ns $NS) readiness..."
+
+          # 1) Wait for the Issuer object to exist (created by the kleidia-platform
+          #    post-install hook). Fail clearly if platform wasn't installed first.
+          DEADLINE=$(( $(date +%s) + 300 ))
+          until kubectl get issuer "$ISSUER" -n "$NS" >/dev/null 2>&1; do
+            if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+              echo "ERROR: issuer '$ISSUER' not found after 5m."
+              echo "       Install kleidia-platform FIRST and ensure its openbao-complete-setup"
+              echo "       hook succeeded (it creates the issuer + OpenBao PKI it depends on)."
+              exit 1
+            fi
+            echo "  ...issuer not present yet, waiting"
+            sleep 5
+          done
+
+          # 2) Wait for it to report Ready (OpenBao reachable + PKI role/auth configured).
+          if ! kubectl wait --for=condition=Ready "issuer/$ISSUER" -n "$NS" --timeout=300s; then
+            echo "ERROR: issuer '$ISSUER' exists but is not Ready -> CNPG certificates cannot"
+            echo "       be issued and PostgreSQL will not start. OpenBao PKI is likely"
+            echo "       misconfigured; check the kleidia-platform openbao-complete-setup hook."
+            kubectl describe issuer "$ISSUER" -n "$NS" || true
+            exit 1
+          fi
+          echo "✅ issuer '$ISSUER' is Ready -- proceeding with kleidia-data."
+{{- end }}

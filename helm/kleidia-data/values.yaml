@@ -14,6 +14,7 @@ thirdPartyImages:
   # CNPG PostgreSQL image - uses default from CNPG v1.28.0 (Dec 2025)
   # See: https://github.com/cloudnative-pg/cloudnative-pg/releases/tag/v1.28.0
   cnpg: "ghcr.io/cloudnative-pg/postgresql:18.1"  # PostgreSQL 18.1 (CNPG default)
+  kubectl: "alpine/k8s:1.28.4"   # kubectl+bash image for the mTLS issuer-readiness gate (pre-install hook)
 
 # =============================================================================
 # STORAGE CONFIGURATION
@@ -82,6 +83,11 @@ cnpg:
     effective_cache_size: "512MB"
     work_mem: "16MB"
     maintenance_work_mem: "64MB"
+    # Force a WAL segment switch at least this often so an IDLE database still
+    # archives WAL to S3 — without it, PITR has no recent recoverable point and a
+    # base backup's trailing WAL may never reach the archive. (Validated in a live
+    # DR drill: an idle cluster left the backup's start WAL unarchived.)
+    archive_timeout: "300s"
   
   # TLS Configuration
   # When enabled, CNPG automatically manages certificates via cert-manager.
@@ -98,21 +104,33 @@ cnpg:
     duration: "8760h"         # 1 year
     renewBefore: "720h"       # 30 days before expiry
   
-  # Backup Configuration
-  # Backups are managed via frontend UI which stores S3 credentials in OpenBao
-  # The backend creates the backup secret and CNPG uses it
-  # NOTE: Enable after S3 credentials are configured via frontend
+  # Backup Configuration (CNPG in-tree barmanObjectStore -> S3, gives PITR).
+  # Leave enabled=false for UI-managed backups: the backend stores S3 creds in
+  # OpenBao, creates s3CredentialsSecret, and patches the Cluster's .spec.backup
+  # at runtime. Set enabled=true + destinationPath here only for declarative
+  # (GitOps) installs where S3 is known at install time.
   backup:
     enabled: false
-    # S3 credentials secret name (created by backend from OpenBao)
+    # S3 credentials secret name. In UI-managed mode the backend CREATES this
+    # secret (name is hardcoded there as cnpg-backup-s3-credentials) and patches
+    # the cluster — so do NOT change this unless you also override the backend's
+    # CNPG_S3_SECRET_NAME env, or backups/restore will reference a missing secret.
+    # Must hold keys: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION.
     s3CredentialsSecret: "cnpg-backup-s3-credentials"
-    # Destination path prefix in S3 bucket
-    destinationPrefix: "cnpg"
-    # Retention policy
+    # Full S3 destination, e.g. "s3://my-bucket/kleidia". REQUIRED when enabled=true.
+    destinationPath: ""
+    # S3-compatible endpoint (omit for AWS S3); e.g. "https://s3.eu-north-1.amazonaws.com"
+    # or a MinIO URL. Leave empty for AWS.
+    endpointURL: ""
+    # Archive stanza name. Restores MUST use a different serverName to avoid
+    # clobbering this cluster's WAL archive.
+    serverName: "kleidia-db"
+    # Retention policy (deprecated field in CNPG 1.28 but still honoured in-tree).
     retentionPolicy: "30d"
-    # WAL compression
+    # WAL compression + parallelism
     walCompression: gzip
-    # Data compression
+    walMaxParallel: 2
+    # Data (base backup) compression
     dataCompression: gzip
   
   # Resource configuration

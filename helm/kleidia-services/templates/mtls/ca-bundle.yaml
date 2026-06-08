@@ -108,41 +108,61 @@ spec:
         - name: {{ . }}
       {{- end }}
       {{- end }}
+      {{- $ext := eq (.Values.global.secretsBackend.mode | default "bundled") "external" }}
+      {{- $pki := ternary (.Values.global.externalVault.pkiMount | default "pki") "pki" $ext }}
+      {{- $addr := printf "http://kleidia-platform-openbao.%s.svc.cluster.local:8200" .Values.global.namespace }}
+      {{- if $ext }}{{- $addr = (required "global.externalVault.address is required when secretsBackend.mode=external" .Values.global.externalVault.address) }}{{- end }}
+      {{- $extCA := and $ext .Values.global.externalVault.caSecret }}
       containers:
       - name: fetch-ca
         image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}alpine/k8s:1.28.4
+        {{- if $extCA }}
+        volumeMounts:
+        - name: vault-ca
+          mountPath: /etc/vault-tls
+          readOnly: true
+        {{- end }}
         command:
         - sh
         - -c
         - |
           set -e
-          
+
           NAMESPACE="{{ .Values.global.namespace }}"
-          OPENBAO_ADDR="http://kleidia-platform-openbao.${NAMESPACE}.svc.cluster.local:8200"
+          OPENBAO_ADDR="{{ $addr }}"
+          PKI_MOUNT="{{ $pki }}"
           CONFIGMAP_NAME="kleidia-mtls-ca"
-          
-          echo "=== Fetching CA Certificate Chain from OpenBao ==="
-          echo "OpenBao address: ${OPENBAO_ADDR}"
-          
-          # Wait for OpenBao to be ready and unsealed
-          echo "Waiting for OpenBao to be ready..."
+          # TLS options for reaching the (external) Vault. CA cert/CRL endpoints are
+          # unauthenticated, so no token is needed — only TLS trust may apply.
+          CURL_TLS=""
+          {{- if $extCA }}
+          CURL_TLS="--cacert /etc/vault-tls/ca.crt"
+          {{- else if and $ext .Values.global.externalVault.tlsSkipVerify }}
+          CURL_TLS="-k"
+          {{- end }}
+
+          echo "=== Fetching CA Certificate Chain from {{ if $ext }}external {{ end }}Vault ==="
+          echo "Vault address: ${OPENBAO_ADDR} (PKI mount: ${PKI_MOUNT})"
+
+          # Wait for Vault to be ready and unsealed
+          echo "Waiting for Vault to be ready..."
           RETRIES=0
           MAX_RETRIES=60
-          until curl -sf "${OPENBAO_ADDR}/v1/sys/health" 2>/dev/null | grep -q '"initialized":true'; do
+          until curl -sf $CURL_TLS "${OPENBAO_ADDR}/v1/sys/health" 2>/dev/null | grep -q '"initialized":true'; do
             RETRIES=$((RETRIES + 1))
             if [ $RETRIES -ge $MAX_RETRIES ]; then
-              echo "ERROR: OpenBao not ready after ${MAX_RETRIES} attempts"
+              echo "ERROR: Vault not ready after ${MAX_RETRIES} attempts"
               exit 1
             fi
-            echo "Waiting for OpenBao... (attempt ${RETRIES}/${MAX_RETRIES})"
+            echo "Waiting for Vault... (attempt ${RETRIES}/${MAX_RETRIES})"
             sleep 2
           done
-          echo "✅ OpenBao is ready"
-          
+          echo "✅ Vault is ready"
+
           # Wait for PKI to be mounted and have a CA
           echo "Waiting for PKI CA to be available..."
           RETRIES=0
-          until curl -sf "${OPENBAO_ADDR}/v1/pki/ca/pem" 2>/dev/null | grep -q "BEGIN CERTIFICATE"; do
+          until curl -sf $CURL_TLS "${OPENBAO_ADDR}/v1/${PKI_MOUNT}/ca/pem" 2>/dev/null | grep -q "BEGIN CERTIFICATE"; do
             RETRIES=$((RETRIES + 1))
             if [ $RETRIES -ge $MAX_RETRIES ]; then
               echo "ERROR: PKI CA not available after ${MAX_RETRIES} attempts"
@@ -152,15 +172,15 @@ spec:
             sleep 2
           done
           echo "✅ PKI CA is available"
-          
+
           # Try to fetch the full CA chain first (for intermediate CA mode)
           # Falls back to single CA if chain endpoint returns empty or error
           echo "Fetching CA certificate chain..."
-          CA_CHAIN=$(curl -sf "${OPENBAO_ADDR}/v1/pki/ca_chain" 2>/dev/null || true)
-          
+          CA_CHAIN=$(curl -sf $CURL_TLS "${OPENBAO_ADDR}/v1/${PKI_MOUNT}/ca_chain" 2>/dev/null || true)
+
           if [ -z "$CA_CHAIN" ] || ! echo "$CA_CHAIN" | grep -q "BEGIN CERTIFICATE"; then
             echo "CA chain not available, fetching single CA certificate..."
-            CA_CHAIN=$(curl -sf "${OPENBAO_ADDR}/v1/pki/ca/pem")
+            CA_CHAIN=$(curl -sf $CURL_TLS "${OPENBAO_ADDR}/v1/${PKI_MOUNT}/ca/pem")
           fi
           
           if [ -z "$CA_CHAIN" ] || ! echo "$CA_CHAIN" | grep -q "BEGIN CERTIFICATE"; then
@@ -192,4 +212,13 @@ spec:
           # Verify the update
           STORED_CERTS=$(kubectl get configmap "${CONFIGMAP_NAME}" -n "${NAMESPACE}" -o jsonpath='{.data.ca\.crt}' | grep -c "BEGIN CERTIFICATE" || echo "0")
           echo "✅ Verified: ConfigMap contains ${STORED_CERTS} certificate(s)"
+      {{- if $extCA }}
+      volumes:
+      - name: vault-ca
+        secret:
+          secretName: {{ .Values.global.externalVault.caSecret }}
+          items:
+            - key: ca.crt
+              path: ca.crt
+      {{- end }}
 {{- end }}

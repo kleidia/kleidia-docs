@@ -72,10 +72,41 @@ spec:
           protocol: TCP
         {{- end }}
         env:
-        - name: VAULT_ADDR
-          value: "http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200"
+        {{- $ext := eq (.Values.global.secretsBackend.mode | default "bundled") "external" }}
         - name: VAULT_AUTH_METHOD
           value: "approle"
+        - name: VAULT_ROLE
+          value: "license-service"
+        {{- if $ext }}
+        - name: VAULT_ADDR
+          value: {{ required "global.externalVault.address is required when secretsBackend.mode=external" .Values.global.externalVault.address | quote }}
+        - name: VAULT_KV_MOUNT
+          value: {{ .Values.global.externalVault.kvMount | default "yubikeys" | quote }}
+        - name: VAULT_ROLE_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.global.externalVault.appRoleSecret | default "kleidia-vault-approle" }}
+              key: role_id
+        - name: VAULT_SECRET_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.global.externalVault.appRoleSecret | default "kleidia-vault-approle" }}
+              key: secret_id
+        {{- if .Values.global.externalVault.namespace }}
+        - name: VAULT_NAMESPACE
+          value: {{ .Values.global.externalVault.namespace | quote }}
+        {{- end }}
+        {{- if .Values.global.externalVault.caSecret }}
+        - name: VAULT_CACERT
+          value: /etc/vault-tls/ca.crt
+        {{- end }}
+        {{- if .Values.global.externalVault.tlsSkipVerify }}
+        - name: VAULT_SKIP_VERIFY
+          value: "true"
+        {{- end }}
+        {{- else }}
+        - name: VAULT_ADDR
+          value: "http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200"
         - name: VAULT_ROLE_ID
           valueFrom:
             secretKeyRef:
@@ -86,8 +117,7 @@ spec:
             secretKeyRef:
               name: openbao-license-approle
               key: secret_id
-        - name: VAULT_ROLE
-          value: "license-service"
+        {{- end }}
         - name: PORT
           value: "8081"
         {{- if .Values.mtls.enabled }}
@@ -104,11 +134,19 @@ spec:
         - name: TLS_ENABLED
           value: "false"
         {{- end }}
-        {{- if .Values.mtls.enabled }}
+        {{- $extCA := and (eq (.Values.global.secretsBackend.mode | default "bundled") "external") .Values.global.externalVault.caSecret }}
+        {{- if or .Values.mtls.enabled $extCA }}
         volumeMounts:
+        {{- if .Values.mtls.enabled }}
         - name: mtls-certs
           mountPath: /tls
           readOnly: true
+        {{- end }}
+        {{- if $extCA }}
+        - name: vault-ca
+          mountPath: /etc/vault-tls
+          readOnly: true
+        {{- end }}
         {{- end }}
         resources:
           requests:
@@ -145,11 +183,22 @@ spec:
           runAsUser: 65534
           capabilities:
             drop: ["ALL"]
-      {{- if .Values.mtls.enabled }}
+      {{- $extCAv := and (eq (.Values.global.secretsBackend.mode | default "bundled") "external") .Values.global.externalVault.caSecret }}
+      {{- if or .Values.mtls.enabled $extCAv }}
       volumes:
+      {{- if .Values.mtls.enabled }}
       - name: mtls-certs
         secret:
           secretName: license-service-mtls-tls
+      {{- end }}
+      {{- if $extCAv }}
+      - name: vault-ca
+        secret:
+          secretName: {{ .Values.global.externalVault.caSecret }}
+          items:
+            - key: ca.crt
+              path: ca.crt
+      {{- end }}
       {{- end }}
 {{- end }}
 

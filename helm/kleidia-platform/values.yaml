@@ -7,6 +7,22 @@ global:
     authSecret: ""            # Optional: docker-registry secret name for private registries
   imagePullSecrets: []        # Optional: list of imagePullSecrets to attach to pods
 
+  # Secrets backend mode. See helm/kleidia-services/values.yaml and docs/EXTERNAL_VAULT.md.
+  #   bundled  - this chart installs and operates OpenBao (default).
+  #   external - customer-managed Vault/OpenBao; this chart installs NO OpenBao and
+  #              points the cert-manager mTLS issuer at the external endpoint.
+  #              REQUIRED: also set `openbao.enabled=false` in external mode.
+  secretsBackend:
+    mode: bundled
+  externalVault:
+    address: ""                 # REQUIRED in external mode, e.g. "https://vault.corp.example:8200"
+    namespace: ""               # Vault Enterprise namespace; empty for OSS/OpenBao
+    pkiMount: "pki"             # PKI mount cert-manager signs kleidia-component against
+    caSecret: ""                # optional k8s Secret (key ca.crt) for TLS to the external Vault
+    appRoleSecret: "kleidia-vault-approle"  # k8s Secret with keys role_id + secret_id (for the cert-manager issuer)
+    certManagerRoleId: ""       # AppRole role_id for the cert-manager issuer (literal; role_id is not secret).
+                                # secret_id is read from appRoleSecret above.
+
 # =============================================================================
 # CLUSTER DEPENDENCIES (Auto-Install)
 # =============================================================================
@@ -109,33 +125,54 @@ openbao:
       tag: "2.4.4"                  # OpenBao version
       pullPolicy: IfNotPresent
     
-    # Use standalone mode with persistent storage
+    # Integrated Raft storage (HA-capable).
+    # Raft enables consistent point-in-time snapshots via `bao operator raft
+    # snapshot`, which is the supported disaster-recovery path. File storage
+    # (the previous backend) has no snapshot API, so its backups silently failed.
+    # Single replica by default — valid for raft; raise ha.replicas for true HA.
+    #
+    # MIGRATION (existing file-storage deploys): this is NOT a hot config flip.
+    # OpenBao cannot read file-backed data under a raft config. Follow
+    # docs/OPENBAO_RAFT_MIGRATION.md (`bao operator migrate`) before upgrading,
+    # or OpenBao will fail to unseal.
     standalone:
+      enabled: false
+
+    ha:
       enabled: true
-      config: |
-        ui = true
-        
-        listener "tcp" {
-          tls_disable = 1
-          address = "[::]:8200"
-          cluster_address = "[::]:8201"
-        }
-        
-        storage "file" {
-          path = "/openbao/data"
-        }
-        
-        # Static auto-unseal (OpenBao 2.4.0+)
-        # The unseal key is stored in a Kubernetes secret and mounted as a file.
-        # Auto-unseal mode: Key persists in secret, OpenBao auto-unseals on restart
-        # Manual unseal mode: Key cleared from secret, admin must provide via UI
-        seal "static" {
-          current_key_id = "kleidia-1"
-          current_key = "file:///keys/unseal-kleidia-1.key"
-        }
-        
-        # Note: service_registration requires HA-capable storage (raft/consul)
-        # File storage doesn't support HA, so we don't use service_registration
+      replicas: 1
+      raft:
+        enabled: true
+        setNodeId: true          # Sets BAO_RAFT_NODE_ID from the pod name
+        config: |
+          ui = true
+
+          listener "tcp" {
+            tls_disable = 1
+            address = "[::]:8200"
+            cluster_address = "[::]:8201"
+          }
+
+          storage "raft" {
+            path = "/openbao/data"
+          }
+
+          # Static auto-unseal (OpenBao 2.4.0+).
+          # The unseal key is stored in a Kubernetes secret and mounted as a file.
+          # Auto-unseal mode: key persists in secret, OpenBao auto-unseals on restart.
+          # Manual unseal mode: key cleared from secret, admin provides it via UI.
+          #
+          # DR WARNING: a raft snapshot is ENCRYPTED and does NOT contain this key.
+          # The unseal key + init/recovery keys must be backed up off-cluster
+          # (handled by the backup path; see docs) or snapshots cannot be restored.
+          seal "static" {
+            current_key_id = "kleidia-1"
+            current_key = "file:///keys/unseal-kleidia-1.key"
+          }
+
+          # service_registration intentionally omitted: single-node raft, and the
+          # main service selects on component=server (not the active label), so no
+          # pod-label-patch RBAC is required.
     
     # Enable persistent storage
     # NOTE: storageClass is set dynamically via --set during install

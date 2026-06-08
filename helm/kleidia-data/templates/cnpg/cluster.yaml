@@ -82,30 +82,48 @@ spec:
   {{- end }}
   {{- end }}
   
-  # Backup Configuration - Disabled by default
-  # Enable via backend API after configuring S3 credentials in OpenBao
-  # The backend dynamically patches the Cluster CR when backups are configured
-  # {{- if .Values.cnpg.backup.enabled }}
-  # backup:
-  #   barmanObjectStore:
-  #     destinationPath: "s3://bucket/path"
-  #     endpointURL: "https://s3.region.amazonaws.com"
-  #     s3Credentials:
-  #       accessKeyId:
-  #         name: {{ .Values.cnpg.backup.s3CredentialsSecret }}
-  #         key: AWS_ACCESS_KEY_ID
-  #       secretAccessKey:
-  #         name: {{ .Values.cnpg.backup.s3CredentialsSecret }}
-  #         key: AWS_SECRET_ACCESS_KEY
-  #       region:
-  #         name: {{ .Values.cnpg.backup.s3CredentialsSecret }}
-  #         key: AWS_REGION
-  #     wal:
-  #       compression: {{ .Values.cnpg.backup.walCompression }}
-  #     data:
-  #       compression: {{ .Values.cnpg.backup.dataCompression }}
-  #   retentionPolicy: {{ .Values.cnpg.backup.retentionPolicy | quote }}
-  # {{- end }}
+  # Backup configuration (CNPG in-tree barmanObjectStore -> S3).
+  # Setting this block makes CNPG archive WAL continuously AND take base backups,
+  # which together provide point-in-time recovery (PITR).
+  #
+  # NOTE: in-tree barmanObjectStore is DEPRECATED as of CNPG 1.26 in favour of the
+  # Barman Cloud Plugin (CNPG-I), but remains supported and is the default on 1.28.
+  # Track migration to the plugin for a future CNPG bump (see docs/BACKUP_DR.md).
+  #
+  # Two ways to configure S3 credentials:
+  #   1. Declaratively  - set cnpg.backup.* in values at install time (renders here).
+  #   2. Via admin UI    - the backend stores S3 creds in OpenBao, creates the
+  #      credentials secret, and patches this Cluster's .spec.backup at runtime.
+  #      For UI-managed backups leave cnpg.backup.enabled=false so Helm upgrades
+  #      don't fight the backend's patch (Helm won't touch a field it never set).
+  {{- if .Values.cnpg.backup.enabled }}
+  backup:
+    # serverName pins the archive stanza so restores reference it deterministically.
+    # A recovery cluster MUST use a different serverName (and not the live
+    # destinationPath) to avoid clobbering the source WAL archive.
+    retentionPolicy: {{ .Values.cnpg.backup.retentionPolicy | default "30d" | quote }}
+    barmanObjectStore:
+      serverName: {{ .Values.cnpg.backup.serverName | default "kleidia-db" | quote }}
+      destinationPath: {{ required "cnpg.backup.destinationPath is required when cnpg.backup.enabled=true" .Values.cnpg.backup.destinationPath | quote }}
+      {{- with .Values.cnpg.backup.endpointURL }}
+      endpointURL: {{ . | quote }}
+      {{- end }}
+      s3Credentials:
+        accessKeyId:
+          name: {{ .Values.cnpg.backup.s3CredentialsSecret }}
+          key: AWS_ACCESS_KEY_ID
+        secretAccessKey:
+          name: {{ .Values.cnpg.backup.s3CredentialsSecret }}
+          key: AWS_SECRET_ACCESS_KEY
+        region:
+          name: {{ .Values.cnpg.backup.s3CredentialsSecret }}
+          key: AWS_REGION
+      wal:
+        compression: {{ .Values.cnpg.backup.walCompression | default "gzip" }}
+        maxParallel: {{ .Values.cnpg.backup.walMaxParallel | default 2 }}
+      data:
+        compression: {{ .Values.cnpg.backup.dataCompression | default "gzip" }}
+  {{- end }}
   
   # Monitoring
   monitoring:

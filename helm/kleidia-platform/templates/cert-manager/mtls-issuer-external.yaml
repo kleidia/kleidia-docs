@@ -1,0 +1,41 @@
+{{- if eq (.Values.global.secretsBackend.mode | default "bundled") "external" }}
+# =============================================================================
+# External-Vault mTLS Issuer (cert-manager Vault issuer via AppRole)
+# =============================================================================
+# Used in `external` mode INSTEAD of the in-cluster issuer (cert-manager/mtls-issuer.yaml,
+# which only renders when openbao.enabled=true). Points cert-manager at the
+# customer-managed Vault/OpenBao. The customer MUST have already provisioned:
+#   - the PKI mount + role `kleidia-component`
+#   - an AppRole whose policy permits `<pkiMount>/sign/kleidia-component`
+# Kleidia performs NO PKI administration here (customer-owned PKI).
+# This is a regular resource (not a hook): the external Vault is already up, so the
+# issuer can be created immediately; kleidia-data's pre-install gate waits for it Ready.
+# =============================================================================
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: kleidia-mtls-issuer
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/component: mtls-issuer
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  vault:
+    server: {{ required "global.externalVault.address is required when secretsBackend.mode=external" .Values.global.externalVault.address | quote }}
+    path: {{ printf "%s/sign/kleidia-component" (.Values.global.externalVault.pkiMount | default "pki") | quote }}
+    {{- if .Values.global.externalVault.namespace }}
+    namespace: {{ .Values.global.externalVault.namespace | quote }}
+    {{- end }}
+    {{- if .Values.global.externalVault.caSecret }}
+    caBundleSecretRef:
+      name: {{ .Values.global.externalVault.caSecret }}
+      key: ca.crt
+    {{- end }}
+    auth:
+      appRole:
+        path: approle
+        roleId: {{ required "global.externalVault.certManagerRoleId is required when secretsBackend.mode=external" .Values.global.externalVault.certManagerRoleId | quote }}
+        secretRef:
+          name: {{ .Values.global.externalVault.appRoleSecret | default "kleidia-vault-approle" }}
+          key: secret_id
+{{- end }}

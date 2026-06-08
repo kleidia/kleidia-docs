@@ -1,3 +1,21 @@
+{{- /* External mode: the customer owns Vault backup/DR, so Kleidia does not snapshot it. */ -}}
+{{- if and .Values.backup.enableVaultBackup (ne (.Values.global.secretsBackend.mode | default "bundled") "external") }}
+# =============================================================================
+# Scheduled OpenBao raft-snapshot backup (thin trigger).
+# =============================================================================
+# DB backups are handled NATIVELY by CNPG (barmanObjectStore + continuous WAL +
+# the ScheduledBackup CRD in the kleidia-data chart), which provides PITR. This
+# CronJob covers the OTHER half — OpenBao — which has no operator-native backup.
+#
+# It is intentionally a thin trigger: it POSTs to the backend, which performs the
+# raft snapshot via its OpenBao client and streams it to S3. This keeps S3 creds
+# and snapshot logic in one place (the backend) and avoids fragile in-container
+# tooling (no `apk add`, no busybox-wget PUT quirks, airgap-friendly).
+#
+# DR WARNING: a raft snapshot is ENCRYPTED by the static seal and is NOT
+# restorable without the unseal key (secret openbao-unseal-key) plus the
+# init/recovery keys. Those must be custodied securely OFF-cluster — see
+# docs/BACKUP_DR.md. The snapshot alone is not a complete backup.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -6,10 +24,8 @@ metadata:
   labels:
     app: backup
 spec:
-  # Schedule from settings (default: daily at 2 AM)
-  # Can be overridden via values.yaml or updated via settings API
+  # Schedule from settings (default: daily at 2 AM).
   schedule: {{ .Values.backup.schedule | default "0 2 * * *" }}
-  # Suspend if disabled in settings
   suspend: {{ .Values.backup.suspend | default false }}
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -17,6 +33,9 @@ spec:
   jobTemplate:
     spec:
       ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+      # Surface a stuck/failing trigger instead of retrying forever.
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
       template:
         metadata:
           labels:
@@ -42,13 +61,9 @@ spec:
             fsGroup: 65534
             seccompProfile:
               type: RuntimeDefault
-          volumes:
-          - name: tmp
-            emptyDir: {}
           containers:
-          # Database backup container - uses postgres with pg_dump
-          - name: db-backup
-            image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.postgres "context" $) }}
+          - name: trigger-openbao-snapshot
+            image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.curl "context" $) }}
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: true
@@ -56,155 +71,34 @@ spec:
               runAsUser: 65534
               capabilities:
                 drop: ["ALL"]
-            volumeMounts:
-            - name: tmp
-              mountPath: /tmp
             command:
             - sh
             - -c
             - |
-              set -e
-              echo "=== Starting Database Backup ==="
-              
+              set -eu
+              echo "=== Triggering scheduled OpenBao raft snapshot ==="
               BACKEND_URL="http://backend.{{ .Values.global.namespace }}.svc.cluster.local:8080"
-              INTERNAL_TOKEN="${BACKUP_RUNNER_TOKEN}"
-              
-              # Get presigned URL for database backup
-              # Using wget with JSON parsing via shell (no jq in minimal images)
-              echo "Requesting presigned URL for database backup..."
-              PRESIGN_RESPONSE=$(wget -q -O - --post-data="" --header="X-Internal-Token: ${INTERNAL_TOKEN}" \
-                "${BACKEND_URL}/api/admin/system/backup/presign?type=db" 2>/dev/null || echo "{}")
-              
-              # Parse JSON response using shell (minimal images may not have jq)
-              PRESIGNED_URL=$(echo "${PRESIGN_RESPONSE}" | grep -o '"url":"[^"]*"' | cut -d'"' -f4)
-              OBJECT_KEY=$(echo "${PRESIGN_RESPONSE}" | grep -o '"key":"[^"]*"' | cut -d'"' -f4)
-              
-              if [ -z "${PRESIGNED_URL}" ] || [ -z "${OBJECT_KEY}" ]; then
-                echo "ERROR: Failed to get presigned URL"
-                echo "Response: ${PRESIGN_RESPONSE}"
-                exit 1
-              fi
-              
-              echo "Got presigned URL for: ${OBJECT_KEY}"
-              
-              # Perform database backup
-              echo "Dumping database..."
-              PGHOST="${DB_HOST}"
-              PGPORT="${DB_PORT}"
-              PGUSER="${DB_USER}"
-              PGDATABASE="${DB_NAME}"
-              export PGPASSWORD="${DB_PASSWORD}"
-              
-              # Use pg_dump with gzip, upload via wget
-              pg_dump -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" -d "${PGDATABASE}" | \
-                gzip > /tmp/backup.sql.gz
-              
-              wget -q -O - --method=PUT --body-file=/tmp/backup.sql.gz \
-                --header="Content-Type: application/gzip" \
-                "${PRESIGNED_URL}" || { echo "ERROR: Upload failed"; exit 1; }
-              
-              rm -f /tmp/backup.sql.gz
-              echo "✅ Database backup uploaded successfully"
-              
-            env:
-            - name: DB_HOST
-              value: postgres.{{ .Values.global.namespace }}.svc.cluster.local
-            - name: DB_PORT
-              value: "5432"
-            - name: DB_USER
-              value: kleidiauser
-            - name: DB_NAME
-              value: kleidia
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: password
-            - name: BACKUP_RUNNER_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: backup-runner-token
-                  key: token
-            resources:
-              requests:
-                memory: "128Mi"
-                cpu: "100m"
-              limits:
-                memory: "512Mi"
-                cpu: "500m"
-          
-          # Vault backup container (only if enabled)
-          # Note: vault container needs to install packages, so readOnlyRootFilesystem is disabled
-          {{- if .Values.backup.enableVaultBackup }}
-          - name: vault-backup
-            image: {{ include "kleidia-services.thirdPartyImage" (dict "image" .Values.thirdPartyImages.vault "context" $) }}
-            securityContext:
-              allowPrivilegeEscalation: false
-              readOnlyRootFilesystem: false  # apk add requires write access
-              runAsNonRoot: true
-              runAsUser: 65534
-              capabilities:
-                drop: ["ALL"]
-            command:
-            - sh
-            - -c
-            - |
-              set -e
-              echo "=== Starting Vault Backup ==="
-              
-              # Install curl and jq (vault image is alpine-based)
-              apk add --no-cache curl jq
-              
-              BACKEND_URL="http://backend.{{ .Values.global.namespace }}.svc.cluster.local:8080"
-              INTERNAL_TOKEN="${BACKUP_RUNNER_TOKEN}"
-              VAULT_ADDR="${VAULT_ADDR}"
-              VAULT_TOKEN="${VAULT_TOKEN}"
-              
-              # Get presigned URL for vault backup
-              echo "Requesting presigned URL for vault backup..."
-              PRESIGN_RESPONSE=$(curl -s -X POST "${BACKEND_URL}/api/admin/system/backup/presign?type=vault" \
-                -H "X-Internal-Token: ${INTERNAL_TOKEN}")
-              
-              PRESIGNED_URL=$(echo "${PRESIGN_RESPONSE}" | jq -r '.url // empty')
-              OBJECT_KEY=$(echo "${PRESIGN_RESPONSE}" | jq -r '.key // empty')
-              
-              if [ -z "${PRESIGNED_URL}" ] || [ -z "${OBJECT_KEY}" ] || [ "${PRESIGNED_URL}" = "null" ] || [ "${OBJECT_KEY}" = "null" ]; then
-                echo "ERROR: Failed to get presigned URL"
-                echo "Response: ${PRESIGN_RESPONSE}"
-                exit 1
-              fi
-              
-              echo "Got presigned URL for: ${OBJECT_KEY}"
-              
-              # Perform vault snapshot
-              echo "Creating Vault snapshot..."
-              vault operator raft snapshot save - | \
-                gzip | \
-                curl -X PUT --upload-file - "${PRESIGNED_URL}" \
-                  -H "Content-Type: application/gzip" \
-                  --fail --show-error
-              
-              echo "✅ Vault backup uploaded successfully"
-              
-            env:
-            - name: VAULT_ADDR
-              value: http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200
-            - name: VAULT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: vault-backup-token
-                  key: token
-            - name: BACKUP_RUNNER_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: backup-runner-token
-                  key: token
-            resources:
-              requests:
-                memory: "128Mi"
-                cpu: "100m"
-              limits:
-                memory: "512Mi"
-                cpu: "500m"
-          {{- end }}
 
+              # The backend takes the raft snapshot (sys/storage/raft/snapshot),
+              # uploads it to S3, and records a backup job. Fails loudly (non-2xx
+              # -> curl --fail -> non-zero exit) so a broken backup is visible
+              # instead of masked.
+              RESP=$(curl -fsS --max-time 540 -X POST \
+                -H "X-Internal-Token: ${BACKUP_RUNNER_TOKEN}" \
+                "${BACKEND_URL}/api/admin/system/backup/openbao-snapshot") || {
+                  echo "ERROR: OpenBao snapshot trigger failed"; exit 1; }
+              echo "✅ ${RESP}"
+            env:
+            - name: BACKUP_RUNNER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backup-runner-token
+                  key: token
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "200m"
+{{- end }}

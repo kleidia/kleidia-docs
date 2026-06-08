@@ -1,9 +1,9 @@
 apiVersion: v2
 name: kleidia-services
-version: 1.0.0
+version: 2.2.1
 description: Kleidia application layer (backend, frontend)
 type: application
-appVersion: "1.0.0"
+appVersion: "2.2.1"
 keywords:
   - backend
   - frontend

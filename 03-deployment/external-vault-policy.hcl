@@ -38,10 +38,7 @@ path "kleidia-pki/crl*" {
   capabilities = ["read"]
 }
 
-# --- Startup auth self-test (backend probes the auth-method list) + token ---
-path "sys/auth" {
-  capabilities = ["read"]
-}
+# --- Token self-inspection (backend startup auth self-test) + renewal ---
 path "auth/token/lookup-self" {
   capabilities = ["read"]
 }
