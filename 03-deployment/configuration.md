@@ -145,7 +145,7 @@ global:
 backend:
   replicas: 3                           # Higher availability
   image:
-    tag: v2.2.0                          # Specific version
+    tag: backend-2.2.1                   # Specific version (format: <component>-<x.y.z>)
   resources:
     requests:
       memory: "512Mi"
@@ -157,7 +157,7 @@ backend:
 frontend:
   replicas: 2
   image:
-    tag: v2.2.0
+    tag: frontend-2.2.1
 
 postgres:
   storage:
