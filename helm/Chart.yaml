@@ -1,9 +1,9 @@
 apiVersion: v2
 name: kleidia-data
-version: 2.2.1
+version: 2.2.2
 description: Kleidia data layer (PostgreSQL) - HTTP-based agent architecture
 type: application
-appVersion: "2.2.1"
+appVersion: "2.2.2"
 keywords:
   - postgresql
 maintainers:

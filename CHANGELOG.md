@@ -3,6 +3,22 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.2.2 — June 2026
+
+### Added
+- **Kleidia platform version is shown in the admin overview.** The admin panel now
+  displays a "Kleidia v<version>" badge, sourced from the deployed chart `appVersion`
+  (`/admin/stats` returns `version`). Addresses pilot feedback about not being able to
+  tell which version is running.
+
+### Fixed
+- Hardening from the SonarQube review: license-service container runs as non-root,
+  TLS 1.2 floor on the OIDC and backup-S3 clients, and minor correctness cleanups.
+
+### Notes
+- No schema/data changes; safe in-place upgrade from 2.2.1.
+- Images: `backend-2.2.2`, `frontend-2.2.2`, `license-2.2.2`.
+
 ## 2.2.1 — June 2026
 
 Patch release. External (customer-managed) Vault mode hardening — surfaced by a

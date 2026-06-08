@@ -1,6 +1,6 @@
 # Kleidia Customer Documentation
 
-**Version**: 2.2.1  
+**Version**: 2.2.2  
 **Last Updated**: June 2026
 
 ## About This Documentation
@@ -100,7 +100,7 @@ For technical support or questions about this documentation:
 
 ## Documentation Version
 
-This documentation corresponds to **Kleidia version 2.2.1**.
+This documentation corresponds to **Kleidia version 2.2.2**.
 
 For version-specific information, see [CHANGELOG](CHANGELOG.md).
 

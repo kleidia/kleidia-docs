@@ -171,6 +171,10 @@ spec:
           name: health
         {{- end }}
         env:
+        # Kleidia platform version — surfaced in the admin overview. Sourced from the
+        # chart appVersion so the displayed version always matches the deployed release.
+        - name: APP_VERSION
+          value: {{ .Chart.AppVersion | quote }}
         # Database connection
         - name: DB_HOST
           value: postgres.{{ .Values.global.namespace }}.svc.cluster.local
