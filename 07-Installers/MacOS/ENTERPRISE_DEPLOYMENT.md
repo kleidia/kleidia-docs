@@ -1,8 +1,8 @@
 # Enterprise Deployment Guide for Kleidia Agent (macOS)
 
 > **📘 Note:** This is a technical reference document. For customer-facing documentation, see:
-> - **[Main Installation Guide](../../../docs/AGENT_INSTALLATION.md)** - Concise guide for end-users and IT admins
-> - **[Quick Reference](../../../docs/AGENT_DEPLOYMENT_QUICK_REFERENCE.md)** - Commands and scripts
+> - **[Main Installation Guide](/docs/user-guides/agent-installation/)** - Concise guide for end-users and IT admins
+> - **[Quick Reference](/docs/user-guides/agent-installation/)** - Commands and scripts
 >
 > This document contains detailed technical information for advanced deployments and troubleshooting.
 
@@ -1053,7 +1053,7 @@ For enterprise deployment:
 - **Notarize** the package with Apple notary service
 - **Staple** the notarization ticket to the package
 
-See: **[SIGNING_GUIDE.md](SIGNING_GUIDE.md)** and **[NOTARIZATION_GUIDE.md](NOTARIZATION_GUIDE.md)**
+See the **`SIGNING_GUIDE.md`** and **`NOTARIZATION_GUIDE.md`** files included in the installer package.
 
 ---
 

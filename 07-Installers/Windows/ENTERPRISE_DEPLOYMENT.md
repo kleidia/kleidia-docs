@@ -1,8 +1,8 @@
 # Enterprise Deployment Guide for Kleidia Agent (Windows)
 
 > **📘 Note:** This is a technical reference document. For customer-facing documentation, see:
-> - **[Main Installation Guide](../../../docs/AGENT_INSTALLATION.md)** - Concise guide for end-users and IT admins
-> - **[Quick Reference](../../../docs/AGENT_DEPLOYMENT_QUICK_REFERENCE.md)** - Commands and scripts
+> - **[Main Installation Guide](/docs/user-guides/agent-installation/)** - Concise guide for end-users and IT admins
+> - **[Quick Reference](/docs/user-guides/agent-installation/)** - Commands and scripts
 >
 > This document contains detailed technical information for advanced deployments and troubleshooting.
 

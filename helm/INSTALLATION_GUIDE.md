@@ -37,9 +37,9 @@ Install the three charts directly from the **public OCI registry** — no clone,
 
 | Chart | OCI reference | Version |
 |---|---|---|
-| `kleidia-platform` | `oci://registry-1.docker.io/therinn/kleidia-platform` | `1.0.0` |
-| `kleidia-data` | `oci://registry-1.docker.io/therinn/kleidia-data` | `2.0.0` |
-| `kleidia-services` | `oci://registry-1.docker.io/therinn/kleidia-services` | `1.0.0` |
+| `kleidia-platform` | `oci://registry-1.docker.io/therinn/kleidia-platform` | `2.2.2` |
+| `kleidia-data` | `oci://registry-1.docker.io/therinn/kleidia-data` | `2.2.2` |
+| `kleidia-services` | `oci://registry-1.docker.io/therinn/kleidia-services` | `2.2.2` |
 
 ### Option 2: From a local chart checkout
 
@@ -105,7 +105,7 @@ CORS must be configured correctly for the admin bootstrap flow to work. The `glo
 --set backend.corsOrigins="https://kleidia.example.com"
 ```
 
-See [CORS Configuration Guide](kleidia-services/CORS-CONFIGURATION.md) for details.
+See [CORS Configuration Guide](/docs/helm/cors-configuration/) for details.
 
 ### Storage Configuration
 

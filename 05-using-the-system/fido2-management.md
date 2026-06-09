@@ -191,5 +191,4 @@ FIDO2 reset has strict timing requirements:
 
 - [Azure Entra ID Integration](../03-deployment/azure-entra-integration.md)
 - [YubiKey Lifecycle Management](yubikey-lifecycle.md)
-- [PIV Certificate Management](piv-management.md)
 

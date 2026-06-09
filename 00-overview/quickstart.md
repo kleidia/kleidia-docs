@@ -15,7 +15,7 @@ DOMAIN=kleidia.example.com   # your public domain
 SC=local-path                # your StorageClass (e.g. local-path, longhorn, gp2)
 
 # 1/3 — Platform (OpenBao + cert-manager/CNPG bootstrap)
-helm install kleidia-platform oci://registry-1.docker.io/therinn/kleidia-platform --version 1.0.0 \
+helm install kleidia-platform oci://registry-1.docker.io/therinn/kleidia-platform --version 2.2.2 \
   --namespace kleidia --create-namespace \
   --set global.domain=$DOMAIN --set global.namespace=kleidia \
   --set storage.className=$SC \
@@ -24,14 +24,14 @@ helm install kleidia-platform oci://registry-1.docker.io/therinn/kleidia-platfor
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=openbao -n kleidia --timeout=600s
 
 # 2/3 — Data (PostgreSQL via CloudNativePG on K8s 1.32+)
-helm install kleidia-data oci://registry-1.docker.io/therinn/kleidia-data --version 2.0.0 \
+helm install kleidia-data oci://registry-1.docker.io/therinn/kleidia-data --version 2.2.2 \
   --namespace kleidia \
   --set global.domain=$DOMAIN --set global.namespace=kleidia \
   --set storage.className=$SC
 kubectl wait --for=condition=Ready cluster/kleidia-db -n kleidia --timeout=300s
 
 # 3/3 — Services (backend, frontend, license)
-helm install kleidia-services oci://registry-1.docker.io/therinn/kleidia-services --version 1.0.0 \
+helm install kleidia-services oci://registry-1.docker.io/therinn/kleidia-services --version 2.2.2 \
   --namespace kleidia \
   --set global.domain=$DOMAIN --set global.namespace=kleidia \
   --set global.siteUrl=https://$DOMAIN
