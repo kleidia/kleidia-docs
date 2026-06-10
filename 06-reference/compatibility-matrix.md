@@ -27,7 +27,7 @@ Kleidia requires a Kubernetes cluster (version 1.24+) with NodePort support. The
 |------------|---------|--------------|----------------|
 | Go         | 1.21+   | ✅ Supported | Required       |
 | PostgreSQL | 15+     | ✅ Supported | Recommended 18 |
-| OpenBao    | 2.4+    | ✅ Supported | Vault fork     |
+| OpenBao    | 2.5.4   | ✅ Supported | Vault fork; bundled in chart |
 
 ### Frontend
 
@@ -127,7 +127,8 @@ Kleidia requires a Kubernetes cluster (version 1.24+) with NodePort support. The
 
 | Version | Kubernetes | PostgreSQL | OpenBao | Status     |
 |---------|------------|------------|---------|------------|
-| 2.2.2   | 1.32+ (CNPG); 1.24+ legacy | 14–18 (default 18.1) | 2.4.4 | ✅ Current |
+| 2.2.3   | 1.32+ (CNPG); 1.24+ legacy | 14–18 (default 18.1) | 2.5.4 | ✅ Current |
+| 2.2.2   | 1.32+ (CNPG); 1.24+ legacy | 14–18 (default 18.1) | 2.4.4 | ⚠️ Superseded |
 | 2.2.1   | 1.32+ (CNPG); 1.24+ legacy | 14–18 (default 18.1) | 2.4.4 | ⚠️ Superseded |
 | 2.2.0   | 1.32+ (CNPG); 1.24+ legacy | 14–18 (default 18.1) | 2.4.4 | ⚠️ Superseded |
 

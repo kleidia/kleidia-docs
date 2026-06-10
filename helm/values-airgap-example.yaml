@@ -44,7 +44,7 @@ kleidia-platform:
       image:
         registry: ""  # Empty = use global.registry.host
         repository: "openbao/openbao"
-        tag: "2.4.4"
+        tag: "2.5.4"
     pki:
       mode: root
       rootCA:
@@ -128,7 +128,7 @@ kleidia-services:
 #    Run: ./mirror-images.sh registry.example.com:5000
 #    
 #    Or manually mirror these images:
-#    - quay.io/openbao/openbao:2.4.4
+#    - quay.io/openbao/openbao:2.5.4
 #    - ghcr.io/cloudnative-pg/postgresql:18.1
 #    - postgres:18.1-alpine
 #    - curlimages/curl:latest

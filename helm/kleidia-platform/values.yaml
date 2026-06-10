@@ -106,7 +106,7 @@ openbao:
     # Secret containing TLS cert/key for OpenBao server
     # Created automatically when enabling HTTPS via admin UI
     certSecretName: "openbao-internal-tls"
-  # Configuration for official OpenBao Helm chart (v0.19.0, appVersion v2.4.4)
+  # Configuration for official OpenBao Helm chart (v0.19.0, appVersion v2.5.4)
   global:
     enabled: true
     tlsDisable: true  # This is overridden by standalone.config when internalTLS.enabled=true
@@ -119,10 +119,10 @@ openbao:
     enabled: true
     image:
       registry: ""                  # OpenBao image registry (leave empty to use global.registry.host)
-                                    # For air-gapped: set global.registry.host and mirror quay.io/openbao/openbao:2.4.4
+                                    # For air-gapped: set global.registry.host and mirror quay.io/openbao/openbao:2.5.4
                                     # Default public registry: "quay.io"
       repository: "openbao/openbao" # OpenBao repository (use "openbao/openbao" for mirrored images)
-      tag: "2.4.4"                  # OpenBao version
+      tag: "2.5.4"                  # OpenBao version
       pullPolicy: IfNotPresent
     
     # Integrated Raft storage (HA-capable).

@@ -3,6 +3,23 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.2.3 — June 2026
+
+Patch release. Bundled OpenBao upgraded to the current 2.5.4.
+
+### Changed
+- **Bundled OpenBao image bumped 2.4.4 → 2.5.4** (managed mode). Verified both the
+  fresh-install path (raft + static-seal init and auto-unseal, including auto-unseal
+  across pod restart) and the in-place 2.4.4 → 2.5.4 upgrade (2.5.4 reads existing
+  raft data and the static-sealed root key without error). The GCP-KMS auto-unseal
+  regression in OpenBao 2.5.0 does not affect Kleidia's static-key seal.
+
+### Notes
+- No schema/data changes; safe in-place upgrade from 2.2.2.
+- Application images are unchanged from 2.2.2 (identical digests, retagged):
+  `backend-2.2.3`, `frontend-2.2.3`, `license-2.2.3`.
+- Charts republished at 2.2.3 — install with `--version 2.2.3`.
+
 ## 2.2.2 — June 2026
 
 ### Added

@@ -37,9 +37,9 @@ Install the three charts directly from the **public OCI registry** — no clone,
 
 | Chart | OCI reference | Version |
 |---|---|---|
-| `kleidia-platform` | `oci://registry-1.docker.io/therinn/kleidia-platform` | `2.2.2` |
-| `kleidia-data` | `oci://registry-1.docker.io/therinn/kleidia-data` | `2.2.2` |
-| `kleidia-services` | `oci://registry-1.docker.io/therinn/kleidia-services` | `2.2.2` |
+| `kleidia-platform` | `oci://registry-1.docker.io/therinn/kleidia-platform` | `2.2.3` |
+| `kleidia-data` | `oci://registry-1.docker.io/therinn/kleidia-data` | `2.2.3` |
+| `kleidia-services` | `oci://registry-1.docker.io/therinn/kleidia-services` | `2.2.3` |
 
 ### Option 2: From a local chart checkout
 
