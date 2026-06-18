@@ -2,7 +2,7 @@
 Kleidia Agent - macOS Installation Quick Start
 ================================================================================
 
-VERSION: 0.4.9+
+VERSION: X.Y.Z+
 DATE: January 2026
 
 ================================================================================
@@ -91,7 +91,7 @@ For scripted or remote deployment:
   export BACKEND_URL="kleidia.example.com"
   
   # Install package
-  sudo installer -pkg kleidia-agent-0.4.9.pkg -target /
+  sudo installer -pkg kleidia-agent-X.Y.Z.pkg -target /
   
   # Verify installation
   sudo launchctl list | grep com.kleidia.agent
@@ -251,7 +251,7 @@ Installation fails:
   cat /var/log/kleidia-agent/postinstall.log
   
   # Verify package signature
-  pkgutil --check-signature kleidia-agent-0.4.9.pkg
+  pkgutil --check-signature kleidia-agent-X.Y.Z.pkg
 
 ================================================================================
 LOGS AND DIAGNOSTICS
@@ -449,7 +449,7 @@ QUICK REFERENCE
 ================================================================================
 
 Installation:
-  sudo installer -pkg kleidia-agent-0.4.9.pkg -target /
+  sudo installer -pkg kleidia-agent-X.Y.Z.pkg -target /
 
 Verify:
   sudo launchctl list | grep com.kleidia.agent

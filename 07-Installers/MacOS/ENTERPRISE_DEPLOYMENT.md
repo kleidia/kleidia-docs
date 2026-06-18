@@ -90,7 +90,7 @@ For scripted installations without GUI prompts:
 export BACKEND_URL="kleidia.example.com"
 
 # Install package silently
-sudo installer -pkg kleidia-agent-0.4.9.pkg -target /
+sudo installer -pkg kleidia-agent-X.Y.Z.pkg -target /
 
 # Verify
 sudo launchctl list | grep com.kleidia.agent
@@ -637,7 +637,7 @@ fi
 
 ```bash
 # Import package
-munkiimport kleidia-agent-0.4.9.pkg
+munkiimport kleidia-agent-X.Y.Z.pkg
 
 # During import, configure:
 # - Name: KleidiaAgent
@@ -696,7 +696,7 @@ exit 0
     <key>unattended_install</key>
     <true/>
     <key>version</key>
-    <string>0.4.9</string>
+    <string>X.Y.Z</string>
 </dict>
 </plist>
 ```
@@ -1019,7 +1019,7 @@ sudo rm -rf /etc/kleidia/agent
 sudo rm -rf /var/log/kleidia-agent
 
 # Reinstall
-sudo installer -pkg kleidia-agent-0.4.9.pkg -target /
+sudo installer -pkg kleidia-agent-X.Y.Z.pkg -target /
 ```
 
 ---
@@ -1186,6 +1186,6 @@ curl -s http://127.0.0.1:56123/health
 
 **Document Version**: 1.0  
 **Last Updated**: 2025-11-10  
-**Agent Version**: 0.4.9+  
+**Agent Version**: X.Y.Z+  
 **Platforms**: macOS 10.15 (Catalina) and later
 

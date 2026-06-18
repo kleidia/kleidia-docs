@@ -2,7 +2,7 @@
 Kleidia Agent - Windows Installation Quick Start
 ================================================================================
 
-VERSION: 0.4.9+
+VERSION: X.Y.Z+
 DATE: January 2026
 
 ================================================================================
@@ -193,7 +193,7 @@ MSI Properties:
   INSTALLSERVICE=1            Install as service (1=yes, 0=no)
 
 Example:
-  msiexec /i kleidia-agent-0.4.9-unsigned.msi /qn /norestart /L*v install.log BACKEND_URL=https://kleidia.example.com
+  msiexec /i kleidia-agent-X.Y.Z-unsigned.msi /qn /norestart /L*v install.log BACKEND_URL=https://kleidia.example.com
 
 EXE Bundle Options:
   /quiet      Silent installation
@@ -202,7 +202,7 @@ EXE Bundle Options:
   BackendURL=<url> Set backend URL
 
 Example:
-  kleidia-agent-installer-0.4.9.exe /quiet /log install.log BackendURL=https://kleidia.example.com
+  kleidia-agent-installer-X.Y.Z.exe /quiet /log install.log BackendURL=https://kleidia.example.com
 
 ================================================================================
 FIREWALL REQUIREMENTS
