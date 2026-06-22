@@ -1,42 +1,53 @@
 # Kleidia Deployment Quick Start
 
-## 🚀 Quick Start
+## 🚀 Clean Deployment from Scratch
 
-Deploy Kleidia's three charts in order, straight from the **public OCI registry** — no clone, no scripts. For the full walkthrough (storage options, TLS, verification) see the **[Helm Installation Guide](../03-deployment/helm-install.md)**.
+This guide helps you clean up a problematic deployment and start fresh.
 
 ## Prerequisites
 
 - `kubectl` configured and connected to your cluster
 - `helm` v3.8 or later
-- A `StorageClass` available in the cluster
+- `jq` (optional, for advanced cleanup)
 
-## Install
+## Quick Start
+
+### Option 1: Automated Cleanup and Deploy (Recommended)
+
+Run the comprehensive cleanup and deployment script:
 
 ```bash
-DOMAIN=kleidia.example.com   # your public domain
-SC=local-path                # your StorageClass (e.g. local-path, longhorn, gp2)
-
-# 1/3 — Platform (OpenBao + cert-manager/CNPG bootstrap)
-helm install kleidia-platform oci://registry-1.docker.io/therinn/kleidia-platform --version 2.2.3 \
-  --namespace kleidia --create-namespace \
-  --set global.domain=$DOMAIN --set global.namespace=kleidia \
-  --set storage.className=$SC \
-  --set openbao.server.dataStorage.storageClass=$SC --set openbao.server.auditStorage.storageClass=$SC
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=openbao -n kleidia --timeout=600s
-
-# 2/3 — Data (PostgreSQL via CloudNativePG)
-helm install kleidia-data oci://registry-1.docker.io/therinn/kleidia-data --version 2.2.3 \
-  --namespace kleidia --set global.domain=$DOMAIN --set global.namespace=kleidia --set storage.className=$SC
-kubectl wait --for=condition=Ready cluster/kleidia-db -n kleidia --timeout=300s
-
-# 3/3 — Services (backend, frontend, license)
-helm install kleidia-services oci://registry-1.docker.io/therinn/kleidia-services --version 2.2.3 \
-  --namespace kleidia --set global.domain=$DOMAIN --set global.namespace=kleidia --set global.siteUrl=https://$DOMAIN
+cd helm
+./cleanup-and-deploy.sh
 ```
 
-> **Single-node clusters:** append `--set backend.replicas=1 --set frontend.replicas=1 --set licenseService.replicas=1` to the services install so the second replicas don't sit `Pending`.
+This script will:
+1. ✅ Check prerequisites
+2. 🧹 Completely clean up existing deployment
+3. 🏗️ Deploy fresh from DockerHub images
+4. ✓ Verify all components
+5. 📊 Show deployment status
 
-After install, create the admin account via the web UI (the bootstrap flow at `https://$DOMAIN`).
+### Option 2: Manual Step-by-Step
+
+If you prefer manual control:
+
+```bash
+cd helm
+
+# 1. Clean up existing deployment
+./deploy-from-dockerhub.sh
+# (This script includes cleanup as the first step)
+```
+
+## Custom Domain
+
+To deploy with a custom domain:
+
+```bash
+export DOMAIN="your-domain.example.com"
+./cleanup-and-deploy.sh
+```
 
 ## Troubleshooting
 
@@ -149,6 +160,24 @@ kubectl logs -n kleidia -l app.kubernetes.io/name=openbao --tail=100
 # Check if OpenBao initialization job completed
 kubectl get jobs -n kleidia | grep openbao
 ```
+
+## What Was Fixed
+
+This deployment includes the following fixes:
+
+1. **Added DB_PASSWORD environment variable** to backend deployment
+   - Previously missing, causing database connection to fail
+   - Now set to empty string (matches PostgreSQL trust auth)
+
+2. **Comprehensive cleanup process**
+   - Removes all resources including stuck PVCs
+   - Forces namespace deletion if stuck
+   - Cleans up orphaned PersistentVolumes
+
+3. **Better error handling**
+   - Detailed pod status checks
+   - Health endpoint verification
+   - Automatic log collection for failed pods
 
 ## Deployment Architecture
 

@@ -44,7 +44,7 @@ backend:
   replicas: 2                 # Horizontal scaling for the backend API
   image:
     repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-backend)
-    tag: backend-2.2.3                    # Pinned to the 2.2.3 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
+    tag: backend-2.2.4                    # Pinned to the 2.2.4 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
   service:
     nodePort: 32570             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
   corsOrigins: ""               # CORS allowed origins (comma-separated). If empty, uses global.siteUrl
@@ -67,14 +67,14 @@ frontend:
   replicas: 2                 # Horizontal scaling for the frontend
   image:
     repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-frontend)
-    tag: frontend-2.2.3                   # Pinned to the 2.2.3 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
+    tag: frontend-2.2.4                   # Pinned to the 2.2.4 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
   service:
     nodePort: 30805             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
 
 licenseService:
   enabled: true                 # Enable the license service pod (optional, backend falls back to TRIAL if disabled)
   replicas: 2                   # Horizontal scaling for high availability
-  image: therinn/kleidia:license-2.2.3  # License service image (garble-obfuscated); pinned to the 2.2.3 release
+  image: therinn/kleidia:license-2.2.4  # License service image (garble-obfuscated); pinned to the 2.2.4 release
   imagePullPolicy: Always       # Always pull to ensure latest image
   resources:
     requests:

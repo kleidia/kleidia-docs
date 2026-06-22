@@ -835,7 +835,7 @@ spec:
           
           echo ""
           echo "=== OpenBao Complete Setup Finished Successfully ==="
-          echo "OpenBao v2.4.4 is ready for use!"
+          echo "OpenBao v2.5.4 is ready for use!"
           echo ""
           echo "Security features enabled:"
           echo "  ✅ Static seal (auto-unseal by default)"
