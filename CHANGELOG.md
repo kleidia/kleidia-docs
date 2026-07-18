@@ -3,6 +3,36 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.2.5 — July 2026
+
+Correctness and security release. Supersedes 2.2.4. Upgrade is a chart/image
+bump with no manual data steps; the missing tables are created automatically at
+backend startup.
+
+### Fixed
+- **Feature tables created on install/upgrade.** `scim_configs`,
+  `scim_provisioning_logs`, `idp_connectors`, `idp_credential_registrations`,
+  `fido2_provisioning_sessions`, `openpgp_keys`, `openpgp_policies`,
+  `device_config_history` (and `operations`) were never created on Helm-installed
+  clusters, so SCIM, IdP connectors, FIDO2 provisioning and OpenPGP features
+  failed on first use. They are now created idempotently at startup and in the
+  chart's db-init.
+- **SCIM resource id.** The SCIM `id` returned in list/get/create responses was
+  mangled (digits reversed and truncated), so SCIM update and deprovision always
+  404'd — a deprovisioned user could never be deactivated. Ids now round-trip.
+- **Admin API tenant isolation.** System-level admin routes now require a global
+  admin (org managers no longer reach them), and per-YubiKey admin operations
+  enforce the caller's organization, closing a cross-tenant access path to keys
+  and their PIN/PUK secrets.
+
+### Changed
+- Frontend admin surfaces use a two-tier model so org managers can reach their
+  own org pages while system pages remain global-admin only.
+
+### Notes
+- Application images retagged from validated digests: `backend-2.2.5`,
+  `frontend-2.2.5`, `license-2.2.5`. Bundled OpenBao unchanged (2.5.4).
+
 ## 2.2.3 — June 2026
 
 Patch release. Bundled OpenBao upgraded to the current 2.5.4.

@@ -295,7 +295,13 @@ spec:
           );
           
           CREATE INDEX IF NOT EXISTS idx_agents_owner_id ON agents(owner_id);
-          
+
+          -- Bug fix (RIT 2026-07-16): GORM Agent model declares IsPaired with column:paired
+          -- and the agent-cleanup cron runs `SELECT count(*) FROM agents WHERE paired = true`,
+          -- but the agents table above never created the column -> SQLSTATE 42703.
+          -- Idempotent add, matching the ADD COLUMN IF NOT EXISTS migration scheme.
+          ALTER TABLE agents ADD COLUMN IF NOT EXISTS paired BOOLEAN NOT NULL DEFAULT FALSE;
+
           -- Discovered devices from agents
           CREATE TABLE IF NOT EXISTS discovered_devices (
               id SERIAL PRIMARY KEY,
@@ -799,7 +805,222 @@ spec:
           CREATE INDEX IF NOT EXISTS idx_scim_tokens_token_hash ON scim_tokens(token_hash);
           CREATE INDEX IF NOT EXISTS idx_scim_tokens_organization_id ON scim_tokens(organization_id);
           CREATE INDEX IF NOT EXISTS idx_scim_tokens_is_active ON scim_tokens(is_active);
-          
+
+          -- SCIM provisioning configs (per-org bearer-token provisioning; used by backend SCIMConfig model)
+          CREATE TABLE IF NOT EXISTS scim_configs (
+              id SERIAL PRIMARY KEY,
+              organization_id INTEGER REFERENCES organizations(id),
+              token_hash VARCHAR(255) NOT NULL,
+              token_prefix VARCHAR(20) NOT NULL,
+              token_hint VARCHAR(10),
+              is_enabled BOOLEAN DEFAULT true,
+              last_sync_at TIMESTAMP,
+              total_users INTEGER DEFAULT 0,
+              last_request_at TIMESTAMP,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              deleted_at TIMESTAMP
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_scim_configs_organization_id ON scim_configs(organization_id);
+          CREATE INDEX IF NOT EXISTS idx_scim_configs_token_prefix ON scim_configs(token_prefix);
+          CREATE INDEX IF NOT EXISTS idx_scim_configs_is_enabled ON scim_configs(is_enabled) WHERE deleted_at IS NULL;
+
+          -- SCIM provisioning logs (references scim_configs)
+          CREATE TABLE IF NOT EXISTS scim_provisioning_logs (
+              id SERIAL PRIMARY KEY,
+              config_id INTEGER REFERENCES scim_configs(id) NOT NULL,
+              operation VARCHAR(50) NOT NULL,
+              resource_type VARCHAR(50) NOT NULL,
+              resource_id VARCHAR(255),
+              external_id VARCHAR(255),
+              request_body TEXT,
+              response_code INTEGER,
+              error_message TEXT,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_scim_provisioning_logs_config_id ON scim_provisioning_logs(config_id);
+          CREATE INDEX IF NOT EXISTS idx_scim_provisioning_logs_created_at ON scim_provisioning_logs(created_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_scim_provisioning_logs_external_id ON scim_provisioning_logs(external_id);
+
+          -- ========================================================================
+          -- IDP CREDENTIAL REGISTRATION (3 tables)
+          -- ========================================================================
+
+          -- IdP connectors (generalized identity provider connections: Entra, Keycloak)
+          CREATE TABLE IF NOT EXISTS idp_connectors (
+              id SERIAL PRIMARY KEY,
+              name VARCHAR(255) NOT NULL,
+              type VARCHAR(50) NOT NULL,
+              client_id VARCHAR(255) NOT NULL,
+              client_secret_path VARCHAR(255),
+              tenant_id VARCHAR(255),
+              base_url VARCHAR(500),
+              realm VARCHAR(255),
+              capabilities TEXT[] DEFAULT '{}',
+              config JSONB DEFAULT '{}',
+              is_active BOOLEAN DEFAULT true,
+              last_health_check TIMESTAMP,
+              last_health_status VARCHAR(50),
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              deleted_at TIMESTAMP,
+              CONSTRAINT idp_connectors_type_check CHECK (type IN ('entra', 'keycloak'))
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_idp_connectors_active ON idp_connectors(is_active) WHERE deleted_at IS NULL;
+          CREATE INDEX IF NOT EXISTS idx_idp_connectors_type ON idp_connectors(type) WHERE deleted_at IS NULL;
+
+          -- IdP credential registrations (references users, yubi_keys, idp_connectors)
+          CREATE TABLE IF NOT EXISTS idp_credential_registrations (
+              id SERIAL PRIMARY KEY,
+              user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              yubikey_id INTEGER REFERENCES yubi_keys(id) ON DELETE SET NULL,
+              connector_id INTEGER NOT NULL REFERENCES idp_connectors(id) ON DELETE CASCADE,
+              credential_type VARCHAR(50) NOT NULL,
+              idp_credential_id VARCHAR(255),
+              display_name VARCHAR(255),
+              status VARCHAR(50) NOT NULL DEFAULT 'pending',
+              error_message TEXT,
+              aaguid VARCHAR(36),
+              initiated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              registered_at TIMESTAMP,
+              last_verified_at TIMESTAMP,
+              removed_at TIMESTAMP,
+              initiated_by INTEGER REFERENCES users(id),
+              metadata JSONB DEFAULT '{}',
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              CONSTRAINT idp_cred_type_check CHECK (credential_type IN ('fido2', 'piv_cba')),
+              CONSTRAINT idp_cred_status_check CHECK (status IN ('pending', 'provisioning', 'registered', 'failed', 'removed'))
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_idp_cred_user ON idp_credential_registrations(user_id);
+          CREATE INDEX IF NOT EXISTS idx_idp_cred_yubikey ON idp_credential_registrations(yubikey_id);
+          CREATE INDEX IF NOT EXISTS idx_idp_cred_connector ON idp_credential_registrations(connector_id);
+          CREATE INDEX IF NOT EXISTS idx_idp_cred_status ON idp_credential_registrations(status);
+          CREATE INDEX IF NOT EXISTS idx_idp_cred_type ON idp_credential_registrations(credential_type);
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_idp_cred_unique_active ON idp_credential_registrations(user_id, yubikey_id, connector_id, credential_type) WHERE status NOT IN ('removed', 'failed');
+
+          -- FIDO2 provisioning sessions (references idp_credential_registrations)
+          CREATE TABLE IF NOT EXISTS fido2_provisioning_sessions (
+              id SERIAL PRIMARY KEY,
+              registration_id INTEGER NOT NULL REFERENCES idp_credential_registrations(id) ON DELETE CASCADE,
+              challenge TEXT NOT NULL,
+              rp_id VARCHAR(255) NOT NULL,
+              user_id_b64 VARCHAR(255) NOT NULL,
+              creation_options JSONB NOT NULL,
+              status VARCHAR(50) NOT NULL DEFAULT 'pending',
+              challenge_expires_at TIMESTAMP NOT NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              completed_at TIMESTAMP,
+              credential_id TEXT,
+              attestation_object TEXT,
+              client_data_json TEXT,
+              error_message TEXT,
+              CONSTRAINT fido2_session_status_check CHECK (status IN ('pending', 'agent_processing', 'completed', 'expired', 'failed'))
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_fido2_session_registration ON fido2_provisioning_sessions(registration_id);
+          CREATE INDEX IF NOT EXISTS idx_fido2_session_status ON fido2_provisioning_sessions(status);
+          CREATE INDEX IF NOT EXISTS idx_fido2_session_expires ON fido2_provisioning_sessions(challenge_expires_at) WHERE status = 'pending';
+
+          -- ========================================================================
+          -- OPENPGP (2 tables)
+          -- ========================================================================
+
+          -- OpenPGP policies
+          CREATE TABLE IF NOT EXISTS openpgp_policies (
+              id SERIAL PRIMARY KEY,
+              name VARCHAR(255) UNIQUE NOT NULL,
+              description TEXT,
+              require_touch BOOLEAN DEFAULT FALSE,
+              allowed_algorithms TEXT,
+              min_pin_length INTEGER DEFAULT 6,
+              min_admin_pin_length INTEGER DEFAULT 8,
+              require_admin_pin_change BOOLEAN DEFAULT TRUE,
+              require_user_pin_change BOOLEAN DEFAULT TRUE,
+              is_default BOOLEAN DEFAULT FALSE,
+              is_active BOOLEAN DEFAULT TRUE,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              deleted_at TIMESTAMP
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_openpgp_policies_name ON openpgp_policies(name);
+          CREATE INDEX IF NOT EXISTS idx_openpgp_policies_is_active ON openpgp_policies(is_active);
+
+          -- OpenPGP keys (references yubi_keys, users)
+          CREATE TABLE IF NOT EXISTS openpgp_keys (
+              id SERIAL PRIMARY KEY,
+              yubikey_id INTEGER NOT NULL REFERENCES yubi_keys(id) ON DELETE CASCADE,
+              slot VARCHAR(10) NOT NULL,
+              algorithm VARCHAR(50),
+              fingerprint VARCHAR(255),
+              touch_policy VARCHAR(20) DEFAULT 'Off',
+              created_by_user_id INTEGER REFERENCES users(id),
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              deleted_at TIMESTAMP,
+              UNIQUE(yubikey_id, slot)
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_openpgp_keys_yubikey_id ON openpgp_keys(yubikey_id);
+          CREATE INDEX IF NOT EXISTS idx_openpgp_keys_fingerprint ON openpgp_keys(fingerprint);
+
+          INSERT INTO openpgp_policies (name, description, require_touch, allowed_algorithms, min_pin_length, min_admin_pin_length, require_admin_pin_change, require_user_pin_change, is_default, is_active)
+          VALUES ('default', 'Default OpenPGP policy', FALSE, '["RSA2048", "RSA3072", "RSA4096", "ECCP256", "ECCP384", "ED25519", "X25519"]', 6, 8, TRUE, TRUE, TRUE, TRUE)
+          ON CONFLICT (name) DO NOTHING;
+
+          -- ========================================================================
+          -- DEVICE CONFIG HISTORY (1 table)
+          -- ========================================================================
+
+          -- Device configuration change history (references yubi_keys, users)
+          -- deleted_at is required: the DeviceConfigHistory model uses gorm soft-delete.
+          CREATE TABLE IF NOT EXISTS device_config_history (
+              id SERIAL PRIMARY KEY,
+              yubikey_id INTEGER NOT NULL REFERENCES yubi_keys(id) ON DELETE CASCADE,
+              configuration JSONB NOT NULL,
+              change_type VARCHAR(50) NOT NULL,
+              changed_by INTEGER REFERENCES users(id),
+              change_reason VARCHAR(255),
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              deleted_at TIMESTAMP
+          );
+          ALTER TABLE device_config_history ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+
+          CREATE INDEX IF NOT EXISTS idx_device_config_history_yubikey_id ON device_config_history(yubikey_id);
+          CREATE INDEX IF NOT EXISTS idx_device_config_history_change_type ON device_config_history(change_type);
+          CREATE INDEX IF NOT EXISTS idx_device_config_history_created_at ON device_config_history(created_at);
+          CREATE INDEX IF NOT EXISTS idx_device_config_history_deleted_at ON device_config_history(deleted_at);
+
+          -- ========================================================================
+          -- ASYNC OPERATIONS (1 table)
+          -- ========================================================================
+
+          -- Async YubiKey operation request/response cycle (references users, yubi_keys)
+          CREATE TABLE IF NOT EXISTS operations (
+              id SERIAL PRIMARY KEY,
+              operation_id UUID UNIQUE NOT NULL,
+              user_id INTEGER NOT NULL REFERENCES users(id),
+              yubikey_id INTEGER REFERENCES yubi_keys(id),
+              command VARCHAR(100) NOT NULL,
+              status VARCHAR(50) NOT NULL DEFAULT 'pending',
+              request_payload JSONB,
+              response_payload JSONB,
+              error TEXT,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              completed_at TIMESTAMP,
+              expires_at TIMESTAMP NOT NULL
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_operations_operation_id ON operations(operation_id);
+          CREATE INDEX IF NOT EXISTS idx_operations_status ON operations(status);
+          CREATE INDEX IF NOT EXISTS idx_operations_created_at ON operations(created_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_operations_expires_at ON operations(expires_at);
+
           -- ========================================================================
           -- BACKUP JOBS (1 table)
           -- ========================================================================
