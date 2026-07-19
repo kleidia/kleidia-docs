@@ -3,6 +3,35 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.3.0 — July 2026
+
+Feature release: Active Directory smart-card logon support, plus an upgrade-path
+hardening. Dependencies unchanged (Kubernetes 1.32+, PostgreSQL 18.1 default,
+OpenBao 2.5.4).
+
+### Added
+- **PIV authentication certificate UPN SAN.** The slot-9a authentication
+  certificate can embed the Microsoft userPrincipalName otherName SAN (OID
+  1.3.6.1.4.1.311.20.2.3), enabling AD smart-card logon. Opt-in via
+  `PIV_AUTH_CERT_EMBED_UPN` + `PIV_AUTH_CERT_UPN_DOMAINS`. The UPN derives from
+  the OIDC upn/preferred_username claim (or email); an explicit override is
+  global-admin only; the value is validated and audited. Covers the
+  register-on-behalf, self-service, and sign-all issuance paths, and the
+  register-on-behalf form shows the UPN that will be embedded. The
+  `yubikey-piv-auth` role gains `allowed_other_sans` (managed and external-Vault
+  modes).
+
+### Fixed
+- **agents.paired self-heals on startup.** Backend image-only upgrades
+  (`kubectl set image`, no `helm upgrade`) now add the `agents.paired` column the
+  cleanup cron requires, instead of erroring until a full chart upgrade runs.
+
+### Notes
+- Application images retagged from validated digests: `backend-2.3.0`,
+  `frontend-2.3.0`, `license-2.3.0`. Bundled OpenBao unchanged (2.5.4).
+- AD smart-card logon requires the issuing CA in the domain's NTAuth store; that
+  trust anchoring is per-deployment and out of scope for Kleidia.
+
 ## 2.2.5 — July 2026
 
 Correctness and security release. Supersedes 2.2.4. Upgrade is a chart/image

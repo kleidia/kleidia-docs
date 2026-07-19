@@ -203,7 +203,10 @@ spec:
           ALTER TABLE users ADD COLUMN IF NOT EXISTS sync_source VARCHAR(50) DEFAULT '';
           ALTER TABLE users ADD COLUMN IF NOT EXISTS is_provisioned BOOLEAN DEFAULT false;
           ALTER TABLE users ADD COLUMN IF NOT EXISTS first_login_at TIMESTAMP;
-          
+
+          -- Migration: Add UPN (userPrincipalName) for PIV auth-cert AD smart-card logon
+          ALTER TABLE users ADD COLUMN IF NOT EXISTS upn VARCHAR(255);
+
           CREATE INDEX IF NOT EXISTS idx_users_entra_object_id ON users(entra_object_id);
           CREATE INDEX IF NOT EXISTS idx_users_entra_sync_config_id ON users(entra_sync_config_id);
           CREATE INDEX IF NOT EXISTS idx_users_sync_source ON users(sync_source);
