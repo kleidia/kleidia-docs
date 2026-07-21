@@ -316,12 +316,14 @@ spec:
           value: "{{ .Values.backend.oidc.discoveryBase }}"
         {{- end }}
         
-        # Backup runner token (for internal backup job authentication)
+        {{- if ne (.Values.global.secretsBackend.mode | default "bundled") "external" }}
+        # Backup runner token (for bundled OpenBao snapshot authentication)
         - name: BACKUP_RUNNER_TOKEN
           valueFrom:
             secretKeyRef:
               name: backup-runner-token
               key: token
+        {{- end }}
         # CNPG backup S3 credentials secret name. Must match the kleidia-data
         # chart's cnpg.backup.s3CredentialsSecret if you override its default.
         - name: CNPG_S3_SECRET_NAME
@@ -414,4 +416,3 @@ spec:
                     - key: ca.crt
                       path: ca.crt
       {{- end }}
-

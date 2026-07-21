@@ -1,0 +1,124 @@
+{{- if ne (.Values.global.secretsBackend.mode | default "bundled") "external" }}
+# =============================================================================
+# Adopt a pre-existing backup-runner-token Secret into this Helm release
+# =============================================================================
+# On clusters first installed before backup-runner-token became Helm-managed,
+# the Secret was created out-of-band (kubectl, by the bundled OpenBao setup
+# hook) and therefore lacks Helm ownership metadata. Helm refuses to reconcile
+# such an unowned object and the upgrade fails with "invalid ownership
+# metadata". This pre-install/pre-upgrade hook stamps the ownership metadata
+# onto the existing Secret BEFORE Helm reconciles the templated one, so it is
+# cleanly adopted. On a fresh install the Secret does not exist yet and the
+# hook is a no-op. Idempotent; safe to re-run.
+{{- $ns := .Values.global.namespace }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-runner-token-adopter
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: kleidia
+    app.kubernetes.io/component: backup-setup
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backup-runner-token-adopter
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: kleidia
+    app.kubernetes.io/component: backup-setup
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["backup-runner-token"]
+  verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backup-runner-token-adopter
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: kleidia
+    app.kubernetes.io/component: backup-setup
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backup-runner-token-adopter
+subjects:
+- kind: ServiceAccount
+  name: backup-runner-token-adopter
+  namespace: {{ $ns }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: backup-runner-token-adopt
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: kleidia
+    app.kubernetes.io/component: backup-setup
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kleidia
+        app.kubernetes.io/component: backup-setup
+    spec:
+      serviceAccountName: backup-runner-token-adopter
+      restartPolicy: OnFailure
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      containers:
+      - name: adopt
+        image: {{ if .Values.global.registry.host }}{{ .Values.global.registry.host }}/{{ end }}alpine/k8s:1.28.4
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          NS="{{ $ns }}"
+          SECRET="backup-runner-token"
+          if ! kubectl get secret "$SECRET" -n "$NS" >/dev/null 2>&1; then
+            echo "adopt: $SECRET not present (fresh install) - nothing to do"
+            exit 0
+          fi
+          OWNER=$(kubectl get secret "$SECRET" -n "$NS" \
+            -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || true)
+          REL=$(kubectl get secret "$SECRET" -n "$NS" \
+            -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || true)
+          if [ "$OWNER" = "Helm" ] && [ "$REL" = "{{ .Release.Name }}" ]; then
+            echo "adopt: $SECRET already owned by release {{ .Release.Name }} - nothing to do"
+            exit 0
+          fi
+          echo "adopt: stamping Helm ownership onto pre-existing $SECRET"
+          kubectl label secret "$SECRET" -n "$NS" \
+            app.kubernetes.io/managed-by=Helm --overwrite
+          kubectl annotate secret "$SECRET" -n "$NS" \
+            meta.helm.sh/release-name={{ .Release.Name }} \
+            meta.helm.sh/release-namespace={{ .Release.Namespace }} --overwrite
+          echo "adopt: done"
+{{- end }}

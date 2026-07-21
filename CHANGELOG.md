@@ -3,6 +3,38 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.4.0 — July 2026
+
+Feature release: reworked backup and restore, external-Vault operability
+improvements, multi-tenant security hardening, and a PKI email-SAN fix.
+Dependencies unchanged (Kubernetes 1.32+, PostgreSQL 18.1 default, OpenBao 2.5.4).
+
+### Added
+- **Reworked backup & restore.** One-button, auto-unseal-aware OpenBao snapshot
+  restore and a simplified CNPG database restore flow; the legacy export bundle
+  is retired. The CNPG backup list is sorted newest-first with readable,
+  date-based names and a count.
+- **External-Vault operability.** When running against a customer-managed
+  OpenBao/Vault (`secretsBackend.mode=external`), the manual-unseal, auto-unseal,
+  and CA-configuration tabs are hidden — those are the customer's responsibility.
+
+### Fixed
+- **PIV / code-signing email SAN.** Authentication and code-signing certificates
+  now carry the rfc822 email SAN. It had been requested via parameters that
+  neither Vault nor OpenBao recognize (`email_sans`/`email_addresses`) and was
+  silently dropped; it is now requested via `alt_names`. The UPN otherName SAN
+  (AD smart-card logon) was unaffected.
+- **Multi-tenant scoping.** Closed cross-tenant read paths (provisioned-YubiKey
+  listing and related endpoints) and corrected pagination and tenant scoping in
+  the admin views.
+
+### Notes
+- Application images retagged from validated digests: `backend-2.4.0`,
+  `frontend-2.4.0`, `license-2.4.0`. Bundled OpenBao unchanged (2.5.4).
+- Provisioning scripts drop the no-op `allowed_email_sans`/`allowed_uri_sans`
+  role parameters (never honored by Vault or OpenBao; OpenBao 2.6.0 warns on
+  them). Email SANs remain permitted via `allow_any_name`.
+
 ## 2.3.0 — July 2026
 
 Feature release: Active Directory smart-card logon support, plus an upgrade-path

@@ -109,6 +109,8 @@ cnpg:
   # OpenBao, creates s3CredentialsSecret, and patches the Cluster's .spec.backup
   # at runtime. Set enabled=true + destinationPath here only for declarative
   # (GitOps) installs where S3 is known at install time.
+  # Do not enable declarative mode after the UI has created backup resources:
+  # Helm and the backend would then compete for ownership of the same objects.
   backup:
     enabled: false
     # S3 credentials secret name. In UI-managed mode the backend CREATES this
@@ -150,7 +152,7 @@ cnpg:
 # =============================================================================
 scheduledBackup:
   enabled: true
-  # Default schedule (can be overridden via UI)
-  schedule: "0 2 * * *"       # Daily at 2 AM
+  # CloudNativePG uses a six-field, seconds-first cron dialect.
+  schedule: "0 0 2 * * *"     # Daily at 2 AM UTC
   # Backup owner reference (for garbage collection)
   backupOwnerReference: self
