@@ -31,16 +31,16 @@ The charts are published publicly to Docker Hub and need **no authentication**:
 
 | Chart | OCI reference | Version |
 |---|---|---|
-| Platform | `oci://registry-1.docker.io/therinn/kleidia-platform` | `2.3.0` |
-| Data | `oci://registry-1.docker.io/therinn/kleidia-data` | `2.3.0` |
-| Services | `oci://registry-1.docker.io/therinn/kleidia-services` | `2.3.0` |
+| Platform | `oci://registry-1.docker.io/therinn/kleidia-platform` | `2.4.1` |
+| Data | `oci://registry-1.docker.io/therinn/kleidia-data` | `2.4.1` |
+| Services | `oci://registry-1.docker.io/therinn/kleidia-services` | `2.4.1` |
 
 ```bash
 DOMAIN=kleidia.example.com   # your public domain
 SC=local-path                # your StorageClass (e.g. local-path, longhorn, gp2)
 
 # 1/3 — Platform (OpenBao + cert-manager/CNPG bootstrap)
-helm install kleidia-platform oci://registry-1.docker.io/therinn/kleidia-platform --version 2.3.0 \
+helm install kleidia-platform oci://registry-1.docker.io/therinn/kleidia-platform --version 2.4.1 \
   --namespace kleidia --create-namespace \
   --set global.domain=$DOMAIN --set global.namespace=kleidia \
   --set storage.className=$SC \
@@ -49,14 +49,14 @@ helm install kleidia-platform oci://registry-1.docker.io/therinn/kleidia-platfor
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=openbao -n kleidia --timeout=600s
 
 # 2/3 — Data (PostgreSQL via CloudNativePG on K8s 1.32+)
-helm install kleidia-data oci://registry-1.docker.io/therinn/kleidia-data --version 2.3.0 \
+helm install kleidia-data oci://registry-1.docker.io/therinn/kleidia-data --version 2.4.1 \
   --namespace kleidia \
   --set global.domain=$DOMAIN --set global.namespace=kleidia \
   --set storage.className=$SC
 kubectl wait --for=condition=Ready cluster/kleidia-db -n kleidia --timeout=300s
 
 # 3/3 — Services (backend, frontend, license)
-helm install kleidia-services oci://registry-1.docker.io/therinn/kleidia-services --version 2.3.0 \
+helm install kleidia-services oci://registry-1.docker.io/therinn/kleidia-services --version 2.4.1 \
   --namespace kleidia \
   --set global.domain=$DOMAIN --set global.namespace=kleidia \
   --set global.siteUrl=https://$DOMAIN

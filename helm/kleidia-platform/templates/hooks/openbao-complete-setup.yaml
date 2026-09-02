@@ -799,12 +799,20 @@ spec:
             echo "  ⚠️  Failed to create backup token (non-critical)"
           fi
           
-          # Create backup runner token (for internal API authentication)
-          BACKUP_RUNNER_TOKEN=$(head -c 32 /dev/urandom | base64)
-          kubectl create secret generic backup-runner-token \
-            --from-literal=token="${BACKUP_RUNNER_TOKEN}" \
-            --dry-run=client -o yaml | kubectl apply -f - -n "${NAMESPACE}"
-          echo "  ✅ backup-runner-token secret created"
+          # Create backup runner token (for internal API authentication) only if
+          # absent. kleidia-services owns this Secret (Helm-templated, token
+          # preserved across upgrades); re-applying it here on every platform
+          # upgrade would rotate the token under the running backend and strip
+          # the Helm ownership metadata kleidia-services relies on.
+          if kubectl get secret backup-runner-token -n "${NAMESPACE}" >/dev/null 2>&1; then
+            echo "  ℹ️  backup-runner-token secret already exists - leaving it untouched"
+          else
+            BACKUP_RUNNER_TOKEN=$(head -c 32 /dev/urandom | base64)
+            kubectl create secret generic backup-runner-token \
+              --from-literal=token="${BACKUP_RUNNER_TOKEN}" \
+              --dry-run=client -o yaml | kubectl apply -f - -n "${NAMESPACE}"
+            echo "  ✅ backup-runner-token secret created"
+          fi
 
           # Step 14: Verify the PKI / mTLS-issuer prerequisites actually exist.
           # kleidia-mtls-issuer (cert-manager Vault issuer) and kleidia-data's CNPG

@@ -110,9 +110,20 @@ spec:
             -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' 2>/dev/null || true)
           REL=$(kubectl get secret "$SECRET" -n "$NS" \
             -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}' 2>/dev/null || true)
-          if [ "$OWNER" = "Helm" ] && [ "$REL" = "{{ .Release.Name }}" ]; then
+          RELNS=$(kubectl get secret "$SECRET" -n "$NS" \
+            -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-namespace}' 2>/dev/null || true)
+          if [ "$OWNER" = "Helm" ] && [ "$REL" = "{{ .Release.Name }}" ] && [ "$RELNS" = "{{ .Release.Namespace }}" ]; then
             echo "adopt: $SECRET already owned by release {{ .Release.Name }} - nothing to do"
             exit 0
+          fi
+          if [ "$OWNER" = "Helm" ] && [ -n "$REL" ]; then
+            echo "adopt: $SECRET is owned by another Helm release ($REL/$RELNS) - refusing to take it over"
+            exit 0
+          fi
+          if ! kubectl get secret "$SECRET" -n "$NS" -o jsonpath='{.data.token}' 2>/dev/null | grep -q .; then
+            echo "adopt: $SECRET has no token key - generating one so the backend and CronJob can mount it"
+            TOKEN=$(head -c 30 /dev/urandom | base64 | tr -d '\n' | base64 | tr -d '\n')
+            kubectl patch secret "$SECRET" -n "$NS" --type=merge -p "{\"data\":{\"token\":\"$TOKEN\"}}"
           fi
           echo "adopt: stamping Helm ownership onto pre-existing $SECRET"
           kubectl label secret "$SECRET" -n "$NS" \

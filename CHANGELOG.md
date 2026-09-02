@@ -3,6 +3,82 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.4.1 — September 2026
+
+Patch release: the PIV authentication-certificate UPN SAN (Active Directory
+smart-card logon, introduced in 2.3.0) can now be enabled through the Helm
+chart, with hardening around it; the 2.4.x OCI charts are published; images are
+rebuilt on patched bases. Dependencies unchanged (Kubernetes 1.32+, PostgreSQL
+18.1 default, OpenBao 2.5.4).
+
+### Fixed
+- **UPN SAN not configurable via Helm.** The backend has honoured
+  `PIV_AUTH_CERT_EMBED_UPN` / `PIV_AUTH_CERT_UPN_DOMAINS` since 2.3.0, but the
+  `kleidia-services` chart exposed neither, so Helm-installed deployments issued
+  authentication certificates without the UPN otherName SAN even when the user's
+  UPN was known. New values `backend.pivAuthCert.embedUpn` (default `false`) and
+  `backend.pivAuthCert.upnDomains` (default `[]`) set them. Existing values files
+  render unchanged; re-issue the authentication certificate after enabling.
+- **Bundled-mode install/upgrade to 2.4.0 failed on `backup-runner-token`.**
+  2.4.0 made `kleidia-services` template that Secret in bundled mode, but the
+  bundled OpenBao setup hook (kleidia-platform) had already created it without
+  Helm ownership metadata, and Helm validates ownership before any pre-install /
+  pre-upgrade hook runs. Result: `helm install`/`helm upgrade kleidia-services`
+  aborted with `Secret "backup-runner-token" ... exists and cannot be imported
+  into the current release: invalid ownership metadata` on every bundled
+  deployment, fresh or upgraded from 2.3.0. The chart now leaves an existing
+  out-of-band Secret in place (the backend and backup CronJob keep using it) and
+  adopts it on the following upgrade; the platform hook no longer re-creates
+  (and silently rotates) the token on every platform upgrade.
+- **2.4.0 OCI charts.** The 2.4.0 release published images and a GitHub release
+  but the Helm charts were never pushed to
+  `oci://registry-1.docker.io/therinn/kleidia-*`. 2.4.1 charts are published and
+  the installation guide points at them.
+
+### Security
+- **Self-registration could grant global admin.** The public registration
+  endpoint (`POST /api/auth/register`, enabled unless `ALLOW_SELF_REGISTER` is
+  `false`) honoured a client-supplied `is_admin` field, stored it on the new
+  account and issued a JWT carrying it. An anonymous caller could therefore
+  self-register as a global administrator on any deployment with
+  self-registration open, which is the default. The field is now ignored on that
+  endpoint; admin accounts come only from the bootstrap flow or an authenticated
+  admin via the admin users API. Affects all releases up to 2.4.0. **Upgrade,
+  then audit `users` for unexpected `is_admin = true` rows** if self-registration
+  has ever been reachable.
+- **Unauthenticated password takeover of IdP-managed accounts.**
+  `POST /api/auth/reset-admin-password` (the first-time admin password setup
+  used by the admin setup page) accepted any `user_id` whose password hash was
+  empty, and `POST /api/auth/login` disclosed that `user_id` for such users
+  before checking a password. OIDC- and SCIM-provisioned users have empty
+  hashes, so anyone who knew an OIDC user's username (their email) could set a
+  local password on that account and log in as them, admins included. The flow
+  is now limited to the seeded local `admin` account awaiting first-time setup;
+  every other user gets the generic 401/403. Affects all releases up to 2.4.0.
+  **Audit `users` for IdP-provisioned accounts that unexpectedly have a local
+  password set**, and rotate if found.
+- **Backend-side UPN enablement invariant.** The backend now refuses to start
+  when `PIV_AUTH_CERT_EMBED_UPN=true` without a non-empty
+  `PIV_AUTH_CERT_UPN_DOMAINS` or with `ALLOW_SELF_REGISTER` not `false`, so the
+  Helm guard below cannot be bypassed by direct environment configuration.
+- **UPN value hardening.** The UPN is passed to the CA inside a comma-separated
+  `other_sans` list; a UPN containing `,` or `;` could smuggle a second UPN SAN
+  for another principal into the certificate. UPNs containing separator,
+  quoting, bracket or non-printable characters are now rejected on every
+  signing path.
+- **Guarded enablement.** The chart refuses `embedUpn: true` unless
+  `upnDomains` is non-empty and `backend.allowSelfRegister` is `false`, because
+  with open self-registration an anonymous user could choose the principal
+  embedded in a Smart Card Logon certificate.
+- **`backend.allowSelfRegister`** (new, default `true` to preserve behaviour)
+  exposes the existing `ALLOW_SELF_REGISTER` switch, which the chart previously
+  did not set.
+- **Rebuilt images.** `backend-2.4.1` is rebuilt on Go 1.26.8 with
+  `golang.org/x/crypto` 0.55.0 (clears 1 CRITICAL + 8 HIGH from the 2.4.0
+  scan); `frontend-2.4.1` is rebuilt on a current `node:24-alpine`
+  (OpenSSL 3.5.8, clears 2 HIGH). `license-2.4.1` is the unchanged, clean 2.4.0
+  build retagged.
+
 ## 2.4.0 — July 2026
 
 Feature release: reworked backup and restore, external-Vault operability

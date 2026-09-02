@@ -44,7 +44,7 @@ backend:
   replicas: 2                 # Horizontal scaling for the backend API
   image:
     repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-backend)
-    tag: backend-2.4.0                    # Pinned to the 2.4.0 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
+    tag: backend-2.4.1                    # Pinned to the 2.4.1 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
   service:
     nodePort: 32570             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
   corsOrigins: ""               # CORS allowed origins (comma-separated). If empty, uses global.siteUrl
@@ -52,6 +52,25 @@ backend:
                                 # REQUIRED for production deployments with external load balancers
   oidc:
     skipTlsVerify: true         # Skip TLS verification for OIDC discovery (set to false in production with proper certificates)
+  # Local-account self-registration (email + password via /api/auth/register).
+  # true keeps the backend's historical behaviour. Set false for OIDC-only or
+  # admin-provisioned deployments; required when pivAuthCert.embedUpn is true.
+  allowSelfRegister: true       # Sets ALLOW_SELF_REGISTER on the backend
+  # PIV authentication certificate (YubiKey slot 9a): Microsoft UPN otherName SAN
+  # (OID 1.3.6.1.4.1.311.20.2.3) for on-prem Active Directory smart-card logon.
+  # Off by default — the auth cert is then issued exactly as before. When enabled,
+  # the backend embeds the user's UPN (OIDC upn / preferred_username claim, else
+  # the user's email) and rejects UPNs whose domain is not in upnDomains.
+  # Because the UPN decides which AD account the certificate logs in as, the chart
+  # refuses to render embedUpn=true unless upnDomains is non-empty AND
+  # allowSelfRegister is false. Bundled OpenBao already permits this SAN on the
+  # yubikey-piv-auth role; with an external Vault add
+  #   allowed_other_sans="1.3.6.1.4.1.311.20.2.3;UTF8:*"
+  # to that role first, or signing fails. Existing certificates are unaffected —
+  # re-issue the authentication certificate to get the UPN SAN.
+  pivAuthCert:
+    embedUpn: false             # Sets PIV_AUTH_CERT_EMBED_UPN on the backend
+    upnDomains: []              # Sets PIV_AUTH_CERT_UPN_DOMAINS, e.g. ["example.com", "corp.example.com"]
   # CNPG backup S3 credentials secret name (the backend creates/patches against it).
   # Keep in sync with kleidia-data's cnpg.backup.s3CredentialsSecret if you change it.
   cnpgS3SecretName: "cnpg-backup-s3-credentials"
@@ -67,14 +86,14 @@ frontend:
   replicas: 2                 # Horizontal scaling for the frontend
   image:
     repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-frontend)
-    tag: frontend-2.4.0                   # Pinned to the 2.4.0 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
+    tag: frontend-2.4.1                   # Pinned to the 2.4.1 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
   service:
     nodePort: 30805             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
 
 licenseService:
   enabled: true                 # Enable the license service pod (optional, backend falls back to TRIAL if disabled)
   replicas: 2                   # Horizontal scaling for high availability
-  image: therinn/kleidia:license-2.4.0  # License service image (garble-obfuscated); pinned to the 2.4.0 release
+  image: therinn/kleidia:license-2.4.1  # License service image (garble-obfuscated); pinned to the 2.4.1 release
   imagePullPolicy: Always       # Always pull to ensure latest image
   resources:
     requests:

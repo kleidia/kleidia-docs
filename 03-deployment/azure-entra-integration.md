@@ -319,6 +319,38 @@ Kleidia authentication certificates include both EKUs:
 
 ### On-Prem AD Configuration
 
+#### Step 0: Enable the UPN SAN in Kleidia (2.4.1+)
+
+Kerberos PKINIT maps the certificate to the AD account through the Microsoft
+UPN otherName SAN (OID `1.3.6.1.4.1.311.20.2.3`). Kleidia embeds it only when
+enabled in the `kleidia-services` chart (off by default; Entra ID CBA does not
+need it):
+
+```yaml
+backend:
+  allowSelfRegister: false        # required: closes local email+password self-registration
+  pivAuthCert:
+    embedUpn: true
+    upnDomains: ["company.com"]   # required: only these UPN domains may be embedded
+```
+
+The UPN decides which AD account the certificate logs in as, so the chart refuses
+to render `embedUpn: true` unless `upnDomains` is non-empty and
+`allowSelfRegister` is `false` (an anonymous self-registrant could otherwise pick
+the principal). The embedded value is the user's UPN from the OIDC `upn` /
+`preferred_username` claim, falling back to the user's email; a global admin can
+pass an explicit UPN on the self-service signing request. Authentication
+certificates issued before enabling do not have the SAN, so re-issue them. With a customer-managed
+external Vault/OpenBao, first add
+`allowed_other_sans="1.3.6.1.4.1.311.20.2.3;UTF8:*"` to the `yubikey-piv-auth`
+PKI role (the bundled OpenBao role already permits it). Verify on an issued
+certificate:
+
+```bash
+openssl x509 -in auth.crt -noout -text | grep -A2 "Subject Alternative Name"
+# expect: othername: UPN::user@company.com
+```
+
 #### Step 1: Publish CA to NTAuth Store
 
 The NTAuth store controls which CAs can issue smart card logon certificates.

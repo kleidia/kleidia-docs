@@ -315,6 +315,44 @@ spec:
         - name: OIDC_DISCOVERY_BASE
           value: "{{ .Values.backend.oidc.discoveryBase }}"
         {{- end }}
+
+        # Local-account self-registration (email + password). Defaults to the
+        # backend's historical behaviour (enabled) so existing installs are
+        # unchanged; see backend.allowSelfRegister.
+        {{- /* Mirror the backend's own predicate exactly: registration is disabled
+             iff ALLOW_SELF_REGISTER is the string "false" or "0". This keeps a
+             bool false, --set-string "false" and "0" all meaning disabled, and
+             avoids sprig `default`, which treats false as empty. */}}
+        {{- $asrRaw := "true" }}
+        {{- if and (hasKey .Values.backend "allowSelfRegister") (not (kindIs "invalid" .Values.backend.allowSelfRegister)) }}
+          {{- $asrRaw = .Values.backend.allowSelfRegister | toString | lower }}
+        {{- end }}
+        {{- $allowSelfRegister := not (or (eq $asrRaw "false") (eq $asrRaw "0")) }}
+        - name: ALLOW_SELF_REGISTER
+          value: {{ $allowSelfRegister | toString | quote }}
+
+        # PIV auth-cert (slot 9a) UPN otherName SAN for AD smart-card logon.
+        # Opt-in via backend.pivAuthCert.embedUpn; dig tolerates a values file
+        # written before this key existed. A UPN plus the Smart Card Logon EKU
+        # authenticates to AD as that principal, so enabling it requires a
+        # non-empty domain allow-list and closed self-registration (otherwise an
+        # anonymous registrant could choose the AD identity in their own cert).
+        {{- $embedUpn := dig "pivAuthCert" "embedUpn" false .Values.backend }}
+        {{- $upnDomains := compact (dig "pivAuthCert" "upnDomains" (list) .Values.backend) }}
+        {{- if $embedUpn }}
+          {{- if not $upnDomains }}
+            {{- fail "backend.pivAuthCert.embedUpn=true requires a non-empty backend.pivAuthCert.upnDomains allow-list (e.g. [\"company.com\"])" }}
+          {{- end }}
+          {{- if $allowSelfRegister }}
+            {{- fail "backend.pivAuthCert.embedUpn=true requires backend.allowSelfRegister=false: with open self-registration an anonymous user could pick the UPN embedded in a Smart Card Logon certificate" }}
+          {{- end }}
+        {{- end }}
+        - name: PIV_AUTH_CERT_EMBED_UPN
+          value: {{ $embedUpn | toString | quote }}
+        {{- with $upnDomains }}
+        - name: PIV_AUTH_CERT_UPN_DOMAINS
+          value: {{ join "," . | quote }}
+        {{- end }}
         
         {{- if ne (.Values.global.secretsBackend.mode | default "bundled") "external" }}
         # Backup runner token (for bundled OpenBao snapshot authentication)

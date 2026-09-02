@@ -51,6 +51,44 @@ For example, if your site URL is `https://kleidia.company.com`, configure your O
 https://kleidia.company.com/api/auth/oidc/callback
 ```
 
+### PIV Authentication Certificate: UPN SAN (AD smart-card logon)
+
+On-prem Active Directory smart-card logon requires the YubiKey slot 9a
+authentication certificate to carry the user's userPrincipalName as a Microsoft
+UPN otherName SAN (OID `1.3.6.1.4.1.311.20.2.3`). This is **off by default**;
+Entra ID certificate-based authentication does not need it.
+
+```yaml
+backend:
+  allowSelfRegister: false        # required: closes local email+password self-registration
+  pivAuthCert:
+    embedUpn: true
+    upnDomains: ["company.com"]   # required: only these UPN domains may be embedded
+```
+
+The UPN in the certificate decides which AD account it logs in as, so the chart
+refuses to render `embedUpn: true` unless `upnDomains` is non-empty **and**
+`allowSelfRegister` is `false`. With self-registration open, an anonymous user
+could register with a chosen email and receive a Smart Card Logon certificate for
+that principal.
+
+The embedded UPN is resolved in this order: the user's UPN from the OIDC `upn` /
+`preferred_username` claim, otherwise the user's email; a global admin may pass
+an explicit UPN on the self-service signing request. A UPN outside `upnDomains`,
+or one containing separator characters (`,` `;` `:` quotes, brackets), is
+rejected and no certificate is issued for that slot; the sign path reports it as
+`invalid_upn`.
+
+Notes:
+- `allowSelfRegister` sets `ALLOW_SELF_REGISTER`; it defaults to `true` so
+  existing installs behave as before.
+- Certificates already issued are unchanged; re-issue the authentication
+  certificate after enabling.
+- Bundled OpenBao: the `yubikey-piv-auth` PKI role already permits this SAN.
+- External Vault/OpenBao: add `allowed_other_sans="1.3.6.1.4.1.311.20.2.3;UTF8:*"`
+  to the `yubikey-piv-auth` role, or signing fails with an "other SAN not
+  allowed" error.
+
 ### Advanced CORS Configuration
 
 If you need to allow additional origins (e.g., for development or multiple domains), you can override the CORS configuration:
@@ -71,6 +109,9 @@ The configuration sets these environment variables:
 
 **Backend:**
 - `CORS_ORIGINS`: Allowed origins for CORS requests
+- `ALLOW_SELF_REGISTER`: `true`/`false` (local email+password self-registration; `backend.allowSelfRegister`)
+- `PIV_AUTH_CERT_EMBED_UPN`: `true`/`false` (embed the UPN otherName SAN in slot-9a auth certs; `backend.pivAuthCert.embedUpn`)
+- `PIV_AUTH_CERT_UPN_DOMAINS`: comma-separated UPN domain allow-list (`backend.pivAuthCert.upnDomains`); unset when the list is empty
 
 ### Migration from Hardcoded Values
 
