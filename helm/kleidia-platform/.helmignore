@@ -1,0 +1,2 @@
+# Offline hook test harness; repo-only, not part of the published chart.
+tests/

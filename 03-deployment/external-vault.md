@@ -44,6 +44,27 @@ A PKI mount (default `pki`, configurable via `externalVault.pkiMount`) with a co
 | `yubikey-piv-code-signing` | YubiKey code-signing certs |
 | `yubikey-piv-email-signing` | YubiKey S/MIME certs |
 
+The `yubikey-piv-auth`, `yubikey-piv-code-signing` and `yubikey-piv-email-signing` roles
+must all set:
+
+| Setting | Value | Vault default |
+|---------|-------|---------------|
+| `use_csr_sans` | `false` | `true` |
+| `use_csr_common_name` | `false` | `true` |
+| `exclude_cn_from_sans` | `true` | `false` |
+| `cn_validations` | `disabled` | `email,hostname` |
+
+**This is a security requirement, not only a functional one.** Kleidia supplies the
+certificate's CN (`common_name`) and its SANs (`alt_names`, the owner's email) itself; the
+CSR subject is user-controlled. With `use_csr_common_name=true` and `exclude_cn_from_sans`
+unset, Vault copies the CSR's CN into the SANs, so a user who puts another person's email
+(e.g. `ceo@corp.com`) in the CSR CN gets a certificate carrying that person's email SAN,
+which is impersonation for S/MIME, code signing and Entra ID / AD smart-card logon. With the
+settings above, nothing in the CSR subject reaches the SANs. `use_csr_sans=false` is also
+functional: with `true`, Vault drops Kleidia's `alt_names` and the certificate is issued
+without the email SAN. `cn_validations=disabled` lets display names with spaces or non-ASCII
+characters (e.g. `Õie Täht`) be used as the CN.
+
 Kleidia will not create or modify the mount, CA, or roles. The in-app "OpenBao CA
 configuration" screen is **read-only** in external mode.
 
@@ -56,6 +77,7 @@ path "kleidia-kv/data/*"     { capabilities = ["create", "read", "update"] }
 path "kleidia-kv/metadata/*" { capabilities = ["read", "list", "delete"] }
 path "kleidia-pki/sign/*"    { capabilities = ["create", "update"] }
 path "kleidia-pki/issue/*"   { capabilities = ["create", "update"] }
+path "kleidia-pki/revoke"    { capabilities = ["update"] }   # required since 2.4.2
 path "kleidia-pki/cert/ca"   { capabilities = ["read"] }
 path "kleidia-pki/ca/pem"    { capabilities = ["read"] }
 path "kleidia-pki/crl*"      { capabilities = ["read"] }

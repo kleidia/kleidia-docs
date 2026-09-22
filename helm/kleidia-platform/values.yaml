@@ -238,22 +238,35 @@ openbao:
       ttl: "43800h"   # 5 years
       customerRootCA: ""  # Base64-encoded customer root CA cert (required when mode=intermediate)
     
-    # PKI URL configuration for certificate distribution
-    # These URLs are embedded into every issued certificate for CRL and CA chain retrieval.
+    # PKI URL configuration for certificate distribution (bundled OpenBao only)
+    # These URLs are embedded into every issued certificate as AIA (CA) and CDP (CRL).
     # IMPORTANT: Once certificates are issued, the URLs cannot be changed without re-issuing.
     #
-    # URL auto-detection (no manual configuration needed):
-    #   1. If global.siteUrl is set → uses {siteUrl}/api/pki
-    #   2. If global.domain is set → uses https://{domain}/api/pki
-    #   3. Otherwise → uses internal Kubernetes URL (not accessible externally)
+    # These values belong to the kleidia-platform release. The kleidia-services
+    # release has its own, separate values; setting them there has no effect here.
+    #
+    # Precedence (applied by the post-install/post-upgrade setup hook, Step 10):
+    #   1. openbao.pki.urls.externalBaseUrl, if set
+    #   2. {global.siteUrl}/api/pki, if global.siteUrl is set
+    #   3. https://{global.domain}/api/pki, if global.domain is set
+    #   An explicit value from 1-3 is validated (must start with http:// or https://,
+    #   trailing slashes are stripped) and written to pki/config/urls on every run.
+    #   An invalid value is reported and the write is skipped (the hook continues).
+    #
+    # With none of 1-3 set, the hook reads the current pki/config/urls and PRESERVES
+    # any non-empty issuing_certificates / crl_distribution_points (e.g. set manually
+    # or from the in-app CA screen). Only empty fields get the internal Kubernetes URL
+    # (http://kleidia-platform-openbao.<ns>.svc.cluster.local:8200/v1/pki, not reachable
+    # externally). If the read fails, nothing is written and a warning is printed.
+    # Preserved URLs pointing at svc.cluster.local/localhost/127.0.0.1 also warn.
     #
     # The backend proxies CRL/CA requests with in-memory caching for performance.
     # Resulting URLs embedded in certificates:
     #   CRL:      https://your-domain.com/api/pki/crl
     #   CA:       https://your-domain.com/api/pki/ca
     urls:
-      # Optional: Override auto-detected PKI URL (rarely needed)
-      # Only set this if you need a different URL than {siteUrl}/api/pki
+      # Optional: explicit PKI base URL, e.g. https://kleidia.example.com/api/pki
+      # Overrides global.siteUrl / global.domain derivation.
       externalBaseUrl: ""
       # CRL validity period (default: 24h)
       # Should match or exceed your CRL cache refresh interval

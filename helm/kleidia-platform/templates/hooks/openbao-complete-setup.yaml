@@ -413,7 +413,7 @@ spec:
           openbao_curl -sf -X PUT "http://127.0.0.1:8200/v1/sys/policy/kleidia-backend" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"policy": "# PKI certificate signing\npath \"pki/sign/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/issue/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/cert/ca\" { capabilities = [\"read\"] }\n\n# PKI CA management (for intermediate CA reconfiguration)\npath \"pki/issuers/generate/intermediate/existing\" { capabilities = [\"create\", \"update\"] }\npath \"pki/intermediate/set-signed\" { capabilities = [\"create\", \"update\"] }\npath \"pki/config/urls\" { capabilities = [\"read\", \"update\"] }\npath \"pki/config/issuers\" { capabilities = [\"read\"] }\npath \"pki/issuer/*\" { capabilities = [\"read\"] }\n\n# Application secrets (specific paths only - least privilege)\npath \"yubikeys/data/jwt-secret\" { capabilities = [\"read\", \"update\"] }\npath \"yubikeys/data/encryption-key\" { capabilities = [\"read\", \"update\"] }\npath \"yubikeys/data/database\" { capabilities = [\"read\"] }\npath \"yubikeys/data/backend/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\"] }\npath \"yubikeys/data/backend-encryption-key\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"yubikeys/metadata/backend/*\" { capabilities = [\"list\", \"read\"] }\n\n# System metadata\npath \"yubikeys/data/system/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"yubikeys/metadata/system/*\" { capabilities = [\"list\", \"read\"] }\n\n# Backup S3 credentials\npath \"yubikeys/data/backup/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\"] }\npath \"yubikeys/metadata/backup/*\" { capabilities = [\"list\", \"read\"] }\n\n# Raft snapshots for disaster recovery (the backend takes/restores snapshots)\npath \"sys/storage/raft/snapshot\" { capabilities = [\"read\"] }\npath \"sys/storage/raft/snapshot-force\" { capabilities = [\"create\", \"update\", \"sudo\"] }\n\n# Explicitly deny license paths\npath \"yubikeys/data/license/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/metadata/license/*\" { capabilities = [\"deny\"] }\n\n# System endpoints (for health checks)\npath \"sys/auth\" { capabilities = [\"read\"] }\n\n# Token renewal\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }"}'
+            -d '{"policy": "# PKI certificate signing\npath \"pki/sign/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/issue/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"pki/cert/ca\" { capabilities = [\"read\"] }\n\n# PKI revocation (lost/deleted/reset keys, replaced slot certs, agent sessions)\npath \"pki/revoke\" { capabilities = [\"update\"] }\n\n# PKI CA management (for intermediate CA reconfiguration)\npath \"pki/issuers/generate/intermediate/existing\" { capabilities = [\"create\", \"update\"] }\npath \"pki/intermediate/set-signed\" { capabilities = [\"create\", \"update\"] }\npath \"pki/config/urls\" { capabilities = [\"read\", \"update\"] }\npath \"pki/config/issuers\" { capabilities = [\"read\"] }\npath \"pki/issuer/*\" { capabilities = [\"read\"] }\n\n# Application secrets (specific paths only - least privilege)\npath \"yubikeys/data/jwt-secret\" { capabilities = [\"read\", \"update\"] }\npath \"yubikeys/data/encryption-key\" { capabilities = [\"read\", \"update\"] }\npath \"yubikeys/data/database\" { capabilities = [\"read\"] }\npath \"yubikeys/data/backend/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\"] }\npath \"yubikeys/data/backend-encryption-key\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"yubikeys/metadata/backend/*\" { capabilities = [\"list\", \"read\"] }\n\n# System metadata\npath \"yubikeys/data/system/*\" { capabilities = [\"create\", \"read\", \"update\"] }\npath \"yubikeys/metadata/system/*\" { capabilities = [\"list\", \"read\"] }\n\n# Backup S3 credentials\npath \"yubikeys/data/backup/*\" { capabilities = [\"create\", \"read\", \"update\", \"delete\"] }\npath \"yubikeys/metadata/backup/*\" { capabilities = [\"list\", \"read\"] }\n\n# Raft snapshots for disaster recovery (the backend takes/restores snapshots)\npath \"sys/storage/raft/snapshot\" { capabilities = [\"read\"] }\npath \"sys/storage/raft/snapshot-force\" { capabilities = [\"create\", \"update\", \"sudo\"] }\n\n# Explicitly deny license paths\npath \"yubikeys/data/license/*\" { capabilities = [\"deny\"] }\npath \"yubikeys/metadata/license/*\" { capabilities = [\"deny\"] }\n\n# System endpoints (for health checks)\npath \"sys/auth\" { capabilities = [\"read\"] }\n\n# Token renewal\npath \"auth/token/renew-self\" { capabilities = [\"update\"] }"}'
           
           echo "✅ Backend policy created (scoped access)"
           
@@ -625,38 +625,111 @@ spec:
             echo "Root CA might already exist (this is OK)"
           fi
           
-          # Step 10: Configure PKI URLs for certificate distribution and CRL
-          # External base URL enables systems like Bitbucket to verify certificates and check revocation
+          # Step 10: Configure PKI URLs (AIA issuing_certificates + CRL distribution points)
+          # These URLs are embedded in every issued certificate. Behaviour:
+          #   - Explicit setting (externalBaseUrl > global.siteUrl > global.domain): validated
+          #     and written on every run (chart-owned).
+          #   - No explicit setting: read the current pki/config/urls first and PRESERVE any
+          #     non-empty field (e.g. set by an operator or the in-app CA screen). Only empty
+          #     fields get the internal fallback. If the read fails, nothing is written.
+          # ocsp_servers is never sent; OpenBao leaves omitted fields unchanged.
+          # >>> STEP10_PKI_URLS (extracted by helm/kleidia-platform/tests/pki-urls-hook-test.sh)
           echo ""
           echo "Step 10: Configuring PKI URLs..."
           
+          PKI_URLS_ENDPOINT="http://127.0.0.1:8200/v1/pki/config/urls"
+          PKI_INTERNAL_BASE_URL="http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/pki"
+          PKI_EXPLICIT_URL=""
+          PKI_EXPLICIT_SOURCE=""
           {{- if .Values.openbao.pki.urls.externalBaseUrl }}
-          # Explicit external URL configured (overrides auto-detection)
-          PKI_BASE_URL="{{ .Values.openbao.pki.urls.externalBaseUrl }}"
-          echo "  Using explicit PKI URL: ${PKI_BASE_URL}"
+          PKI_EXPLICIT_URL={{ .Values.openbao.pki.urls.externalBaseUrl | toString | replace "'" "'\\''" | squote }}
+          PKI_EXPLICIT_SOURCE="openbao.pki.urls.externalBaseUrl"
           {{- else if .Values.global.siteUrl }}
-          # Auto-derive PKI URL from global.siteUrl
-          PKI_BASE_URL="{{ .Values.global.siteUrl }}/api/pki"
-          echo "  Using PKI URL derived from siteUrl: ${PKI_BASE_URL}"
+          PKI_SITE_URL={{ .Values.global.siteUrl | toString | replace "'" "'\\''" | squote }}
+          while [[ "$PKI_SITE_URL" == */ ]]; do PKI_SITE_URL="${PKI_SITE_URL%/}"; done
+          PKI_EXPLICIT_URL="${PKI_SITE_URL}/api/pki"
+          PKI_EXPLICIT_SOURCE="global.siteUrl"
           {{- else if .Values.global.domain }}
-          # Auto-derive PKI URL from global.domain
-          PKI_BASE_URL="https://{{ .Values.global.domain }}/api/pki"
-          echo "  Using PKI URL derived from domain: ${PKI_BASE_URL}"
-          {{- else }}
-          # No domain configured - using internal Kubernetes service URLs
-          # External systems (Entra ID, Bitbucket) will NOT be able to reach this URL
-          PKI_BASE_URL="http://kleidia-platform-openbao.{{ .Values.global.namespace }}.svc.cluster.local:8200/v1/pki"
-          echo "  Using internal PKI URL: ${PKI_BASE_URL}"
-          echo "  ⚠️  WARNING: CRL is not accessible from external systems!"
-          echo "  ⚠️  For production, set global.domain or global.siteUrl"
+          PKI_EXPLICIT_URL={{ printf "https://%s/api/pki" (.Values.global.domain | toString) | replace "'" "'\\''" | squote }}
+          PKI_EXPLICIT_SOURCE="global.domain"
           {{- end }}
-          echo "  CRL will be available at: ${PKI_BASE_URL}/crl"
-          echo "  CA will be available at: ${PKI_BASE_URL}/ca"
           
-          openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/config/urls" \
-            -H "X-Vault-Token: ${ROOT_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"issuing_certificates\":[\"${PKI_BASE_URL}/ca\"],\"crl_distribution_points\":[\"${PKI_BASE_URL}/crl\"]}"
+          pki_urls_write() {
+            # $1 = JSON body. Failure is fatal (set -e), same as before this step was reworked.
+            openbao_curl -sf -X POST "${PKI_URLS_ENDPOINT}" \
+              -H "X-Vault-Token: ${ROOT_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$1" >/dev/null
+          }
+          
+          pki_urls_set_hint() {
+            echo "  ⚠️  Set openbao.pki.urls.externalBaseUrl (e.g. https://kleidia.example.com/api/pki)"
+            echo "  ⚠️  on the kleidia-platform release (or global.siteUrl / global.domain there) and upgrade."
+          }
+          
+          if [ -n "$PKI_EXPLICIT_URL" ]; then
+            while [[ "$PKI_EXPLICIT_URL" == */ ]]; do PKI_EXPLICIT_URL="${PKI_EXPLICIT_URL%/}"; done
+            if [[ ! "$PKI_EXPLICIT_URL" =~ ^https?://[^/[:space:]]+ ]] || [[ "$PKI_EXPLICIT_URL" =~ [[:space:]] ]]; then
+              echo "  ❌ ERROR: invalid PKI base URL from ${PKI_EXPLICIT_SOURCE}: '${PKI_EXPLICIT_URL}'"
+              echo "  ❌ It must start with http:// or https:// and contain no whitespace."
+              echo "  ❌ Skipping pki/config/urls write; existing AIA/CDP URLs are left unchanged."
+            else
+              echo "  Using PKI URL from ${PKI_EXPLICIT_SOURCE}: ${PKI_EXPLICIT_URL}"
+              echo "  CRL will be available at: ${PKI_EXPLICIT_URL}/crl"
+              echo "  CA will be available at: ${PKI_EXPLICIT_URL}/ca"
+              pki_urls_write "$(jq -cn --arg b "$PKI_EXPLICIT_URL" \
+                '{issuing_certificates: [$b + "/ca"], crl_distribution_points: [$b + "/crl"]}')"
+              echo "  ✅ PKI URLs written"
+            fi
+          else
+            echo "  No explicit PKI URL configured; reading current pki/config/urls..."
+            PKI_URLS_READ_OK=true
+            PKI_URLS_RESPONSE=$(openbao_curl -s -w '\n%{http_code}' "${PKI_URLS_ENDPOINT}" \
+              -H "X-Vault-Token: ${ROOT_TOKEN}" 2>/dev/null) || PKI_URLS_READ_OK=false
+            PKI_URLS_HTTP="${PKI_URLS_RESPONSE##*$'\n'}"
+            PKI_URLS_BODY="${PKI_URLS_RESPONSE%$'\n'*}"
+            if [ "$PKI_URLS_READ_OK" != "true" ] || [[ ! "$PKI_URLS_HTTP" =~ ^2[0-9][0-9]$ ]]; then
+              PKI_URLS_READ_OK=false
+              echo "  ⚠️  WARNING: could not read pki/config/urls (HTTP ${PKI_URLS_HTTP:-none}); writing NOTHING."
+            elif ! PKI_CUR_ISSUING=$(printf '%s' "$PKI_URLS_BODY" | jq -er '.data | if type == "object" then (.issuing_certificates // []) else error("no data") end | if type == "array" then join(" ") else error("not array") end' 2>/dev/null) \
+              || ! PKI_CUR_CRL=$(printf '%s' "$PKI_URLS_BODY" | jq -er '.data.crl_distribution_points // [] | if type == "array" then join(" ") else error("not array") end' 2>/dev/null); then
+              PKI_URLS_READ_OK=false
+              echo "  ⚠️  WARNING: pki/config/urls response could not be parsed; writing NOTHING."
+            fi
+          
+            if [ "$PKI_URLS_READ_OK" != "true" ]; then
+              echo "  ⚠️  Existing AIA/CDP URLs (if any) are left unchanged."
+              pki_urls_set_hint
+            else
+              PKI_URLS_PATCH='{}'
+              if [ -n "$PKI_CUR_ISSUING" ]; then
+                echo "  Preserving issuing_certificates: ${PKI_CUR_ISSUING}"
+              else
+                PKI_URLS_PATCH=$(jq -c --arg u "${PKI_INTERNAL_BASE_URL}/ca" '. + {issuing_certificates: [$u]}' <<<"$PKI_URLS_PATCH")
+              fi
+              if [ -n "$PKI_CUR_CRL" ]; then
+                echo "  Preserving crl_distribution_points: ${PKI_CUR_CRL}"
+              else
+                PKI_URLS_PATCH=$(jq -c --arg u "${PKI_INTERNAL_BASE_URL}/crl" '. + {crl_distribution_points: [$u]}' <<<"$PKI_URLS_PATCH")
+              fi
+          
+              if [ "$PKI_URLS_PATCH" = '{}' ]; then
+                echo "  ✅ Existing PKI URLs preserved (no write)"
+                if [[ "${PKI_CUR_ISSUING} ${PKI_CUR_CRL}" =~ svc\.cluster\.local|localhost|127\.0\.0\.1 ]]; then
+                  echo "  ⚠️  WARNING: the preserved PKI URLs are internal; issued certificates will carry"
+                  echo "  ⚠️  AIA/CDP URLs that external systems (Entra ID, Bitbucket) cannot reach."
+                  pki_urls_set_hint
+                fi
+              else
+                echo "  Using internal PKI URL for empty field(s): ${PKI_INTERNAL_BASE_URL}"
+                echo "  ⚠️  WARNING: CRL is not accessible from external systems!"
+                echo "  ⚠️  For production, set global.domain or global.siteUrl"
+                pki_urls_write "$PKI_URLS_PATCH"
+                echo "  ✅ PKI URLs written for empty field(s): $(jq -r 'keys | join(", ")' <<<"$PKI_URLS_PATCH")"
+              fi
+            fi
+          fi
+          # <<< STEP10_PKI_URLS
           
           # Configure CRL expiry (default: 24h - matches Bitbucket's refresh interval)
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/config/crl" \
@@ -669,6 +742,8 @@ spec:
           # Step 11: Create PKI roles
           echo ""
           echo "Step 11: Creating PKI roles..."
+          # Bundled PKI roles are chart-owned: every role below is re-applied on each
+          # install AND upgrade, so manual edits to these roles are overwritten.
           
           # agent-session role
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/agent-session" \
@@ -677,37 +752,45 @@ spec:
             -d '{"allowed_domains":["agent.kleidia.local","*.agent.kleidia.local"],"allow_glob_domains":true,"allow_subdomains":true,"allow_any_name":true,"enforce_hostnames":false,"server_flag":true,"client_flag":true,"key_type":"rsa","key_bits":2048,"ttl":"12h","max_ttl":"24h"}'
           echo "  ✅ agent-session role created"
           
-          # yubikey-piv role (legacy - kept for backwards compatibility)
+          # yubikey-piv role (legacy, no longer used by the backend). Kept so existing
+          # installs don't lose the role, but it can no longer mint arbitrary names:
+          # no serverAuth, and neither the CN nor any SAN is taken from the CSR.
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":true,"client_flag":true,"key_type":"rsa","key_bits":2048,"ttl":"8760h","max_ttl":"87600h"}'
+            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":true,"use_csr_common_name":false,"use_csr_sans":false,"exclude_cn_from_sans":true,"key_type":"rsa","key_bits":2048,"ttl":"8760h","max_ttl":"87600h"}'
           echo "  ✅ yubikey-piv role created"
           
           # yubikey-piv-auth role (for slot 9a - Authentication)
           # Supports: Entra ID CBA (ClientAuth) + On-prem AD Smart Card (SmartCardLogon OID)
-          # NOTE: use_csr_sans=false allows backend to inject email SAN for Entra ID authentication
+          # SECURITY: CN and SANs are backend-authoritative. use_csr_common_name=false +
+          # exclude_cn_from_sans=true + use_csr_sans=false: nothing in the CSR subject reaches
+          # the SANs (a CSR CN of another user's email would otherwise become an email SAN).
           # allowed_other_sans is scoped to the Microsoft UPN OID (1.3.6.1.4.1.311.20.2.3)
           # so the backend can add the UPN otherName SAN for on-prem AD smart-card logon,
           # and ONLY that otherName type is ever permitted (not "*").
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-auth" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"allow_any_name":true,"cn_validations":["disabled"],"enforce_hostnames":false,"server_flag":false,"client_flag":true,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["ClientAuth"],"ext_key_usage_oids":["1.3.6.1.4.1.311.20.2.2"],"use_csr_common_name":true,"use_csr_sans":false,"allowed_email_sans":true,"allowed_uri_sans":true,"allowed_other_sans":["1.3.6.1.4.1.311.20.2.3;UTF8:*"],"key_type":"any"}'
+            -d '{"allow_any_name":true,"cn_validations":["disabled"],"enforce_hostnames":false,"server_flag":false,"client_flag":true,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["ClientAuth"],"ext_key_usage_oids":["1.3.6.1.4.1.311.20.2.2"],"use_csr_common_name":false,"exclude_cn_from_sans":true,"use_csr_sans":false,"allowed_email_sans":true,"allowed_uri_sans":true,"allowed_other_sans":["1.3.6.1.4.1.311.20.2.3;UTF8:*"],"key_type":"any"}'
           echo "  ✅ yubikey-piv-auth role created (with Smart Card Logon EKU + Email SANs + UPN otherName SAN)"
           
           # yubikey-piv-code-signing role (for slot 9c - Code Signing)
+          # SECURITY: CN and SANs are backend-authoritative; nothing in the CSR subject reaches
+          # the SANs. cn_validations disabled so display names (spaces, non-ASCII) are valid CNs.
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-code-signing" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":false,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature"],"ext_key_usage":["CodeSigning"],"use_csr_common_name":true,"use_csr_sans":true,"key_type":"any"}'
+            -d '{"allow_any_name":true,"cn_validations":["disabled"],"enforce_hostnames":false,"server_flag":false,"client_flag":false,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature"],"ext_key_usage":["CodeSigning"],"use_csr_common_name":false,"exclude_cn_from_sans":true,"use_csr_sans":false,"key_type":"any"}'
           echo "  ✅ yubikey-piv-code-signing role created"
           
           # yubikey-piv-email-signing role (for slot 9d - Email Signing)
+          # SECURITY: CN and SANs are backend-authoritative; nothing in the CSR subject reaches
+          # the SANs. cn_validations disabled so display names (spaces, non-ASCII) are valid CNs.
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-email-signing" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":false,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["EmailProtection"],"use_csr_common_name":true,"use_csr_sans":true,"key_type":"any"}'
+            -d '{"allow_any_name":true,"cn_validations":["disabled"],"enforce_hostnames":false,"server_flag":false,"client_flag":false,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["EmailProtection"],"use_csr_common_name":false,"exclude_cn_from_sans":true,"use_csr_sans":false,"key_type":"any"}'
           echo "  ✅ yubikey-piv-email-signing role created"
           
           # backend-mtls role

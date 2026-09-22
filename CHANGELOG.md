@@ -3,6 +3,74 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.4.2 — September 2026
+
+Security and correctness release for PIV certificate issuance and revocation.
+Revocation now actually revokes, CSR contents can no longer choose a
+certificate's identity, and PIV certificates carry the owner's email SAN on
+every slot. Dependencies unchanged (Kubernetes 1.32+, PostgreSQL 18.1 default,
+OpenBao 2.5.4).
+
+### Upgrade notes
+- **External Vault/OpenBao: update your policy and PIV roles before
+  upgrading.** Add `path "<pkiMount>/revoke" { capabilities = ["update"] }` to
+  the Kleidia AppRole policy, and set `use_csr_sans=false`,
+  `use_csr_common_name=false`, `exclude_cn_from_sans=true`,
+  `cn_validations=disabled` on the `yubikey-piv-auth`,
+  `yubikey-piv-code-signing` and `yubikey-piv-email-signing` roles (see
+  [External Vault](03-deployment/external-vault.md)). Without the revoke
+  permission, revoking or deleting a YubiKey fails with HTTP 502 and the key is
+  kept; the error message names the missing permission.
+- **Bundled OpenBao:** the `kleidia-platform` upgrade applies the policy and
+  role changes. Upgrade `kleidia-platform` before `kleidia-services`.
+- **Certificates of YubiKeys revoked or deleted on 2.4.1 or earlier were never
+  revoked in the PKI** and stay valid until they expire. 2.4.2 revokes
+  certificates going forward; it does not revoke past ones retroactively.
+- Re-issue 9c (code signing) and 9d (key management / S/MIME) certificates to
+  get the email SAN.
+
+### Fixed
+- **YubiKey revocation did not revoke certificates.** Lost-key revoke, YubiKey
+  delete, PIV reset, re-provisioning and slot regeneration looked up
+  certificates in a table nothing wrote, sent serials in a format OpenBao
+  rejects, and the backend's OpenBao policy did not permit revocation. Revoked
+  or deleted keys' certificates therefore stayed valid and never appeared in
+  the CRL. All three causes are fixed; revoked certificates are published in
+  the CRL.
+- **Revocation fails closed.** If a certificate cannot be revoked, a lost-key
+  revoke or delete now stops with HTTP 502 and keeps the key, so it can be
+  retried; previously the key was deleted and the certificate left valid. A
+  certificate that is issued but cannot be recorded is revoked immediately and
+  the request fails. Serials the PKI has no record of (for example from a
+  previous CA) are recorded in the audit log as `certificates_unknown_to_pki`.
+- **9c/9d certificates had no Subject Alternative Name.** The code-signing and
+  S/MIME roles used the CSR's (empty) SANs instead of the owner's email.
+- **Platform upgrades overwrote the PKI's public AIA/CRL URLs** with
+  cluster-internal `*.svc.cluster.local` addresses. Existing values are now
+  preserved unless `externalBaseUrl`, `siteUrl` or `domain` is set explicitly.
+- **Preset certificate generation reported success when a slot failed.**
+  Results are now reported per slot.
+- Admin YubiKey registration offers Standard / Developer / Custom certificate
+  templates (9a/9c/9d).
+
+### Security
+- **A CSR could put another person's email into a certificate.** The PIV roles
+  copied the CSR's common name into the SANs, so a user submitting a CSR with
+  CN `ceo@corp.com` received a 9a/9c/9d certificate with that email SAN
+  (impersonation for S/MIME, code signing and smart-card logon). The default
+  9a path also used a legacy role that honoured arbitrary CSR SANs and set
+  `serverAuth`. CN and SANs now come only from Kleidia. Affects all releases up
+  to 2.4.1.
+- **Admin-API scope failed open.** Organisation scoping on `/admin` trusted
+  the JWT, so a stale admin token, a demoted admin, an org manager without an
+  organisation, or a deleted or disabled user was treated as a global admin
+  for YubiKey and user operations, including issuing smart-card-logon
+  certificates for other users. Scope is now decided from the database on
+  every request. Affects all releases up to 2.4.1.
+- **Rebuilt images.** Go `golang.org/x` modules updated (x/crypto 0.57.0,
+  x/net 0.59.0); frontend on Nuxt 4.5.2 with patched transitive dependencies.
+  All three images scan clean at HIGH/CRITICAL.
+
 ## 2.4.1 — September 2026
 
 Patch release: the PIV authentication-certificate UPN SAN (Active Directory

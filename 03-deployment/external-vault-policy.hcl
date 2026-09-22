@@ -18,12 +18,17 @@ path "kleidia-kv/metadata/*" {
   capabilities = ["read", "list", "delete"]
 }
 
-# --- PKI: sign/issue only against Kleidia's roles (NO admin) ---
+# --- PKI: sign/issue against Kleidia's roles, revoke what it issued (NO admin) ---
 path "kleidia-pki/sign/*" {
   capabilities = ["create", "update"]
 }
 path "kleidia-pki/issue/*" {
   capabilities = ["create", "update"]
+}
+# Required since 2.4.2: lost/deleted/reset YubiKeys and replaced slot certificates
+# are revoked, and the operation fails (the key is kept) when the revoke is denied.
+path "kleidia-pki/revoke" {
+  capabilities = ["update"]
 }
 path "kleidia-pki/cert/ca" {
   capabilities = ["read"]
