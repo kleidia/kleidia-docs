@@ -15,8 +15,8 @@ OpenBao 2.5.4).
 - **External Vault/OpenBao: update your policy and PIV roles before
   upgrading.** Add `path "<pkiMount>/revoke" { capabilities = ["update"] }` to
   the Kleidia AppRole policy, and set `use_csr_sans=false`,
-  `use_csr_common_name=false`, `exclude_cn_from_sans=true`,
-  `cn_validations=disabled` on the `yubikey-piv-auth`,
+  `use_csr_common_name=false` and `cn_validations=disabled` on the
+  `yubikey-piv-auth`,
   `yubikey-piv-code-signing` and `yubikey-piv-email-signing` roles (see
   [External Vault](03-deployment/external-vault.md)). Without the revoke
   permission, revoking or deleting a YubiKey fails with HTTP 502 and the key is
@@ -61,6 +61,14 @@ OpenBao 2.5.4).
   9a path also used a legacy role that honoured arbitrary CSR SANs and set
   `serverAuth`. CN and SANs now come only from Kleidia. Affects all releases up
   to 2.4.1.
+- **A display name could put another person's email into a certificate.** The
+  certificate CN is the owner's display name, which self-registration and the
+  identity provider set, and the CA copied it into the SANs: an owner named
+  `ceo@corp.com` received an email SAN for that address, and a host-shaped name
+  became a DNS SAN. Kleidia now asks the CA to keep the CN out of the SANs on
+  every PIV signing request. Affects all releases up to 2.4.1. **Review issued
+  PIV certificates for SANs other than the owner's own email**, and revoke any
+  found.
 - **Admin-API scope failed open.** Organisation scoping on `/admin` trusted
   the JWT, so a stale admin token, a demoted admin, an org manager without an
   organisation, or a deleted or disabled user was treated as a global admin

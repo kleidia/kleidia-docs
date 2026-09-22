@@ -758,21 +758,23 @@ spec:
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":true,"use_csr_common_name":false,"use_csr_sans":false,"exclude_cn_from_sans":true,"key_type":"rsa","key_bits":2048,"ttl":"8760h","max_ttl":"87600h"}'
+            -d '{"allow_any_name":true,"enforce_hostnames":false,"server_flag":false,"client_flag":true,"use_csr_common_name":false,"use_csr_sans":false,"key_type":"rsa","key_bits":2048,"ttl":"8760h","max_ttl":"87600h"}'
           echo "  ✅ yubikey-piv role created"
           
           # yubikey-piv-auth role (for slot 9a - Authentication)
           # Supports: Entra ID CBA (ClientAuth) + On-prem AD Smart Card (SmartCardLogon OID)
           # SECURITY: CN and SANs are backend-authoritative. use_csr_common_name=false +
-          # exclude_cn_from_sans=true + use_csr_sans=false: nothing in the CSR subject reaches
-          # the SANs (a CSR CN of another user's email would otherwise become an email SAN).
+          # use_csr_sans=false: nothing in the CSR subject reaches the certificate (a CSR CN
+          # of another user's email would otherwise become an email SAN). The backend also
+          # sends exclude_cn_from_sans=true on every PIV sign request (it is a request
+          # parameter, not a role setting), so its own CN never becomes a SAN either.
           # allowed_other_sans is scoped to the Microsoft UPN OID (1.3.6.1.4.1.311.20.2.3)
           # so the backend can add the UPN otherName SAN for on-prem AD smart-card logon,
           # and ONLY that otherName type is ever permitted (not "*").
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-auth" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"allow_any_name":true,"cn_validations":["disabled"],"enforce_hostnames":false,"server_flag":false,"client_flag":true,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["ClientAuth"],"ext_key_usage_oids":["1.3.6.1.4.1.311.20.2.2"],"use_csr_common_name":false,"exclude_cn_from_sans":true,"use_csr_sans":false,"allowed_email_sans":true,"allowed_uri_sans":true,"allowed_other_sans":["1.3.6.1.4.1.311.20.2.3;UTF8:*"],"key_type":"any"}'
+            -d '{"allow_any_name":true,"cn_validations":["disabled"],"enforce_hostnames":false,"server_flag":false,"client_flag":true,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["ClientAuth"],"ext_key_usage_oids":["1.3.6.1.4.1.311.20.2.2"],"use_csr_common_name":false,"use_csr_sans":false,"allowed_email_sans":true,"allowed_uri_sans":true,"allowed_other_sans":["1.3.6.1.4.1.311.20.2.3;UTF8:*"],"key_type":"any"}'
           echo "  ✅ yubikey-piv-auth role created (with Smart Card Logon EKU + Email SANs + UPN otherName SAN)"
           
           # yubikey-piv-code-signing role (for slot 9c - Code Signing)
@@ -781,7 +783,7 @@ spec:
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-code-signing" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"allow_any_name":true,"cn_validations":["disabled"],"enforce_hostnames":false,"server_flag":false,"client_flag":false,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature"],"ext_key_usage":["CodeSigning"],"use_csr_common_name":false,"exclude_cn_from_sans":true,"use_csr_sans":false,"key_type":"any"}'
+            -d '{"allow_any_name":true,"cn_validations":["disabled"],"enforce_hostnames":false,"server_flag":false,"client_flag":false,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature"],"ext_key_usage":["CodeSigning"],"use_csr_common_name":false,"use_csr_sans":false,"key_type":"any"}'
           echo "  ✅ yubikey-piv-code-signing role created"
           
           # yubikey-piv-email-signing role (for slot 9d - Email Signing)
@@ -790,7 +792,7 @@ spec:
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/yubikey-piv-email-signing" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"allow_any_name":true,"cn_validations":["disabled"],"enforce_hostnames":false,"server_flag":false,"client_flag":false,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["EmailProtection"],"use_csr_common_name":false,"exclude_cn_from_sans":true,"use_csr_sans":false,"key_type":"any"}'
+            -d '{"allow_any_name":true,"cn_validations":["disabled"],"enforce_hostnames":false,"server_flag":false,"client_flag":false,"ttl":"8760h","max_ttl":"8760h","key_usage":["DigitalSignature","KeyEncipherment"],"ext_key_usage":["EmailProtection"],"use_csr_common_name":false,"use_csr_sans":false,"key_type":"any"}'
           echo "  ✅ yubikey-piv-email-signing role created"
           
           # backend-mtls role

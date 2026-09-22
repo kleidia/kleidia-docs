@@ -51,16 +51,18 @@ must all set:
 |---------|-------|---------------|
 | `use_csr_sans` | `false` | `true` |
 | `use_csr_common_name` | `false` | `true` |
-| `exclude_cn_from_sans` | `true` | `false` |
 | `cn_validations` | `disabled` | `email,hostname` |
 
 **This is a security requirement, not only a functional one.** Kleidia supplies the
 certificate's CN (`common_name`) and its SANs (`alt_names`, the owner's email) itself; the
-CSR subject is user-controlled. With `use_csr_common_name=true` and `exclude_cn_from_sans`
-unset, Vault copies the CSR's CN into the SANs, so a user who puts another person's email
-(e.g. `ceo@corp.com`) in the CSR CN gets a certificate carrying that person's email SAN,
-which is impersonation for S/MIME, code signing and Entra ID / AD smart-card logon. With the
-settings above, nothing in the CSR subject reaches the SANs. `use_csr_sans=false` is also
+CSR subject is user-controlled. With `use_csr_common_name=true`, Vault takes the CSR's CN and
+copies it into the SANs, so a user who puts another person's email (e.g. `ceo@corp.com`) in
+the CSR CN gets a certificate carrying that person's email SAN, which is impersonation for
+S/MIME, code signing and Entra ID / AD smart-card logon. With the settings above, nothing in
+the CSR subject reaches the certificate. Kleidia (2.4.2+) also sends `exclude_cn_from_sans=true`
+on every PIV sign request, so its own CN (the owner's display name) is never copied into the
+SANs either. That is a request parameter, not a role setting, so there is nothing to
+configure for it on the role. `use_csr_sans=false` is also
 functional: with `true`, Vault drops Kleidia's `alt_names` and the certificate is issued
 without the email SAN. `cn_validations=disabled` lets display names with spaces or non-ASCII
 characters (e.g. `Õie Täht`) be used as the CN.
