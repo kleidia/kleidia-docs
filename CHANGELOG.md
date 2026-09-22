@@ -17,7 +17,8 @@ OpenBao 2.5.4).
   the Kleidia AppRole policy, and set `use_csr_sans=false`,
   `use_csr_common_name=false` and `cn_validations=disabled` on the
   `yubikey-piv-auth`,
-  `yubikey-piv-code-signing` and `yubikey-piv-email-signing` roles (see
+  `yubikey-piv-code-signing` and `yubikey-piv-email-signing` roles, and
+  `use_csr_sans=false`, `use_csr_common_name=false` on `agent-localhost-cert` (see
   [External Vault](03-deployment/external-vault.md)). Without the revoke
   permission, revoking or deleting a YubiKey fails with HTTP 502 and the key is
   kept; the error message names the missing permission.
@@ -69,6 +70,17 @@ OpenBao 2.5.4).
   every PIV signing request. Affects all releases up to 2.4.1. **Review issued
   PIV certificates for SANs other than the owner's own email**, and revoke any
   found.
+- **A registration email could carry a second address.** Self-registration did
+  not validate the email format, and the email is passed to the CA as a
+  comma-separated SAN list, so registering as `me@x.com,ceo@corp.com` produced
+  PIV certificates with the other person's email SAN. Registration now accepts
+  a single plain address, and every PIV signing request refuses an owner email
+  that is not one. Affects all releases up to 2.4.1 with self-registration
+  enabled (the default); covered by the same certificate review.
+- **Agent localhost certificates honoured CSR SANs.** The certificate signing
+  endpoint available to any signed-in user used a role that took SANs from the
+  CSR, so a user could obtain a server-auth certificate for arbitrary IP
+  addresses. The role now ignores the CSR's CN and SANs.
 - **Admin-API scope failed open.** Organisation scoping on `/admin` trusted
   the JWT, so a stale admin token, a demoted admin, an org manager without an
   organisation, or a deleted or disabled user was treated as a global admin

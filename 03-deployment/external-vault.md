@@ -67,6 +67,11 @@ functional: with `true`, Vault drops Kleidia's `alt_names` and the certificate i
 without the email SAN. `cn_validations=disabled` lets display names with spaces or non-ASCII
 characters (e.g. `Õie Täht`) be used as the CN.
 
+The `agent-localhost-cert` role must also set `use_csr_common_name=false` and
+`use_csr_sans=false` (Vault default `true` for both). Kleidia requests its CN and SANs
+(`localhost`, `127.0.0.1`, `::1`) itself; with the defaults, any signed-in user could obtain
+a server-auth certificate for arbitrary IP addresses by putting them in the CSR.
+
 Kleidia will not create or modify the mount, CA, or roles. The in-app "OpenBao CA
 configuration" screen is **read-only** in external mode.
 

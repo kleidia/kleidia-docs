@@ -810,10 +810,13 @@ spec:
           echo "  ✅ kleidia-component role created (flexible naming)"
           
           # agent-localhost-cert role (for HTTP-based agent architecture)
+          # SECURITY: the backend requests CN/SANs localhost + 127.0.0.1,::1 itself; the
+          # CSR's CN and SANs are ignored (with use_csr_sans at its default any user could
+          # get a serverAuth cert for arbitrary IP SANs through POST /api/certificates/sign).
           openbao_curl -sf -X POST "http://127.0.0.1:8200/v1/pki/roles/agent-localhost-cert" \
             -H "X-Vault-Token: ${ROOT_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"allowed_domains":["localhost"],"allow_localhost":true,"allow_ip_sans":true,"enforce_hostnames":false,"server_flag":true,"client_flag":false,"key_type":"rsa","key_bits":2048,"ttl":"8h","max_ttl":"8h"}'
+            -d '{"allowed_domains":["localhost"],"allow_localhost":true,"allow_ip_sans":true,"enforce_hostnames":false,"server_flag":true,"client_flag":false,"use_csr_common_name":false,"use_csr_sans":false,"key_type":"rsa","key_bits":2048,"ttl":"8h","max_ttl":"8h"}'
           echo "  ✅ agent-localhost-cert role created (HTTP agent architecture)"
           
           # Step 12: Initialize application secrets (JWT, encryption keys, etc.)
