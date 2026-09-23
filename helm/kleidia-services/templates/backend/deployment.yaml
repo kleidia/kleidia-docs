@@ -316,18 +316,17 @@ spec:
           value: "{{ .Values.backend.oidc.discoveryBase }}"
         {{- end }}
 
-        # Local-account self-registration (email + password). Defaults to the
-        # backend's historical behaviour (enabled) so existing installs are
-        # unchanged; see backend.allowSelfRegister.
-        {{- /* Mirror the backend's own predicate exactly: registration is disabled
-             iff ALLOW_SELF_REGISTER is the string "false" or "0". This keeps a
-             bool false, --set-string "false" and "0" all meaning disabled, and
-             avoids sprig `default`, which treats false as empty. */}}
-        {{- $asrRaw := "true" }}
+        # Local-account self-registration (email + password). Opt-in: disabled
+        # unless backend.allowSelfRegister is true; see values.yaml.
+        {{- /* Mirror the backend's own predicate exactly: registration is enabled
+             iff ALLOW_SELF_REGISTER is the string "true" or "1". A missing or
+             null key, bool false, "false", "0" and anything else all mean
+             disabled; this avoids sprig `default`, which treats false as empty. */}}
+        {{- $asrRaw := "false" }}
         {{- if and (hasKey .Values.backend "allowSelfRegister") (not (kindIs "invalid" .Values.backend.allowSelfRegister)) }}
-          {{- $asrRaw = .Values.backend.allowSelfRegister | toString | lower }}
+          {{- $asrRaw = .Values.backend.allowSelfRegister | toString | trim | lower }}
         {{- end }}
-        {{- $allowSelfRegister := not (or (eq $asrRaw "false") (eq $asrRaw "0")) }}
+        {{- $allowSelfRegister := or (eq $asrRaw "true") (eq $asrRaw "1") }}
         - name: ALLOW_SELF_REGISTER
           value: {{ $allowSelfRegister | toString | quote }}
 

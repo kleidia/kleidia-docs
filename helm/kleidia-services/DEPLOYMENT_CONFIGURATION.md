@@ -80,8 +80,8 @@ rejected and no certificate is issued for that slot; the sign path reports it as
 `invalid_upn`.
 
 Notes:
-- `allowSelfRegister` sets `ALLOW_SELF_REGISTER`; it defaults to `true` so
-  existing installs behave as before.
+- `allowSelfRegister` sets `ALLOW_SELF_REGISTER`; it defaults to `false`
+  since 2.4.2 (only `true`/`1` enable it), so the UPN setup needs no change there.
 - Certificates already issued are unchanged; re-issue the authentication
   certificate after enabling.
 - Bundled OpenBao: the `yubikey-piv-auth` PKI role already permits this SAN.

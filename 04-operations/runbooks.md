@@ -110,6 +110,85 @@ Device needs to be revoked (lost, stolen, compromised, or user departure).
 - Verify Vault connectivity
 - Check user permissions (admin role required)
 
+## Revoking Certificates Left Valid Before 2.4.2
+
+### Symptom
+Up to and including 2.4.1, revoking or deleting a YubiKey did not revoke its
+certificates in the PKI. Those certificates stay valid, and absent from the CRL,
+until they expire. 2.4.2 revokes going forward but does not revoke past ones.
+
+Two cases are affected:
+- certificates of YubiKeys that were revoked (lost key) or deleted;
+- certificates still attached to a YubiKey that was deleted and then registered
+  again to a **different** owner.
+
+### Procedure
+
+Run this once, **after** upgrading to 2.4.2. External Vault/OpenBao: the Kleidia
+policy must include `update` on `<pkiMount>/revoke` (see
+[External Vault](../03-deployment/external-vault.md)), or use your own token.
+
+1. **List the affected certificates.** The query prints `id|serial`, with the
+   serial already in the colon-hex form `pki/revoke` expects:
+   ```bash
+   PRIMARY=$(kubectl -n kleidia get pod -l cnpg.io/cluster=kleidia-db,cnpg.io/instanceRole=primary -o name)
+   kubectl -n kleidia exec -i "$PRIMARY" -c postgres -- psql -d kleidia -At > historic-certs.txt <<'EOF'
+   WITH RECURSIVE affected AS (
+     SELECT c.id, c.serial_number::numeric AS n
+     FROM issued_certificates c
+     JOIN yubi_keys y ON y.id = c.yubikey_id
+     WHERE c.serial_number ~ '^[0-9]+$'
+       AND c.not_after > now()
+       AND (y.deleted_at IS NOT NULL OR c.owner_user_id IS DISTINCT FROM y.owner_id)
+   ), hex(id, n, h) AS (
+     SELECT id, n, ''::text FROM affected
+     UNION ALL
+     SELECT id, div(n, 16), substr('0123456789abcdef', mod(n, 16)::int + 1, 1) || h
+     FROM hex WHERE n > 0
+   )
+   SELECT id, regexp_replace(lpad(h, length(h) + length(h) % 2, '0'), '(..)(?!$)', '\1:', 'g')
+   FROM hex WHERE n = 0 AND h <> '' ORDER BY id;
+   EOF
+   cat historic-certs.txt
+   ```
+   Review the list before continuing. To see what each row is, run
+   `SELECT c.id, c.subject, c.not_after, y.serial FROM issued_certificates c JOIN yubi_keys y ON y.id = c.yubikey_id WHERE c.id IN (...)`.
+
+2. **Revoke them.** Bundled OpenBao, using the backend's AppRole (which has the
+   revoke permission from 2.4.2):
+   ```bash
+   RID=$(kubectl -n kleidia get secret openbao-backend-approle -o jsonpath='{.data.role_id}' | base64 -d)
+   SID=$(kubectl -n kleidia get secret openbao-backend-approle -o jsonpath='{.data.secret_id}' | base64 -d)
+   while IFS='|' read -r id serial; do
+     echo "revoking row $id serial $serial"
+     kubectl -n kleidia exec kleidia-platform-openbao-0 -- sh -c \
+       "BAO_TOKEN=\$(bao write -field=token auth/approle/login role_id='$RID' secret_id='$SID') bao write pki/revoke serial_number='$serial'" < /dev/null \
+       && echo "$id" >> revoked-ids.txt
+   done < historic-certs.txt
+   ```
+   Each successful revoke prints `state revoked`. External Vault: run
+   `vault write <pkiMount>/revoke serial_number=<serial>` for each line with a
+   token allowed to revoke. A serial reported as "not found" was issued by a
+   different CA or mount and cannot be revoked here.
+
+3. **Stop tracking the revoked certificates** (removes them from expiry
+   notifications), using only the rows that revoked successfully:
+   ```bash
+   kubectl -n kleidia exec "$PRIMARY" -c postgres -- psql -d kleidia -c \
+     "DELETE FROM issued_certificates WHERE id IN ($(paste -sd, revoked-ids.txt))"
+   ```
+
+4. **Publish the CRL.** OpenBao's CRL updates immediately; Kleidia's public
+   CRL endpoint (`/api/pki/crl`, the URL in the certificates) caches it for up
+   to an hour. To publish now:
+   ```bash
+   kubectl -n kleidia rollout restart deployment/backend
+   ```
+
+5. **Verify.** Re-running step 1 prints nothing, and each revoked serial
+   (upper-case, without colons) appears in
+   `curl -s https://<your-domain>/api/pki/crl | openssl crl -inform DER -noout -text`.
+
 ## Vault 403 Errors
 
 ### Symptom

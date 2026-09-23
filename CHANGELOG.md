@@ -24,9 +24,16 @@ OpenBao 2.5.4).
   kept; the error message names the missing permission.
 - **Bundled OpenBao:** the `kleidia-platform` upgrade applies the policy and
   role changes. Upgrade `kleidia-platform` before `kleidia-services`.
+- **Self-registration is now off by default.** `backend.allowSelfRegister`
+  defaults to `false`, and the backend enables it only for
+  `ALLOW_SELF_REGISTER=true` or `1`. If your users create their own local
+  accounts through `/api/auth/register`, set `backend.allowSelfRegister: true`
+  before upgrading. OIDC, SCIM and admin-created accounts are unaffected.
 - **Certificates of YubiKeys revoked or deleted on 2.4.1 or earlier were never
   revoked in the PKI** and stay valid until they expire. 2.4.2 revokes
-  certificates going forward; it does not revoke past ones retroactively.
+  certificates going forward; it does not revoke past ones by itself. After
+  upgrading, revoke them once with the runbook
+  [Revoking Certificates Left Valid Before 2.4.2](04-operations/runbooks.md#revoking-certificates-left-valid-before-242).
 - Re-issue 9c (code signing) and 9d (key management / S/MIME) certificates to
   get the email SAN.
 
@@ -76,7 +83,12 @@ OpenBao 2.5.4).
   PIV certificates with the other person's email SAN. Registration now accepts
   a single plain address, and every PIV signing request refuses an owner email
   that is not one. Affects all releases up to 2.4.1 with self-registration
-  enabled (the default); covered by the same certificate review.
+  enabled (the default through 2.4.1); covered by the same certificate review.
+- **Self-registration let anyone choose a certificate's email.** Registration
+  never verified that the registrant owns the email address, and that email
+  becomes the email SAN of the user's PIV certificates. It is now disabled
+  unless explicitly enabled (see Upgrade notes); enable it only where every
+  user who can reach the API may be trusted with an email identity.
 - **Agent localhost certificates honoured CSR SANs.** The certificate signing
   endpoint available to any signed-in user used a role that took SANs from the
   CSR, so a user could obtain a server-auth certificate for arbitrary IP
