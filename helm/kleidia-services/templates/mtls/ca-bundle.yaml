@@ -8,6 +8,20 @@
 #
 # For intermediate CA mode: contains the full chain (intermediate + root)
 # For root CA mode: contains just the root CA
+#
+# Field ownership (one manager per field, so Helm 4 server-side apply never
+# conflicts and never needs --force-conflicts):
+#   - Helm owns the object's existence and metadata (this manifest). It
+#     deliberately renders NO `data`: under server-side apply a chart-declared
+#     `ca.crt: ""` collides with the hook's value on every upgrade.
+#   - The fetch-mtls-ca hook owns `data.ca.crt`, written by server-side apply
+#     under its own field manager (kleidia-fetch-mtls-ca).
+# Upgrading a <=2.4.2 release: on SSA, Helm drops its claim on data.ca.crt
+# (the old hook's client-side apply already took it over) and the live value
+# stays. On client-side apply (Helm 3, or Helm 4 on a release first deployed
+# client-side), the 3-way merge removes the old chart's empty ca.crt key once;
+# this upgrade's post-upgrade hook writes it back. Later upgrades never touch
+# data. Nothing in this chart mounts this ConfigMap.
 # =============================================================================
 
 apiVersion: v1
@@ -20,8 +34,6 @@ metadata:
     app.kubernetes.io/component: mtls-ca-bundle
   annotations:
     description: "CA certificate chain for mTLS verification. Auto-populated by fetch-mtls-ca job."
-data:
-  ca.crt: ""
 ---
 # ServiceAccount for the CA fetch job
 apiVersion: v1
@@ -37,7 +49,9 @@ metadata:
     "helm.sh/hook-weight": "35"
     "helm.sh/hook-delete-policy": before-hook-creation
 ---
-# Role to update the CA ConfigMap
+# Role to update the CA ConfigMap. No `create`: the chart creates the object,
+# so the hook can only ever fill the release-owned ConfigMap, never mint an
+# unowned copy that would block a later install.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -54,7 +68,7 @@ rules:
 - apiGroups: [""]
   resources: ["configmaps"]
   resourceNames: ["kleidia-mtls-ca"]
-  verbs: ["get", "update", "patch"]
+  verbs: ["get", "patch"]
 ---
 # RoleBinding for the CA updater
 apiVersion: rbac.authorization.k8s.io/v1
@@ -199,11 +213,19 @@ spec:
           TEMP_FILE=$(mktemp)
           echo "$CA_CHAIN" > "$TEMP_FILE"
           
-          # Patch the ConfigMap using kubectl
+          # Server-side apply ONLY data.ca.crt under a dedicated field manager.
+          # Helm owns the object and its metadata and renders no data, so the
+          # two managers' field sets are disjoint and `helm upgrade` (Helm 4
+          # SSA) never conflicts. --force-conflicts takes ca.crt over from the
+          # managers that held it on <=2.4.2 releases (kubectl-client-side-apply
+          # from the old hook, helm from the old empty-string manifest). The
+          # applied config must stay metadata.name + data only: any label or
+          # annotation added here would be co-owned with Helm.
           kubectl create configmap "${CONFIGMAP_NAME}" \
             --from-file=ca.crt="$TEMP_FILE" \
             --dry-run=client -o yaml | \
-            kubectl apply -f - -n "${NAMESPACE}"
+            kubectl apply --server-side --field-manager=kleidia-fetch-mtls-ca --force-conflicts \
+              -f - -n "${NAMESPACE}"
           
           rm -f "$TEMP_FILE"
           

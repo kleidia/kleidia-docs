@@ -3,6 +3,56 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.4.3 — September 2026
+
+Security and reliability fixes for sign-in, account identity and the PIV
+certificate lifecycle. Dependencies unchanged (Kubernetes 1.32+, PostgreSQL
+18.1 default, OpenBao 2.5.4).
+
+### Upgrade notes
+- **SSO sign-in onto accounts with a local password** now requires the IdP to
+  confirm the email (`email_verified`). Entra ID does not send that claim: if
+  your users have local passwords and sign in through Entra ID, set
+  `backend.oidc.trustEmail: true`. See
+  [OIDC Environment Variables](03-deployment/configuration.md#oidc-environment-variables).
+- **Email addresses are case-insensitive.** New and updated emails are stored
+  in lower case. Two accounts whose emails differ only in case can no longer
+  sign in until an administrator merges or removes one of them.
+- **The first-time admin password page (`/adminSetup`) is removed.** Initial
+  setup uses the bootstrap flow.
+- **Update the Kleidia agent** on administrator workstations. The new agent
+  lets the server verify that a YubiKey generated the key it certifies; with
+  an older agent, registration still works and the certificate is recorded as
+  unverified in the audit log.
+- **Helm 4:** `helm upgrade kleidia-services` no longer needs
+  `--force-conflicts`.
+- **`backend.oidc.skipTlsVerify` now defaults to `false`**: the backend
+  verifies the IdP's TLS certificate. If your IdP uses a private CA, configure
+  that CA or set `skipTlsVerify: true` explicitly before upgrading.
+
+### Fixed
+- Resetting, re-provisioning or re-registering a YubiKey stops if its old
+  certificates cannot be revoked, instead of continuing with them still valid.
+- A YubiKey is marked certified only when every requested certificate was
+  issued.
+- A certificate that could be neither recorded nor revoked is queued and
+  revoked automatically.
+- Regenerating the same slot twice at the same time leaves one valid
+  certificate.
+- Enabling OpenBao internal HTTPS now issues its server certificate.
+- Admin, SCIM and Entra ID reject or skip invalid email addresses when users
+  are written.
+
+### Security
+All items affect releases up to and including 2.4.2.
+- SSO sign-in can no longer be linked to a local account with the same email
+  unless the IdP confirms the email; linking ends the account's existing
+  sessions.
+- Email addresses are treated case-insensitively for identity.
+- Administrator certificate signing checks the YubiKey's attestation.
+- The unauthenticated first-time admin password endpoint is removed.
+- Frontend dependencies updated (tiptap 3.31.3, esbuild 0.28.2).
+
 ## 2.4.2 — September 2026
 
 Security and correctness release for PIV certificate issuance and revocation.

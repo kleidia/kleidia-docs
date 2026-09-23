@@ -44,14 +44,28 @@ backend:
   replicas: 2                 # Horizontal scaling for the backend API
   image:
     repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-backend)
-    tag: backend-2.4.2                    # Pinned to the 2.4.2 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
+    tag: backend-2.4.3                    # Pinned to the 2.4.3 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
   service:
     nodePort: 32570             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
   corsOrigins: ""               # CORS allowed origins (comma-separated). If empty, uses global.siteUrl
                                 # Example: "https://kleidia.example.com,https://frontend.example.com"
                                 # REQUIRED for production deployments with external load balancers
   oidc:
-    skipTlsVerify: true         # Skip TLS verification for OIDC discovery (set to false in production with proper certificates)
+    # Verify the IdP's TLS certificate (OIDC_SKIP_TLS_VERIFY). Off means the
+    # backend trusts whatever answers on the path to the IdP, including a
+    # forged email_verified claim that lets an SSO login be merged into an
+    # existing account. Keep false. An IdP behind a private CA needs the CA
+    # (OIDC_CA_CERT_FILE, see DEPLOYMENT_CONFIGURATION.md) or an explicit
+    # skipTlsVerify: true, dev/test only.
+    skipTlsVerify: false        # Sets OIDC_SKIP_TLS_VERIFY on the backend
+    # Trust the IdP's email claim even when it sends no email_verified. An SSO
+    # login whose email matches an existing LOCAL-PASSWORD account is merged
+    # into it (and that local password cleared) only when the IdP asserts
+    # email_verified=true or this is true; otherwise the login is refused (403)
+    # until an administrator resolves it. Set true only for an IdP that owns the
+    # email domain and never sends email_verified (Entra ID). Accounts without a
+    # local password (SCIM/Entra/OIDC-created) merge regardless.
+    trustEmail: false           # Sets OIDC_TRUST_EMAIL on the backend
   # Local-account self-registration (email + password via /api/auth/register).
   # Off by default since 2.4.2: registration does not verify email ownership and
   # the email becomes the certificate's email SAN. Set true only where anyone who
@@ -88,14 +102,14 @@ frontend:
   replicas: 2                 # Horizontal scaling for the frontend
   image:
     repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-frontend)
-    tag: frontend-2.4.2                   # Pinned to the 2.4.2 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
+    tag: frontend-2.4.3                   # Pinned to the 2.4.3 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
   service:
     nodePort: 30805             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
 
 licenseService:
   enabled: true                 # Enable the license service pod (optional, backend falls back to TRIAL if disabled)
   replicas: 2                   # Horizontal scaling for high availability
-  image: therinn/kleidia:license-2.4.2  # License service image (garble-obfuscated); pinned to the 2.4.2 release
+  image: therinn/kleidia:license-2.4.3  # License service image (garble-obfuscated); pinned to the 2.4.3 release
   imagePullPolicy: Always       # Always pull to ensure latest image
   resources:
     requests:

@@ -154,7 +154,7 @@ The backend (`main.go`) validates CORS origins:
 The admin creation flow requires correct CORS:
 
 1. Frontend loads at `https://kleidia.example.com`
-2. User navigates to `/adminSetup`
+2. User opens the site root; with no administrator in the database yet, the frontend shows the first-admin (bootstrap) page there
 3. Frontend calls `POST /api/bootstrap/claim` with `Origin: https://kleidia.example.com`
 4. Backend checks if origin is in `CORS_ORIGINS`
 5. If not found → **403 Forbidden**

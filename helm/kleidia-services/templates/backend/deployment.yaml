@@ -315,6 +315,19 @@ spec:
         - name: OIDC_DISCOVERY_BASE
           value: "{{ .Values.backend.oidc.discoveryBase }}"
         {{- end }}
+        # OIDC email trust for merging SSO logins into existing local-password
+        # accounts. Opt-in via backend.oidc.trustEmail; see values.yaml.
+        {{- /* Mirror config.OIDCTrustEmail exactly: trusted iff OIDC_TRUST_EMAIL is
+             the string "true" or "1". A missing or null key, bool false, "false",
+             "0" and anything else all mean not trusted; no sprig `default`, which
+             treats false as empty. */}}
+        {{- $oteRaw := "false" }}
+        {{- $oidcVals := .Values.backend.oidc | default dict }}
+        {{- if and (kindIs "map" $oidcVals) (hasKey $oidcVals "trustEmail") (not (kindIs "invalid" (get $oidcVals "trustEmail"))) }}
+          {{- $oteRaw = get $oidcVals "trustEmail" | toString | trim | lower }}
+        {{- end }}
+        - name: OIDC_TRUST_EMAIL
+          value: {{ or (eq $oteRaw "true") (eq $oteRaw "1") | toString | quote }}
 
         # Local-account self-registration (email + password). Opt-in: disabled
         # unless backend.allowSelfRegister is true; see values.yaml.

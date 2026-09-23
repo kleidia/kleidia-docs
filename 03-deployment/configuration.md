@@ -262,6 +262,15 @@ OIDC is primarily configured through the **Admin UI** (settings stored in the da
 | `OIDC_CA_CERT_FILE` | Custom CA certificate file path | — |
 | `OIDC_MFA_REQUIRED` | Require MFA | `false` |
 | `OIDC_CONDITIONAL_ACCESS` | Enable conditional access | `false` |
+| `OIDC_TRUST_EMAIL` | Treat the IdP's email claim as verified even without `email_verified` (Helm `backend.oidc.trustEmail`). Set only for an IdP that owns the email domain, such as Entra ID. | `false` |
+
+**Linking SSO to existing accounts.** An SSO login is linked to an existing
+Kleidia account with the same email (case-insensitive). Accounts without a
+local password (SCIM, Entra sync, earlier SSO logins) are linked as before. An
+account with a local password is linked only when the IdP sends
+`email_verified: true` or `OIDC_TRUST_EMAIL` is enabled; the local password is
+then removed. Otherwise the login is refused and an administrator must resolve
+the duplicate account. The bootstrap `admin` account is never linked to SSO.
 
 See [Admin Guide - OIDC Configuration](../05-using-the-system/admin-guide.md) for provider-specific settings and setup instructions.
 
