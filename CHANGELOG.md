@@ -29,6 +29,10 @@ OpenBao 2.5.4).
   `ALLOW_SELF_REGISTER=true` or `1`. If your users create their own local
   accounts through `/api/auth/register`, set `backend.allowSelfRegister: true`
   before upgrading. OIDC, SCIM and admin-created accounts are unaffected.
+  `helm upgrade --reuse-values` keeps the previous chart's default (`true`);
+  pass `--set backend.allowSelfRegister=false` or use
+  `--reset-then-reuse-values`, and confirm with
+  `kubectl -n kleidia get deploy backend -o yaml | grep -A1 ALLOW_SELF_REGISTER`.
 - **Certificates of YubiKeys revoked or deleted on 2.4.1 or earlier were never
   revoked in the PKI** and stay valid until they expire. 2.4.2 revokes
   certificates going forward; it does not revoke past ones by itself. After
@@ -86,9 +90,12 @@ OpenBao 2.5.4).
   enabled (the default through 2.4.1); covered by the same certificate review.
 - **Self-registration let anyone choose a certificate's email.** Registration
   never verified that the registrant owns the email address, and that email
-  becomes the email SAN of the user's PIV certificates. It is now disabled
-  unless explicitly enabled (see Upgrade notes); enable it only where every
-  user who can reach the API may be trusted with an email identity.
+  becomes the email SAN of the user's PIV certificates. A later OIDC login
+  with the same email is merged into that account, which keeps its password.
+  It is now disabled unless explicitly enabled (see Upgrade notes); enable it
+  only where every user who can reach the API may be trusted with an email
+  identity. Accounts registered before the upgrade stay: **audit them with the
+  runbook [Auditing Local Accounts After 2.4.2](04-operations/runbooks.md#auditing-local-accounts-after-242).**
 - **Agent localhost certificates honoured CSR SANs.** The certificate signing
   endpoint available to any signed-in user used a role that took SANs from the
   CSR, so a user could obtain a server-auth certificate for arbitrary IP

@@ -155,21 +155,34 @@ policy must include `update` on `<pkiMount>/revoke` (see
    `SELECT c.id, c.subject, c.not_after, y.serial FROM issued_certificates c JOIN yubi_keys y ON y.id = c.yubikey_id WHERE c.id IN (...)`.
 
 2. **Revoke them.** Bundled OpenBao, using the backend's AppRole (which has the
-   revoke permission from 2.4.2):
+   revoke permission from 2.4.2). The credentials and serials travel on stdin,
+   so they never appear in a command line or the Kubernetes audit log; the
+   script logs in once and revokes its own token at the end:
    ```bash
-   RID=$(kubectl -n kleidia get secret openbao-backend-approle -o jsonpath='{.data.role_id}' | base64 -d)
-   SID=$(kubectl -n kleidia get secret openbao-backend-approle -o jsonpath='{.data.secret_id}' | base64 -d)
-   while IFS='|' read -r id serial; do
-     echo "revoking row $id serial $serial"
-     kubectl -n kleidia exec kleidia-platform-openbao-0 -- sh -c \
-       "BAO_TOKEN=\$(bao write -field=token auth/approle/login role_id='$RID' secret_id='$SID') bao write pki/revoke serial_number='$serial'" < /dev/null \
-       && echo "$id" >> revoked-ids.txt
-   done < historic-certs.txt
+   { kubectl -n kleidia get secret openbao-backend-approle \
+       -o jsonpath='{.data.role_id} {.data.secret_id}{"\n"}'
+     cat historic-certs.txt; } |
+   kubectl -n kleidia exec -i kleidia-platform-openbao-0 -- sh -c '
+     read -r rid sid
+     rid=$(echo "$rid" | base64 -d); sid=$(echo "$sid" | base64 -d)
+     BAO_TOKEN=$(echo "{\"role_id\":\"$rid\",\"secret_id\":\"$sid\"}" |
+       bao write -field=token auth/approle/login -) || exit 1
+     export BAO_TOKEN
+     while IFS="|" read -r id serial; do
+       if bao write pki/revoke serial_number="$serial" </dev/null >/dev/null; then
+         echo "$id"; echo "revoked row $id serial $serial" >&2
+       fi
+     done
+     bao token revoke -self </dev/null >/dev/null
+   ' > revoked-ids.txt
    ```
-   Each successful revoke prints `state revoked`. External Vault: run
+   `revoked-ids.txt` receives only the rows whose revoke succeeded; failures
+   print OpenBao's error. External Vault: run
    `vault write <pkiMount>/revoke serial_number=<serial>` for each line with a
-   token allowed to revoke. A serial reported as "not found" was issued by a
-   different CA or mount and cannot be revoked here.
+   token allowed to revoke, and put the ids that succeeded in
+   `revoked-ids.txt`. A serial reported as "not found" was issued by a
+   different CA or mount and cannot be revoked here; delete its row by id if
+   you no longer want it tracked.
 
 3. **Stop tracking the revoked certificates** (removes them from expiry
    notifications), using only the rows that revoked successfully:
@@ -188,6 +201,34 @@ policy must include `update` on `<pkiMount>/revoke` (see
 5. **Verify.** Re-running step 1 prints nothing, and each revoked serial
    (upper-case, without colons) appears in
    `curl -s https://<your-domain>/api/pki/crl | openssl crl -inform DER -noout -text`.
+
+## Auditing Local Accounts After 2.4.2
+
+### Symptom
+Up to 2.4.1, self-registration was open by default and never verified that the
+registrant owns the email address. That email becomes the email SAN of the
+account's PIV certificates, and a later OIDC login with the same email is
+merged into the existing account, which keeps its local password. A squatted
+account therefore survives the upgrade and passes a "SAN equals the owner's
+email" review.
+
+### Procedure
+
+1. **List local accounts that have a password** (IdP-synced and OIDC-created
+   users have none):
+   ```bash
+   PRIMARY=$(kubectl -n kleidia get pod -l cnpg.io/cluster=kleidia-db,cnpg.io/instanceRole=primary -o name)
+   kubectl -n kleidia exec "$PRIMARY" -c postgres -- psql -d kleidia -c \
+     "SELECT id, username, email, created_at, is_active FROM users
+      WHERE hashed_password <> '' AND COALESCE(sync_source, '') IN ('', 'manual')
+        AND deleted_at IS NULL ORDER BY created_at"
+   ```
+   Registration is not audited, so compare the list against the accounts your
+   administrators created. The seeded `admin` account always appears.
+
+2. **For every account nobody can vouch for:** revoke its YubiKeys (Admin
+   Panel → YubiKeys → Revoke Device, which revokes their certificates on 2.4.2)
+   and disable or delete the account (Admin Panel → Users).
 
 ## Vault 403 Errors
 
