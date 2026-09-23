@@ -66,49 +66,19 @@ OpenBao 2.5.4).
   templates (9a/9c/9d).
 
 ### Security
-- **A CSR could put another person's email into a certificate.** The PIV roles
-  copied the CSR's common name into the SANs, so a user submitting a CSR with
-  CN `ceo@corp.com` received a 9a/9c/9d certificate with that email SAN
-  (impersonation for S/MIME, code signing and smart-card logon). The default
-  9a path also used a legacy role that honoured arbitrary CSR SANs and set
-  `serverAuth`. CN and SANs now come only from Kleidia. Affects all releases up
-  to 2.4.1.
-- **A display name could put another person's email into a certificate.** The
-  certificate CN is the owner's display name, which self-registration and the
-  identity provider set, and the CA copied it into the SANs: an owner named
-  `ceo@corp.com` received an email SAN for that address, and a host-shaped name
-  became a DNS SAN. Kleidia now asks the CA to keep the CN out of the SANs on
-  every PIV signing request. Affects all releases up to 2.4.1. **Review issued
-  PIV certificates for SANs other than the owner's own email**, and revoke any
-  found.
-- **A registration email could carry a second address.** Self-registration did
-  not validate the email format, and the email is passed to the CA as a
-  comma-separated SAN list, so registering as `me@x.com,ceo@corp.com` produced
-  PIV certificates with the other person's email SAN. Registration now accepts
-  a single plain address, and every PIV signing request refuses an owner email
-  that is not one. Affects all releases up to 2.4.1 with self-registration
-  enabled (the default through 2.4.1); covered by the same certificate review.
-- **Self-registration let anyone choose a certificate's email.** Registration
-  never verified that the registrant owns the email address, and that email
-  becomes the email SAN of the user's PIV certificates. A later OIDC login
-  with the same email is merged into that account, which keeps its password.
-  It is now disabled unless explicitly enabled (see Upgrade notes); enable it
-  only where every user who can reach the API may be trusted with an email
-  identity. Accounts registered before the upgrade stay: **audit them with the
-  runbook [Auditing Local Accounts After 2.4.2](04-operations/runbooks.md#auditing-local-accounts-after-242).**
-- **Agent localhost certificates honoured CSR SANs.** The certificate signing
-  endpoint available to any signed-in user used a role that took SANs from the
-  CSR, so a user could obtain a server-auth certificate for arbitrary IP
-  addresses. The role now ignores the CSR's CN and SANs.
-- **Admin-API scope failed open.** Organisation scoping on `/admin` trusted
-  the JWT, so a stale admin token, a demoted admin, an org manager without an
-  organisation, or a deleted or disabled user was treated as a global admin
-  for YubiKey and user operations, including issuing smart-card-logon
-  certificates for other users. Scope is now decided from the database on
-  every request. Affects all releases up to 2.4.1.
-- **Rebuilt images.** Go `golang.org/x` modules updated (x/crypto 0.57.0,
-  x/net 0.59.0); frontend on Nuxt 4.5.2 with patched transitive dependencies.
-  All three images scan clean at HIGH/CRITICAL.
+All items affect releases up to and including 2.4.1.
+- PIV certificate identity (CN and SANs) is now set only by Kleidia; CSR
+  contents, display names and malformed registration emails can no longer
+  influence it. **Review issued PIV certificates for SANs other than the
+  owner's own email**, and revoke any found.
+- Agent localhost certificates no longer take SANs from the CSR.
+- Admin-API organisation scope is decided from the database on every request
+  instead of the session token.
+- Self-registration is disabled by default because it does not verify email
+  ownership. **Audit existing local accounts** with the runbook
+  [Auditing Local Accounts After 2.4.2](04-operations/runbooks.md#auditing-local-accounts-after-242).
+- Rebuilt images: Go `golang.org/x` modules and frontend dependencies updated;
+  all three images scan clean at HIGH/CRITICAL.
 
 ## 2.4.1 — September 2026
 
