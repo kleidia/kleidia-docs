@@ -187,8 +187,12 @@ policy must include `update` on `<pkiMount>/revoke` (see
 3. **Stop tracking the revoked certificates** (removes them from expiry
    notifications), using only the rows that revoked successfully:
    ```bash
-   kubectl -n kleidia exec "$PRIMARY" -c postgres -- psql -d kleidia -c \
-     "DELETE FROM issued_certificates WHERE id IN ($(paste -sd, revoked-ids.txt))"
+   if [ -s revoked-ids.txt ]; then
+     kubectl -n kleidia exec "$PRIMARY" -c postgres -- psql -d kleidia -c \
+       "DELETE FROM issued_certificates WHERE id IN ($(paste -sd, revoked-ids.txt))"
+   else
+     echo "nothing revoked, nothing to delete"
+   fi
    ```
 
 4. **Publish the CRL.** OpenBao's CRL updates immediately; Kleidia's public
