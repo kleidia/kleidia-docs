@@ -259,7 +259,7 @@ OIDC is primarily configured through the **Admin UI** (settings stored in the da
 | `OIDC_ACCESS_TYPE` | Access type | `offline` |
 | `OIDC_TOKEN_ENDPOINT_AUTH_METHOD` | Client auth method | `client_secret_post` |
 | `OIDC_SKIP_TLS_VERIFY` | Skip TLS verification (non-production only) | `false` |
-| `OIDC_CA_CERT_FILE` | Custom CA certificate file path | — |
+| `OIDC_CA_CERT_FILE` | PEM CA bundle that replaces the system roots for the IdP connection (sign-in and the Keycloak admin API). With Helm, set `backend.oidc.caSecret` to an existing Secret (key `backend.oidc.caSecretKey`, default `ca.crt`): it is mounted at `/etc/oidc-ca` and this variable is set for you. Use this instead of `OIDC_SKIP_TLS_VERIFY` for an IdP behind a private CA. | — |
 | `OIDC_MFA_REQUIRED` | Require MFA | `false` |
 | `OIDC_CONDITIONAL_ACCESS` | Enable conditional access | `false` |
 | `OIDC_TRUST_EMAIL` | Treat the IdP's email claim as verified even without `email_verified` (Helm `backend.oidc.trustEmail`). Set only for an IdP that owns the email domain, such as Entra ID. | `false` |

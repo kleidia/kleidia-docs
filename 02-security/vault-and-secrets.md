@@ -35,7 +35,7 @@ Kleidia uses OpenBao as the central secrets management system. All sensitive dat
 
 ### YubiKey Secrets
 
-Secrets stored at path: `yubikeys/data/{serial}/secrets`
+Secrets stored at path: `yubikeys/data/backend/{serial}/secrets`
 
 **Structure**:
 ```json
@@ -208,14 +208,14 @@ path "yubikeys/data/encryption-key" {
 
 1. User registers YubiKey with PIN/PUK/management key
 2. Frontend sends secrets to backend
-3. Backend stores secrets in Vault: `yubikeys/data/{serial}/secrets`
+3. Backend stores secrets in Vault: `yubikeys/data/backend/{serial}/secrets`
 4. Vault encrypts secrets at rest
 5. Backend confirms storage
 
 ### Secret Retrieval
 
 1. User requests YubiKey operation
-2. Frontend requests secrets: `GET /api/yubikeys/{serial}/secrets`
+2. Frontend requests secrets: `GET /api/yubikeys/{id}/piv/secrets` (encrypted for the agent)
 3. Backend authenticates to Vault (AppRole)
 4. Backend retrieves secrets from Vault
 5. Backend encrypts secrets with agent public key (RSA-OAEP)
@@ -443,7 +443,7 @@ When administrators enter unseal keys in the web interface (for manual unseal or
 | License Service | ❌ Denied | ✅ Full | ❌ No | ❌ No |
 | Helm Admin | ❌ No Access | ❌ No Access | ✅ Roles only | ✅ Limited |
 
-> **Note**: "YubiKey Secrets" here refers to device secrets at `yubikeys/data/{serial}/secrets`, and "License Secrets" refers to `yubikeys/data/license/*`. Both live under the single `yubikeys/` KV v2 mount; access is scoped by path within that mount, not by separate mounts. The license service is granted `yubikeys/data/license/*` and denied other YubiKey paths; the backend is the inverse.
+> **Note**: "YubiKey Secrets" here refers to device secrets at `yubikeys/data/backend/{serial}/secrets`, and "License Secrets" refers to `yubikeys/data/license/*`. Both live under the single `yubikeys/` KV v2 mount; access is scoped by path within that mount, not by separate mounts. The license service is granted `yubikeys/data/license/*` and denied other YubiKey paths; the backend is the inverse.
 
 ### Operational Security
 

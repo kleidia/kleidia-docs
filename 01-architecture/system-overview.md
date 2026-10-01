@@ -183,7 +183,7 @@
 - Secret encryption at rest
 
 **Secrets Stored**:
-- YubiKey PINs, PUKs, management keys (`yubikeys/data/{serial}/secrets`)
+- YubiKey PINs, PUKs, management keys (`yubikeys/data/backend/{serial}/secrets`)
 - Application secrets (JWT keys, encryption keys, database passwords)
 - PKI root CA and intermediate certificates
 
@@ -235,8 +235,8 @@
 
 ```
 1. User → Frontend: Request PIN change
-2. Frontend → Backend: GET /api/yubikeys/{serial}/secrets
-3. Backend → OpenBao: Retrieve PIN from yubikeys/data/{serial}/secrets
+2. Frontend → Backend: GET /api/yubikeys/{id}/piv/secrets
+3. Backend → OpenBao: Retrieve PIN from yubikeys/data/backend/{serial}/secrets
 4. Backend → PostgreSQL: Get agent_pubkey from user_sessions
 5. Backend: Encrypt PIN with agent's RSA public key (RSA-OAEP)
 6. Backend → Frontend: { encrypted: true, pin: "encrypted_data" }

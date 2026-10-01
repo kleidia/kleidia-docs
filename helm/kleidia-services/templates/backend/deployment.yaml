@@ -311,6 +311,14 @@ spec:
         # OIDC Configuration
         - name: OIDC_SKIP_TLS_VERIFY
           value: "{{ .Values.backend.oidc.skipTlsVerify | default "false" }}"
+        {{- if .Values.backend.oidc.caSecret }}
+        {{- if eq (.Values.backend.oidc.skipTlsVerify | toString | trim | lower) "true" }}
+        {{- fail "backend.oidc.caSecret cannot be combined with backend.oidc.skipTlsVerify=true: the backend ignores the CA while verification is off. Set skipTlsVerify: false." }}
+        {{- end }}
+        # IdP private CA bundle (backend.oidc.caSecret), mounted at /etc/oidc-ca.
+        - name: OIDC_CA_CERT_FILE
+          value: /etc/oidc-ca/ca.crt
+        {{- end }}
         {{- if .Values.backend.oidc.discoveryBase }}
         - name: OIDC_DISCOVERY_BASE
           value: "{{ .Values.backend.oidc.discoveryBase }}"
@@ -418,6 +426,11 @@ spec:
             mountPath: /etc/vault-tls
             readOnly: true
         {{- end }}
+        {{- if .Values.backend.oidc.caSecret }}
+          - name: oidc-ca
+            mountPath: /etc/oidc-ca
+            readOnly: true
+        {{- end }}
         # Graceful shutdown: wait for load balancer to drain connections
         lifecycle:
           preStop:
@@ -437,6 +450,15 @@ spec:
             secretName: {{ .Values.global.externalVault.caSecret }}
             items:
               - key: ca.crt
+                path: ca.crt
+            defaultMode: 0400
+      {{- end }}
+      {{- if .Values.backend.oidc.caSecret }}
+        - name: oidc-ca
+          secret:
+            secretName: {{ .Values.backend.oidc.caSecret | quote }}
+            items:
+              - key: {{ .Values.backend.oidc.caSecretKey | default "ca.crt" | quote }}
                 path: ca.crt
             defaultMode: 0400
       {{- end }}

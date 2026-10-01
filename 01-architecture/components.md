@@ -92,7 +92,7 @@ REST API server handling authentication, authorization, secret encryption, and V
 #### YubiKeys
 - `GET /api/yubikeys` - List YubiKeys
 - `GET /api/yubikeys/{serial}` - Get YubiKey details
-- `GET /api/yubikeys/{serial}/secrets` - Get encrypted secrets
+- `GET /api/yubikeys/{id}/piv/secrets` - Get the YubiKey's PIV secrets, encrypted for the agent
 - `POST /api/yubikeys/{serial}/sign-csr` - Sign certificate request
 
 #### Admin
@@ -414,7 +414,7 @@ Secrets management and PKI certificate authority. Installed as CA, configurable 
 - **Audit Logging**: Complete audit trail of all operations
 
 ### Secret Storage Paths
-- `yubikeys/data/{serial}/secrets` - YubiKey PIN/PUK/management keys
+- `yubikeys/data/backend/{serial}/secrets` - YubiKey PIN/PUK/management keys
 - `yubikeys/metadata/{serial}` - Secret metadata and versions
 
 ### PKI Configuration
@@ -447,7 +447,7 @@ Secrets management and PKI certificate authority. Installed as CA, configurable 
 4. Backend → PostgreSQL: Store agent_pubkey
 
 ### YubiKey Operation Flow
-1. Frontend → Backend: GET /api/yubikeys/{serial}/secrets
+1. Frontend → Backend: GET /api/yubikeys/{id}/piv/secrets
 2. Backend → OpenBao: Retrieve secrets
 3. Backend → PostgreSQL: Get agent_pubkey
 4. Backend: Encrypt secrets with agent public key
