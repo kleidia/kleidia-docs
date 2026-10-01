@@ -718,8 +718,18 @@ spec:
           -- CLEANUP: Remove obsolete tables from previous versions
           -- ========================================================================
           
-          -- Remove message queue-era operations table (HTTP agents now)
-          DROP TABLE IF EXISTS operations CASCADE;
+          -- Remove the message queue-era operations table (HTTP agents now). The
+          -- current async operations table reuses the name (created below), so
+          -- drop only the old shape: an unconditional DROP here wiped in-flight
+          -- operations on every upgrade.
+          DO $do$
+          BEGIN
+              IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'operations')
+                 AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+                                 WHERE table_name = 'operations' AND column_name = 'operation_id') THEN
+                  DROP TABLE operations CASCADE;
+              END IF;
+          END $do$;
           
           -- Remove v1.0 workstation approval tables (machine_id matching in v2.0)
           DROP TABLE IF EXISTS user_workstations CASCADE;
