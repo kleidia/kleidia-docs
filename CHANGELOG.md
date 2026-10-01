@@ -14,7 +14,9 @@ is unchanged; 2.4.3 agents work with this release.
 - **Signing out ends all of the user's sessions,** on every device. Disabling
   a user, lowering their role or moving them to another organization (admin
   UI, SCIM, Entra ID sync or claims from the identity provider) also ends
-  their sessions immediately.
+  their sessions immediately, and so does an administrator resetting a
+  user's password (including their own). A session that only expired or was
+  refused in one browser tab ends locally, without signing out other devices.
 - **Refresh tokens are single-use.** Each refresh returns a new refresh token
   that replaces the old one. API clients must store it. Presenting an
   already-used refresh token more than 30 seconds after its use ends all of the
@@ -34,6 +36,9 @@ is unchanged; 2.4.3 agents work with this release.
   contain an `encrypted` field.
 - **Database:** on startup the backend adds columns and tables that some
   Helm-installed databases were missing. No manual migration is needed.
+- **Logging:** the backend no longer logs every SQL statement; only slow
+  queries and errors are logged, without their values. The backend process
+  runs in UTC regardless of the container's `TZ`.
 
 ### Fixed
 - Organization managers can generate the user activity and security events
@@ -75,6 +80,13 @@ All items affect releases up to and including 2.4.3.
 - Stored PINs, PUKs and management keys are never overwritten after a failed
   read from OpenBao.
 - The endpoints that returned PIV PINs and PUKs in plaintext are removed.
+- The backend log no longer contains SQL statements with their values, which
+  could include refresh tokens and password hashes. Rotate or clear existing
+  backend logs if they are retained.
+- Resetting a user's password ends their sessions.
+- PINs, PUKs and management keys are no longer written to the backend log.
+- Requests are never retried under another account after a sign-in in the
+  same browser tab.
 
 ## 2.4.3 — September 2026
 
