@@ -11,6 +11,14 @@ and stored secrets, plus a set of database fixes. Dependencies unchanged
 is unchanged; 2.4.3 agents work with this release.
 
 ### Upgrade notes
+- **IdP behind a private CA:** mount its CA with `backend.oidc.caSecret`
+  (and `backend.oidc.caSecretKey`) instead of setting
+  `backend.oidc.skipTlsVerify: true`. See
+  [OIDC Environment Variables](03-deployment/configuration.md#oidc-environment-variables).
+- **Organizations from the IdP:** with multi-tenancy on and an organization
+  claim configured, a user's organization follows the claim at every sign-in,
+  and a sign-in without the claim removes the user from their organization.
+  Users managed by SCIM or Entra ID sync are not moved by sign-in.
 - **Signing out ends all of the user's sessions,** on every device. Disabling
   a user, lowering their role or moving them to another organization (admin
   UI, SCIM, Entra ID sync or claims from the identity provider) also ends
@@ -27,8 +35,6 @@ is unchanged; 2.4.3 agents work with this release.
 - **YubiKey serial numbers** registered by an administrator must use the same
   format as self-registration: 3 to 20 letters, digits, `-` or `_`. On
   startup the backend logs any existing YubiKey whose serial does not match.
-- **Keycloak:** `preferred_username` is used as the UPN only when it has the
-  form `user@domain`; otherwise the email address is used.
 - **Organization managers** can now manage OpenPGP keys and PINs for YubiKeys
   owned by members of their organization.
 - **Removed:** `GET`/`POST /api/yubikeys/{id}/secrets` (use
@@ -41,6 +47,13 @@ is unchanged; 2.4.3 agents work with this release.
   runs in UTC regardless of the container's `TZ`.
 
 ### Fixed
+- SSO users whose identity provider sends no UPN or organization claim no
+  longer get the literal value `<nil>` stored as their UPN (which made PIV
+  authentication certificates fail) or an organization named `<nil>`.
+  Existing `<nil>` values are cleared on startup; the UPN then falls back to
+  the email address, and Keycloak's `preferred_username` is used as the UPN
+  only when it has the form `user@domain`.
+- Moving a user to another organization at sign-in is saved.
 - Organization managers can generate the user activity and security events
   reports again.
 - Recording OpenPGP keys and FIDO2 provisioning work again.
