@@ -120,7 +120,7 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
 
 **Steps**:
 1. User requests PIN change in frontend
-2. Frontend requests secrets: `GET /api/yubikeys/{serial}/secrets`
+2. Frontend requests secrets: `GET /api/yubikeys/{id}/piv/secrets` (encrypted for the agent)
 3. Backend retrieves agent public key from PostgreSQL
 4. Backend retrieves PIN from OpenBao Vault
 5. Backend encrypts PIN using agent's RSA public key (RSA-OAEP)
@@ -216,9 +216,9 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
 
 **Steps**:
 1. Admin registers YubiKey and provides PIN/PUK/management key
-2. Frontend sends secrets to backend: `POST /api/yubikeys/{serial}/secrets`
+2. Frontend sends secrets to backend: `POST /api/yubikeys/{id}/piv/upsert-secrets` (encrypted to the backend)
 3. Backend encrypts secrets (if needed) and stores in Vault
-4. Backend stores at path: `yubikeys/data/{serial}/secrets`
+4. Backend stores at path: `yubikeys/data/backend/{serial}/secrets`
 5. Vault encrypts data at rest
 6. Backend confirms storage
 

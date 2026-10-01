@@ -3,6 +3,79 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.4.4 — October 2026
+
+Security and reliability fixes for multi-tenant isolation, sessions, sign-in
+and stored secrets, plus a set of database fixes. Dependencies unchanged
+(Kubernetes 1.32+, PostgreSQL 18.1 default, OpenBao 2.5.4). The Kleidia agent
+is unchanged; 2.4.3 agents work with this release.
+
+### Upgrade notes
+- **Signing out ends all of the user's sessions,** on every device. Disabling
+  a user, lowering their role or moving them to another organization (admin
+  UI, SCIM, Entra ID sync or claims from the identity provider) also ends
+  their sessions immediately.
+- **Refresh tokens are single-use.** Each refresh returns a new refresh token
+  that replaces the old one. API clients must store it. Presenting an
+  already-used refresh token more than 30 seconds after its use ends all of the
+  user's sessions.
+- **SSO sign-in sets a short-lived cookie** (`__Host-kleidia_oidc_state` on
+  HTTPS, `kleidia_oidc_state` on plain HTTP) between the authorize and callback
+  steps. Reverse proxies must pass cookies through to `/api/auth/oidc/`.
+- **YubiKey serial numbers** registered by an administrator must use the same
+  format as self-registration: 3 to 20 letters, digits, `-` or `_`. On
+  startup the backend logs any existing YubiKey whose serial does not match.
+- **Keycloak:** `preferred_username` is used as the UPN only when it has the
+  form `user@domain`; otherwise the email address is used.
+- **Organization managers** can now manage OpenPGP keys and PINs for YubiKeys
+  owned by members of their organization.
+- **Removed:** `GET`/`POST /api/yubikeys/{id}/secrets` (use
+  `/api/yubikeys/{id}/piv/secrets`). Certificate signing responses no longer
+  contain an `encrypted` field.
+- **Database:** on startup the backend adds columns and tables that some
+  Helm-installed databases were missing. No manual migration is needed.
+
+### Fixed
+- Organization managers can generate the user activity and security events
+  reports again.
+- Recording OpenPGP keys and FIDO2 provisioning work again.
+- OpenPGP PINs are stored in a location the Helm OpenBao policy allows.
+- Certificate state, device configuration history and agent session
+  certificate records are saved again.
+- Certificate expiry emails are sent once per reminder window instead of on
+  every scheduler run.
+- An administrator reclaiming a deleted YubiKey becomes its owner.
+- Enabling or disabling a user from the edit form is audited, and license,
+  CRL and CA changes record who made them.
+- Searching the admin YubiKey list by owner name or email finds their keys.
+- Turning off an OpenPGP policy option or an Entra ID sync filter is saved.
+- Signing out releases the session's agent.
+- A secret that has not been stored yet returns "not configured" instead of
+  a server error.
+- Upgrades no longer delete in-progress YubiKey operations.
+- Installing without the Helm database hook works on PostgreSQL.
+- The Keycloak admin client trusts the identity provider CA configured for
+  sign-in.
+
+### Security
+All items affect releases up to and including 2.4.3.
+- YubiKey serial numbers are validated wherever they are used to locate
+  stored secrets, so a crafted serial can no longer reach another YubiKey's
+  secrets.
+- PIV secret and public key endpoints check that the caller owns the YubiKey.
+- Organization managers can reclaim deleted YubiKeys only from their own
+  organization, and only for members of it.
+- Sessions end when an account loses privileges, and disabled accounts are
+  refused immediately.
+- Administrative overrides are decided from the current account, not from
+  the token.
+- Refresh tokens are single-use, and reuse of a spent token ends all of the
+  user's sessions.
+- The SSO sign-in state is bound to the browser that started the sign-in.
+- Stored PINs, PUKs and management keys are never overwritten after a failed
+  read from OpenBao.
+- The endpoints that returned PIV PINs and PUKs in plaintext are removed.
+
 ## 2.4.3 — September 2026
 
 Security and reliability fixes for sign-in, account identity and the PIV

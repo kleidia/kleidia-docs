@@ -116,7 +116,7 @@ All secrets stored in OpenBao, not in database:
 
 ### Secret Storage Paths
 
-- `yubikeys/data/{serial}/secrets` - YubiKey PIN/PUK/management keys
+- `yubikeys/data/backend/{serial}/secrets` - YubiKey PIN/PUK/management keys
 - `yubikeys/metadata/{serial}` - Secret metadata and versions
 - Application secrets at separate paths under the same `yubikeys/` mount (`yubikeys/data/jwt-secret`, `yubikeys/data/encryption-key`, `yubikeys/data/database`, `yubikeys/data/license/*`)
 
