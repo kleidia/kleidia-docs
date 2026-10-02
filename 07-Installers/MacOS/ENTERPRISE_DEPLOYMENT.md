@@ -83,18 +83,54 @@ curl http://127.0.0.1:56123/health
 
 #### Silent Installation (Command Line)
 
-For scripted installations without GUI prompts:
+For scripted installations without GUI prompts, write the backend URL to the
+seed file before installing:
 
 ```bash
-# Set backend URL via environment variable
-export BACKEND_URL="kleidia.example.com"
+# Pre-seed the backend URL (https:// is added when the scheme is missing)
+sudo mkdir -p /etc/kleidia/agent
+echo "kleidia.example.com" | sudo tee /etc/kleidia/agent/backend_url
 
 # Install package silently
 sudo installer -pkg kleidia-agent-X.Y.Z.pkg -target /
 
 # Verify
+grep backend_url /etc/kleidia/agent/agent.toml
 sudo launchctl list | grep com.kleidia.agent
 ```
+
+> **Do not use `export BACKEND_URL=...; sudo installer ...`** (or
+> `sudo BACKEND_URL=... installer ...`). `sudo` resets the environment and
+> `installer` runs package scripts with a sanitized one, so the variable never
+> reaches the postinstall script and the install falls back to the interactive
+> prompt.
+
+#### How the Installer Finds the Backend URL
+
+Kleidia Agent 2.4.5 and later. The postinstall script takes the first backend
+URL it finds, in this order:
+
+| # | Source | Use for |
+|---|--------|---------|
+| 1 | Managed preference: `/Library/Managed Preferences/com.kleidia.agent.plist`, key `BackendURL` | MDM (Intune, Jamf): a configuration profile for the `com.kleidia.agent` preference domain |
+| 2 | Seed file: `/etc/kleidia/agent/backend_url` (first line that is not blank or a `#` comment) | Scripted / command-line installs, Munki preinstall scripts |
+| 3 | `BACKEND_URL` environment variable | Only when the postinstall script is run directly; `installer` strips it |
+| 4 | `backend_url` already set in `/etc/kleidia/agent/agent.toml` | Upgrades: the existing value is kept and no prompt is shown |
+| 5 | Interactive dialog for the logged-in user | Double-click installs |
+
+- The value may be a host (`kleidia.example.com`, `https://` is added) or a
+  full URL (`https://kleidia.example.com:8443`). A trailing slash is removed.
+- `allowed_origins` is set to the backend URL's origin at the same time.
+- A value that is not a plain `host[:port][/path]` URL is ignored and logged
+  to `/var/log/kleidia-agent/postinstall.log`, which also records which
+  source was used.
+- The managed preference and the seed file are read only at install time. The
+  managed preference must be on the Mac **before** the package runs, so scope
+  the configuration profile ahead of (or with) the install policy. To change
+  the URL later, edit `agent.toml` (see Post-Install Script below) or
+  reinstall after updating the profile or seed file.
+- Agents before 2.4.5 only read the environment variable and the prompt; for
+  those, configure `agent.toml` with a post-install script.
 
 ---
 
@@ -113,7 +149,10 @@ sudo launchctl list | grep com.kleidia.agent
 
 2. **Create Configuration Profile** (optional but recommended):
 
-Create a Custom Settings profile to pre-configure `agent.toml`:
+Create a custom configuration profile that sets the `BackendURL` managed
+preference, which the installer writes into `agent.toml` (see
+[How the Installer Finds the Backend URL](#how-the-installer-finds-the-backend-url)).
+Assign it to the same devices as the package so it lands before the install.
 
 **Profile XML**: `com.kleidia.agent.mobileconfig`
 
@@ -134,17 +173,15 @@ Create a Custom Settings profile to pre-configure `agent.toml`:
             <key>PayloadOrganization</key>
             <string>Your Organization</string>
             <key>PayloadType</key>
-            <string>Configuration</string>
+            <string>com.kleidia.agent</string>
             <key>PayloadUUID</key>
             <string>GENERATE-UUID-HERE</string>
             <key>PayloadVersion</key>
             <integer>1</integer>
             <key>PayloadEnabled</key>
             <true/>
-            <key>PayloadScope</key>
-            <string>System</string>
-            <key>TargetDeviceType</key>
-            <integer>5</integer>
+            <key>BackendURL</key>
+            <string>https://kleidia.example.com</string>
         </dict>
     </array>
     <key>PayloadDescription</key>
@@ -379,19 +416,22 @@ Create a Configuration Profile to pre-configure the backend URL:
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>backend_url</key>
+    <key>BackendURL</key>
     <string>https://kleidia.example.com</string>
-    <key>backend_host</key>
-    <string>kleidia.example.com</string>
 </dict>
 </plist>
 ```
 
 4. **Scope**:
-   - **Targets**: Select Smart Group or Static Group
+   - **Targets**: Select Smart Group or Static Group (the same devices as the
+     install policy; the profile must be on the Mac before the package runs)
    - **Exclusions**: None (unless needed)
 
 5. **Save**
+
+The installer reads `BackendURL` from this profile (Kleidia Agent 2.4.5 and
+later, see
+[How the Installer Finds the Backend URL](#how-the-installer-finds-the-backend-url)).
 
 #### Step 3: Create Policy for Installation
 
@@ -769,7 +809,15 @@ cd ../../../../../
 
 #### Option 2: MDM Configuration Profile
 
-Deploy via Intune or Jamf Configuration Profile (see MDM sections above).
+Deploy a configuration profile for the `com.kleidia.agent` preference domain
+with the key `BackendURL` via Intune or Jamf (see MDM sections above). The
+installer reads it at install time (2.4.5 and later).
+
+#### Option 2b: Seed File
+
+Write the backend URL to `/etc/kleidia/agent/backend_url` before the package
+runs (for example from a Munki `preinstall_script` or an MDM script that runs
+first). The installer reads it at install time (2.4.5 and later).
 
 #### Option 3: Post-Install Script
 

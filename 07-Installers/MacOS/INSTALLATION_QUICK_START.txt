@@ -85,13 +85,23 @@ OPTION 1: Interactive Installation (End-Users)
 OPTION 2: Silent Installation (Command Line)
 ---------------------------------------------
 
-For scripted or remote deployment:
+For scripted or remote deployment, pre-seed the backend URL in a file
+(Kleidia Agent 2.4.5 and later):
 
-  # Set backend URL via environment variable
-  export BACKEND_URL="kleidia.example.com"
-  
+  # Pre-seed the backend URL (https:// is added if missing)
+  sudo mkdir -p /etc/kleidia/agent
+  echo "kleidia.example.com" | sudo tee /etc/kleidia/agent/backend_url
+
   # Install package
   sudo installer -pkg kleidia-agent-X.Y.Z.pkg -target /
+
+  Do NOT use "export BACKEND_URL=...; sudo installer ...": sudo and the
+  macOS installer both drop the variable, so the install falls back to the
+  interactive prompt.
+
+  MDM: a configuration profile for the com.kleidia.agent preference domain
+  with the key BackendURL works too, and takes precedence over the file.
+  See ENTERPRISE_DEPLOYMENT.md, "How the Installer Finds the Backend URL".
   
   # Verify installation
   sudo launchctl list | grep com.kleidia.agent
@@ -440,8 +450,9 @@ Supported MDM Platforms:
 
 Configuration Options:
   - Pre-deploy via package customization
+  - Seed file /etc/kleidia/agent/backend_url before install
+  - Configuration profiles via MDM (com.kleidia.agent, key BackendURL)
   - Post-install via MDM scripts
-  - Configuration profiles via MDM
   - Ansible/Puppet/Chef templates
 
 ================================================================================

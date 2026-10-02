@@ -3,6 +3,82 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.4.5 — October 2026
+
+PIV attestation is now enforced, plus fixes for YubiKeys with firmware 5.7.4
+and later, certificate revocation, PIV reset and sign-out. Dependencies
+unchanged (Kubernetes 1.32+, PostgreSQL 18.1 default, OpenBao 2.5.4). Use
+Kleidia agent 2.4.3 or later with this release.
+
+### Upgrade notes
+- **PIV attestation is enforced by default.** Every PIV certificate request
+  (administrator provisioning, self-service registration and certificate
+  regeneration, all slots) must carry a YubiKey attestation that chains to
+  Yubico's roots for that YubiKey's serial number, slot and key. This needs
+  Kleidia agent 2.4.3 or later. Before any key is generated, the dashboard
+  checks the connected agent and stops with a message asking the user to
+  update it. To keep the 2.4.4 behaviour for older agents (requests without
+  an attestation are signed and recorded as unverified), set
+  `backend.pivAttestation.enforce: false`. A supplied attestation that does
+  not verify is refused either way.
+- **Reload open dashboards after upgrading.** The dashboard now resets a
+  YubiKey's PIV application in two steps (prepare, reset the device,
+  confirm). A dashboard loaded before the upgrade can wipe the device but
+  not confirm the reset; reload the page and run the reset again.
+- **API clients of the reset endpoints:** `POST /api/yubikeys/{id}/reset/prepare`
+  returns a `reset_token` that `POST /api/yubikeys/{id}/reset/commit` must
+  send back in its body. The one-shot `POST /api/yubikeys/{id}/reset` is
+  unchanged.
+- **Agent sessions:** when a session expires, the agents paired to it are
+  released, the same as at sign-out.
+
+### Fixed
+- YubiKeys with firmware 5.7.4 or later are accepted again when an
+  administrator provisions a signing slot. Since 2.4.3, one of the two
+  Yubico attestation root certificates built into the backend was damaged,
+  so attestations from these YubiKeys were refused as not chaining to
+  Yubico's roots.
+- A PIV reset from the dashboard only stores the factory-default PIN, PUK
+  and management key once the agent confirms that the device was reset.
+  If the device reset fails, the stored secrets still match the device.
+  Certificates are revoked either way.
+- Deleting a YubiKey removes it on the server before the device is wiped,
+  so a refused delete no longer leaves a wiped YubiKey registered.
+- Changing a YubiKey's PIN, PUK or management key cancels a PIV reset that
+  is waiting for confirmation.
+- When a YubiKey was changed, deleted or taken over by someone else in the
+  meantime, the dashboard says so instead of showing a generic error.
+- Signing out no longer leaves a session's tokens behind in the browser when
+  a token refresh lands while the sign-out is in progress.
+- Concurrent sign-outs, password resets, role changes, SSO sign-ins and Entra
+  ID sync for the same user no longer fail with database deadlocks.
+- A role change or a disable is no longer undone by a sign-in or a sync
+  running at the same moment.
+- A PIV reset waiting for confirmation expires correctly on servers that do
+  not run in UTC.
+- The backend no longer logs an error about the legacy `license_history`
+  table at every startup.
+
+### Security
+All items affect releases up to and including 2.4.4.
+- Self-service PIV certificate requests marked an attestation as verified
+  without checking it. They are now verified like administrator requests.
+- An agent session certificate whose revocation failed when its session
+  expired was recorded as revoked. It is now queued and revoked again until
+  the PKI confirms it.
+- When a YubiKey's PIV certificate was replaced and the old certificate
+  could not be revoked, the old certificate stayed valid and was no longer
+  tracked. It is now queued for revocation.
+- Revocations completed right away (not only those from the retry queue) are
+  recorded in the audit log.
+
+### macOS agent installer
+These fixes ship with the Kleidia agent 2.4.5 package, published separately;
+the 2.4.3 agent package is unchanged and works with this release.
+- Silent installs read the backend address from a managed preference or a
+  seed file. See [macOS Enterprise Deployment](07-Installers/MacOS/ENTERPRISE_DEPLOYMENT.md).
+- The packaged example configuration is installed in `/etc/kleidia/agent/`.
+
 ## 2.4.4 — October 2026
 
 Security and reliability fixes for multi-tenant isolation, sessions, sign-in

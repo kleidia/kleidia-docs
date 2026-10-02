@@ -373,6 +373,12 @@ spec:
         - name: PIV_AUTH_CERT_UPN_DOMAINS
           value: {{ join "," . | quote }}
         {{- end }}
+
+        # PIV attestation enforcement (backend.pivAttestation.enforce, default
+        # true; needs Kleidia agent >= 2.4.3). dig tolerates a values file
+        # written before this key existed; an explicit false is kept.
+        - name: PIV_ATTESTATION_ENFORCE
+          value: {{ dig "pivAttestation" "enforce" true .Values.backend | toString | quote }}
         
         {{- if ne (.Values.global.secretsBackend.mode | default "bundled") "external" }}
         # Backup runner token (for bundled OpenBao snapshot authentication)
