@@ -115,6 +115,7 @@ The configuration sets these environment variables:
 - `OIDC_CA_CERT_FILE`: path to a PEM CA bundle for the IdP (`backend.oidc.caSecret`, since 2.4.4). Create a Secret in the release namespace holding the bundle (`kubectl -n <ns> create secret generic kleidia-oidc-ca --from-file=ca.crt=idp-ca.pem`) and set `backend.oidc.caSecret: kleidia-oidc-ca` (and `backend.oidc.caSecretKey` if the key is not `ca.crt`). The chart mounts it read-only at `/etc/oidc-ca` and sets the variable. The bundle replaces the system roots for the OIDC client, so it must contain every CA the IdP's chain needs. Rendering fails when `caSecret` is set together with `skipTlsVerify: true`, because the backend ignores the CA while verification is off. A missing Secret or key keeps the backend pod from starting; a bundle that does not parse as PEM fails closed (the backend logs an error and every OIDC call fails with an unknown-authority error, it never falls back to the system roots).
 - `PIV_AUTH_CERT_EMBED_UPN`: `true`/`false` (embed the UPN otherName SAN in slot-9a auth certs; `backend.pivAuthCert.embedUpn`)
 - `PIV_AUTH_CERT_UPN_DOMAINS`: comma-separated UPN domain allow-list (`backend.pivAuthCert.upnDomains`); unset when the list is empty
+- `PIV_ATTESTATION_ENFORCE`: `true`/`false` (default `true`; issue PIV certificates only for keys whose YubiKey attestation chains to Yubico's roots, needs Kleidia agent >= 2.4.3; `false` signs unverified keys and audits them; `backend.pivAttestation.enforce`)
 
 ### Migration from Hardcoded Values
 
