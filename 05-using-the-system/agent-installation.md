@@ -10,7 +10,7 @@ The Kleidia Agent runs on user workstations to enable YubiKey management through
 
 **Download**: the agent installers (macOS `.pkg`, Windows `.msi` and `.exe`) are attached to each
 [Kleidia docs release](https://github.com/kleidia/kleidia-docs/releases/latest). Use the agent version that the
-[changelog](../CHANGELOG.md) names for your platform release (2.4.3 or later for Kleidia 2.4.6; 2.4.6 recommended).
+[changelog](../CHANGELOG.md) names for your platform release (Kleidia 2.4.6: Windows 2.4.6 or later, macOS 2.4.3 or later).
 
 ---
 
@@ -314,24 +314,28 @@ cat /etc/kleidia/agent/agent.toml
 
 ## Troubleshooting
 
-### Dashboard says the agent did not respond
+### Dashboard refuses the agent before generating keys
 
-Since 2.4.6, when PIV attestation is enforced and the dashboard cannot reach
-the agent on `http://127.0.0.1:56123`, key generation stops with "the Kleidia
-agent on this computer did not respond". (Before 2.4.6 the same situation
-asked to update an agent of version "?".) On that computer:
+With PIV attestation enforced, the dashboard checks the agent before it
+generates any key and stops with one of these:
 
-1. Open `http://127.0.0.1:56123/.well-known/kleidia-agent` in the same browser.
-   It should show JSON with the agent's `"version"`. If it does not open, the
-   agent is not running: check the service (below) and that YubiKey Manager
-   (`ykman --version`) is installed.
-2. If it opens, compare `allowed_origins` in the agent configuration with the
-   address the dashboard is opened from. They must match exactly: scheme, host
-   and port, no trailing slash. The installer derives it from the backend URL
-   entered at install time; reinstalling after an uninstall writes it again.
-   After editing, restart the agent.
-3. The browser's developer console (F12) shows a CORS error for
-   `127.0.0.1:56123` when the origin does not match.
+- **"did not report its version"**: on Windows, the agent is older than 2.4.6
+  (its service reported an empty version; before 2.4.6 the dashboard showed this
+  as "version ?" and asked for 2.4.3). Install agent 2.4.6 or later.
+- **"(version X.Y.Z) cannot provide it"**, with a version older than 2.4.3: update
+  the agent.
+- **"did not respond"**: the dashboard could not reach the agent on
+  `http://127.0.0.1:56123`. On that computer:
+  1. Open `http://127.0.0.1:56123/.well-known/kleidia-agent` in the same
+     browser. It should show JSON with the agent's `"version"`. If it does not
+     open, the agent is not running: check the service (below) and that YubiKey
+     Manager (`ykman --version`) is installed.
+  2. If it opens, compare `allowed_origins` in the agent configuration with the
+     address the dashboard is opened from. They must match exactly: scheme,
+     host and port, no trailing slash. The installer derives it from the backend
+     URL entered at install time. After editing, restart the agent.
+  3. The browser's developer console (F12) shows a CORS error for
+     `127.0.0.1:56123` when the origin does not match.
 
 ```powershell
 # Windows
@@ -347,8 +351,9 @@ cat /etc/kleidia/agent/agent.toml
 sudo launchctl kickstart -k system/com.kleidia.agent
 ```
 
-On Windows, agent 2.4.6 and later also show their version in Explorer
-(Properties > Details on `kleidia-agent.exe`).
+The installed version is what `/.well-known/kleidia-agent` reports. On Windows,
+agent 2.4.6 and later also show it in Explorer (Properties > Details on
+`kleidia-agent.exe`).
 
 ### Windows
 
