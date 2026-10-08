@@ -47,7 +47,7 @@ This documentation is designed for **Kleidia customers** who need to:
 - Performance optimization
 
 ### [05 - Using the System](05-using-the-system/)
-- **[Agent Installation](05-using-the-system/agent-installation.md)** - Install agent on workstations
+- **[Agent Installation](05-using-the-system/agent-installation.md)** - Install agent on workstations ([downloads](https://github.com/kleidia/kleidia-docs/releases/latest))
 - **[Multi-Tenant Organizations](05-using-the-system/multi-tenant-organizations.md)** - Configure organization-based access control
 - End-user guide
 - Administrator guide

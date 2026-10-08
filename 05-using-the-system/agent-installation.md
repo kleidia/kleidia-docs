@@ -8,7 +8,9 @@
 
 The Kleidia Agent runs on user workstations to enable YubiKey management through your web browser. The agent provides a secure bridge between the browser and locally-connected YubiKey devices.
 
-**Current Version**: 0.4.9
+**Download**: the agent installers (macOS `.pkg`, Windows `.msi` and `.exe`) are attached to each
+[Kleidia docs release](https://github.com/kleidia/kleidia-docs/releases/latest). Use the agent version that the
+[changelog](../CHANGELOG.md) names for your platform release (2.4.3 or later for Kleidia 2.4.5).
 
 ---
 
@@ -36,17 +38,17 @@ The Kleidia Agent runs on user workstations to enable YubiKey management through
 
 1. Sign in to **Microsoft Endpoint Manager** (https://endpoint.microsoft.com)
 2. Navigate to **Apps → Windows → Add → Windows app (Win32)**
-3. Upload `kleidia-agent-0.4.9-unsigned.msi`
+3. Upload `kleidia-agent-<version>-unsigned.msi`
 4. Configure application:
    - **Name**: Kleidia Agent
    - **Publisher**: Kleidia
    - **Install command**:
      ```powershell
-     msiexec /i kleidia-agent-0.4.9-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
+     msiexec /i kleidia-agent-<version>-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
      ```
    - **Uninstall command**:
      ```powershell
-     msiexec /x kleidia-agent-0.4.9-unsigned.msi /qn
+     msiexec /x kleidia-agent-<version>-unsigned.msi /qn
      ```
 
 #### Detection Rule
@@ -81,7 +83,7 @@ exit 1
    ```
 
 2. **Copy installation files**:
-   - `kleidia-agent-0.4.9-unsigned.msi`
+   - `kleidia-agent-<version>-unsigned.msi`
    - `yubikey-manager.msi`
 
 3. **Create agent.toml** configuration in the share:
@@ -112,7 +114,7 @@ New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 Copy-Item "\\DC\Software\Kleidia\agent.toml" "$configDir\agent.toml" -Force
 
 # Install agent
-Start-Process msiexec.exe -ArgumentList "/i \\DC\Software\Kleidia\kleidia-agent-0.4.9-unsigned.msi /qn /norestart" -Wait -NoNewWindow
+Start-Process msiexec.exe -ArgumentList "/i \\DC\Software\Kleidia\kleidia-agent-<version>-unsigned.msi /qn /norestart" -Wait -NoNewWindow
 
 exit $LASTEXITCODE
 ```
@@ -137,7 +139,7 @@ exit $LASTEXITCODE
 
 1. Sign in to **Jamf Pro**
 2. Navigate to **Settings → Computer Management → Packages**
-3. Click **New** and upload `kleidia-agent-0.4.9.pkg`
+3. Click **New** and upload `kleidia-agent-<version>.pkg`
 4. Configure:
    - **Display Name**: Kleidia Agent
    - **Category**: Productivity
@@ -227,7 +229,7 @@ echo "<result>$RESULT</result>"
 
 1. Sign in to **Microsoft Endpoint Manager** (https://endpoint.microsoft.com)
 2. Navigate to **Apps → macOS → Add → macOS app (PKG)**
-3. Upload `kleidia-agent-0.4.9.pkg`
+3. Upload `kleidia-agent-<version>.pkg`
 4. Configure:
    - **Name**: Kleidia Agent
    - **Publisher**: Kleidia
@@ -485,7 +487,7 @@ sudo rm -rf /etc/kleidia/agent
 
 ---
 
-**Version**: 0.4.9  
-**Last Updated**: 2025-11-10  
+**Downloads**: [latest release](https://github.com/kleidia/kleidia-docs/releases/latest)  
+**Last Updated**: 2026-10-08  
 **Platforms**: Windows 10+, macOS 10.15+
 

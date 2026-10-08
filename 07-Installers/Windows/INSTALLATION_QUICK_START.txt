@@ -29,9 +29,9 @@ PREREQUISITES (INSTALL FIRST)
 PACKAGE CONTENTS
 ================================================================================
 
-This package contains:
+Download from https://github.com/kleidia/kleidia-docs/releases/latest:
 
-  kleidia-agent-<version>.msi
+  kleidia-agent-<version>-unsigned.msi
     - Standalone agent MSI
     - For enterprise deployment (GPO, Intune, SCCM)
     - Supports silent installation
@@ -47,7 +47,7 @@ Step 1: Install YubiKey Manager (if not already installed)
   msiexec /i yubikey-manager-5.8.0-win64.msi /qn /norestart
 
 Step 2: Install Kleidia Agent
-  msiexec /i kleidia-agent-<version>.msi /qn BACKEND_URL=https://kleidia.example.com
+  msiexec /i kleidia-agent-<version>-unsigned.msi /qn BACKEND_URL=https://kleidia.example.com
 
 Enterprise Deployment (IT Administrators)
 ------------------------------------------
