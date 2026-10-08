@@ -3,6 +3,41 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.4.6 — October 2026
+
+Fixes Windows agents being refused by PIV attestation enforcement. Dependencies
+unchanged (Kubernetes 1.32+, PostgreSQL 18.1 default, OpenBao 2.5.4).
+**Windows workstations need Kleidia agent 2.4.6**; macOS agents 2.4.3 and later
+keep working.
+
+### Upgrade notes
+- **Install agent 2.4.6 on Windows before (or right after) upgrading the
+  platform.** Windows agents up to 2.4.5 did not report their version, so with
+  attestation enforced (the 2.4.5 default) the dashboard refuses them. Until
+  every Windows workstation runs 2.4.6, `backend.pivAttestation.enforce: false`
+  keeps them working (requests without an attestation are then signed and
+  recorded as unverified).
+
+### Fixed
+- **The Windows agent reports its version.** The Windows service (how the MSI
+  runs the agent) answered with an empty version, so since 2.4.5 the dashboard
+  stopped every MSI-installed Windows agent with "Kleidia agent (version ?)
+  cannot provide it. Update the Kleidia agent to 2.4.3 or later", even when it
+  was 2.4.5. Fixed in agent 2.4.6; CI now starts the built agent as a Windows
+  service and checks the version it reports.
+- **Clearer refusals before key generation.** When attestation is enforced, the
+  dashboard now says which of three things went wrong: the agent did not
+  respond (with what to check: the agent is running and its `allowed_origins`
+  matches the dashboard's address), the agent did not report its version
+  (update to 2.4.6), or the agent is older than 2.4.3.
+
+### Agent 2.4.6
+- The Windows service reports the agent version (see above).
+- `kleidia-agent.exe` carries a Windows version resource: Explorer's
+  Properties > Details shows the file and product version.
+- The agent installers are attached to this release (see
+  [Agent installers](07-Installers/README.md)).
+
 ## 2.4.5 — October 2026
 
 PIV attestation is now enforced, plus fixes for YubiKeys with firmware 5.7.4
