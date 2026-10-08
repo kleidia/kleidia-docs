@@ -12,6 +12,7 @@ This guide covers deploying Kleidia Agent across enterprise environments using c
 
 ## Package Contents
 
+The agent MSI and binary are attached to each [Kleidia docs release](https://github.com/kleidia/kleidia-docs/releases/latest).
 After building with `build-bundle.ps1`, you get `installer.zip` containing:
 
 - **`kleidia-agent-installer-<version>.exe`** - Interactive installer (EXE bundle)

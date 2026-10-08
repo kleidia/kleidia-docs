@@ -36,7 +36,7 @@ The package includes:
 
 #### Step 1: Download and Open Package
 
-1. **Download** `kleidia-agent-<version>.pkg`
+1. **Download** `kleidia-agent-<version>.pkg` from the [latest release](https://github.com/kleidia/kleidia-docs/releases/latest)
 2. **Double-click** the package file
 3. macOS may show a security warning (if not notarized)
 
@@ -145,7 +145,7 @@ URL it finds, in this order:
 
 1. **Obtain signed .pkg**:
    - Build locally with signing certificates
-   - Or download from GitHub release
+   - Or download from the [latest release](https://github.com/kleidia/kleidia-docs/releases/latest) (signed and notarized)
 
 2. **Create Configuration Profile** (optional but recommended):
 
