@@ -3,6 +3,31 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.4.6 — October 2026
+
+Fixes a misleading error when the dashboard cannot reach the Kleidia agent,
+and the Windows agent now shows its version in Explorer. Dependencies
+unchanged (Kubernetes 1.32+, PostgreSQL 18.1 default, OpenBao 2.5.4). Use
+Kleidia agent 2.4.3 or later with this release; 2.4.6 is recommended on
+Windows.
+
+### Fixed
+- When PIV attestation is enforced and the dashboard cannot reach the
+  Kleidia agent on the user's computer, key generation now stops with a
+  message that the agent did not respond, with what to check (the agent is
+  installed and running, and its `allowed_origins` matches the dashboard's
+  address). It used to ask the user to update an agent of version "?" to
+  2.4.3, which sent them to reinstall an agent that was already current.
+  The update message is now shown only for an agent that answers with a
+  version older than 2.4.3.
+
+### Agent 2.4.6
+- `kleidia-agent.exe` carries a Windows version resource: Explorer's
+  Properties > Details shows the file and product version (2.4.6) instead
+  of empty fields.
+- The agent installers are attached to this release (see
+  [Agent installers](07-Installers/README.md)).
+
 ## 2.4.5 — October 2026
 
 PIV attestation is now enforced, plus fixes for YubiKeys with firmware 5.7.4

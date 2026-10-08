@@ -10,7 +10,7 @@ The Kleidia Agent runs on user workstations to enable YubiKey management through
 
 **Download**: the agent installers (macOS `.pkg`, Windows `.msi` and `.exe`) are attached to each
 [Kleidia docs release](https://github.com/kleidia/kleidia-docs/releases/latest). Use the agent version that the
-[changelog](../CHANGELOG.md) names for your platform release (2.4.3 or later for Kleidia 2.4.5).
+[changelog](../CHANGELOG.md) names for your platform release (2.4.3 or later for Kleidia 2.4.6; 2.4.6 recommended).
 
 ---
 
@@ -313,6 +313,42 @@ cat /etc/kleidia/agent/agent.toml
 ---
 
 ## Troubleshooting
+
+### Dashboard says the agent did not respond
+
+Since 2.4.6, when PIV attestation is enforced and the dashboard cannot reach
+the agent on `http://127.0.0.1:56123`, key generation stops with "the Kleidia
+agent on this computer did not respond". (Before 2.4.6 the same situation
+asked to update an agent of version "?".) On that computer:
+
+1. Open `http://127.0.0.1:56123/.well-known/kleidia-agent` in the same browser.
+   It should show JSON with the agent's `"version"`. If it does not open, the
+   agent is not running: check the service (below) and that YubiKey Manager
+   (`ykman --version`) is installed.
+2. If it opens, compare `allowed_origins` in the agent configuration with the
+   address the dashboard is opened from. They must match exactly: scheme, host
+   and port, no trailing slash. The installer derives it from the backend URL
+   entered at install time; reinstalling after an uninstall writes it again.
+   After editing, restart the agent.
+3. The browser's developer console (F12) shows a CORS error for
+   `127.0.0.1:56123` when the origin does not match.
+
+```powershell
+# Windows
+Get-Service KleidiaAgent
+Get-Content "C:\ProgramData\Kleidia\agent\agent.toml"
+Restart-Service KleidiaAgent
+```
+
+```bash
+# macOS
+sudo launchctl print system/com.kleidia.agent | head -5
+cat /etc/kleidia/agent/agent.toml
+sudo launchctl kickstart -k system/com.kleidia.agent
+```
+
+On Windows, agent 2.4.6 and later also show their version in Explorer
+(Properties > Details on `kleidia-agent.exe`).
 
 ### Windows
 
