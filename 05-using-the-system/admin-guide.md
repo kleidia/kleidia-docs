@@ -165,7 +165,9 @@ Use this workflow to provision a YubiKey **on behalf of** a user (for example, a
    - The connected device
    - The target user
 5. Click **Register YubiKey**
-6. Save/print the **Initial PIN** and **Initial PUK** (shown once) for a sealed envelope to ship with the device
+6. Save/print the **Initial PIN** (shown once) for a sealed envelope to ship with the device
+
+The YubiKey's PUK is set to a random value that Kleidia does not store or show (since 2.5.0). If the user's PIN gets blocked, the YubiKey is recovered with a PIV reset: its certificates are revoked and issued again.
 
 For the full lifecycle (prepare → certify → ship → activate), see [YubiKey Lifecycle](yubikey-lifecycle.md).
 
@@ -527,7 +529,7 @@ These settings are configured via environment variables and apply to all OIDC pr
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OIDC_PKCE_ENABLED` | Enable Proof Key for Code Exchange (RFC 7636) | `true` |
+| `OIDC_PKCE_ENABLED` | Enable Proof Key for Code Exchange (RFC 7636, S256). Implemented since 2.5.0; a callback without the PKCE verifier cookie is refused | `true` |
 | `OIDC_STATE_VALIDATION` | Validate OAuth state parameter | `true` |
 | `OIDC_NONCE_VALIDATION` | Validate OpenID nonce parameter | `true` |
 | `OIDC_MFA_REQUIRED` | Require multi-factor authentication | `false` |

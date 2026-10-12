@@ -42,7 +42,7 @@ A PKI mount (default `pki`, configurable via `externalVault.pkiMount`) with a co
 | `yubikey-piv` | YubiKey PIV certificates |
 | `yubikey-piv-auth` | YubiKey PIV authentication |
 | `yubikey-piv-code-signing` | YubiKey code-signing certs |
-| `yubikey-piv-email-signing` | YubiKey S/MIME certs |
+| `yubikey-piv-email-signing` | YubiKey S/MIME signing certs (slot 9d) |
 
 The `yubikey-piv-auth`, `yubikey-piv-code-signing` and `yubikey-piv-email-signing` roles
 must all set:
@@ -67,6 +67,13 @@ functional: with `true`, Vault drops Kleidia's `alt_names` and the certificate i
 without the email SAN. `cn_validations=disabled` lets display names with spaces or non-ASCII
 characters (e.g. `Õie Täht`) be used as the CN.
 
+The `yubikey-piv-email-signing` role is **signing only**: set `key_usage=DigitalSignature` and
+`ext_key_usage=EmailProtection`, without `KeyEncipherment`. Kleidia does not provide S/MIME
+encryption: the slot 9d key is generated on the YubiKey and cannot be archived, so mail
+encrypted to it would be unreadable for good after a PIV reset or a lost key. (Up to 2.4.6
+the bundled role also set `KeyEncipherment`; certificates issued then keep it until they are
+reissued or expire.)
+
 The `agent-localhost-cert` role must also set `use_csr_common_name=false` and
 `use_csr_sans=false` (Vault default `true` for both). Kleidia requests its CN and SANs
 (`localhost`, `127.0.0.1`, `::1`) itself; with the defaults, any signed-in user could obtain
@@ -82,17 +89,25 @@ names to match your `kvMount`/`pkiMount`):
 ```hcl
 path "kleidia-kv/data/*"     { capabilities = ["create", "read", "update"] }
 path "kleidia-kv/metadata/*" { capabilities = ["read", "list", "delete"] }
+path "kleidia-kv/destroy/backend/*" { capabilities = ["update"] }   # required since 2.5.0 (PUK scrub)
 path "kleidia-pki/sign/*"    { capabilities = ["create", "update"] }
 path "kleidia-pki/issue/*"   { capabilities = ["create", "update"] }
 path "kleidia-pki/revoke"    { capabilities = ["update"] }   # required since 2.4.2
 path "kleidia-pki/cert/ca"   { capabilities = ["read"] }
 path "kleidia-pki/ca/pem"    { capabilities = ["read"] }
+path "kleidia-pki/ca_chain"  { capabilities = ["read"] }
 path "kleidia-pki/crl*"      { capabilities = ["read"] }
 path "auth/token/lookup-self" { capabilities = ["read"] }
 path "auth/token/renew-self" { capabilities = ["update"] }
 ```
 
 Download: [`external-vault-policy.hcl`](https://raw.githubusercontent.com/kleidia/kleidia-docs/main/03-deployment/external-vault-policy.hcl)
+
+The `destroy/backend/*` grant is new in 2.5.0. Kleidia no longer stores PUKs; at startup the
+backend removes any stored PUK from the per-YubiKey secrets and destroys the older KV versions
+that still hold one. Without the grant the backend still starts, but the scrub logs
+`[PUK_SCRUB] incomplete` and retries on every start, and the older versions keep the old PUK
+until the grant is added.
 
 The same AppRole serves the backend, the license-service, and the cert-manager issuer.
 

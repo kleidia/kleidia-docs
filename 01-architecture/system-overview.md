@@ -169,7 +169,8 @@
 - Audit logs (all operations)
 
 **Data NOT Stored**:
-- YubiKey PINs, PUKs, or management keys (stored in Vault)
+- YubiKey PINs or management keys (stored in Vault)
+- YubiKey PUKs (not stored by Kleidia at all since 2.5.0)
 - Agent private keys (never leave agent memory)
 
 ### OpenBao (Vault)
@@ -183,7 +184,7 @@
 - Secret encryption at rest
 
 **Secrets Stored**:
-- YubiKey PINs, PUKs, management keys (`yubikeys/data/backend/{serial}/secrets`)
+- YubiKey PINs and management keys (`yubikeys/data/backend/{serial}/secrets`); no PUKs since 2.5.0
 - Application secrets (JWT keys, encryption keys, database passwords)
 - PKI root CA and intermediate certificates
 

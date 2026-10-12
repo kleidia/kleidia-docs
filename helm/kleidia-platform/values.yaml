@@ -238,6 +238,18 @@ openbao:
       ttl: "43800h"   # 5 years
       customerRootCA: ""  # Base64-encoded customer root CA cert (required when mode=intermediate)
     
+    # Slot 9a (PIV Authentication / smart card logon) certificates.
+    pivAuth:
+      # Issuance policy OIDs stamped on every 9a certificate (certificate policies
+      # extension), for Active Directory "strong name-based mapping": the DC GPO
+      # "Allow name-based strong mappings for certificates" with a tuple
+      #   <issuing CA thumbprint>;<OID(s)>;UPNSuffix=<your UPN suffix>
+      # The OID attests that your PKI meets Microsoft's requirements for it; use
+      # OIDs from your own organization's arc. Empty (default): no policies.
+      # Applies to 9a certificates issued after the next helm upgrade; reissue
+      # existing ones. Example: ["1.3.6.1.4.1.<your-PEN>.1.1"]
+      policyIdentifiers: []
+
     # PKI URL configuration for certificate distribution (bundled OpenBao only)
     # These URLs are embedded into every issued certificate as AIA (CA) and CDP (CRL).
     # IMPORTANT: Once certificates are issued, the URLs cannot be changed without re-issuing.

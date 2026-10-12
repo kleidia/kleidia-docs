@@ -21,7 +21,7 @@ Kleidia uses OpenBao as the central secrets management system. All sensitive dat
 
 #### KV v2 Secrets Engine
 - **Mount Path**: `yubikeys/`
-- **Purpose**: Store YubiKey secrets (PINs, PUKs, management keys)
+- **Purpose**: Store YubiKey secrets (PINs, management keys)
 - **Versioning**: Enabled for secret versioning
 - **Encryption**: AES-256-GCM encryption at rest
 
@@ -41,7 +41,6 @@ Secrets stored at path: `yubikeys/data/backend/{serial}/secrets`
 ```json
 {
   "pin": "123456",
-  "puk": "12345678",
   "management_key": "010203040506070801020304050607080102030405060708"
 }
 ```
@@ -50,6 +49,9 @@ Secrets stored at path: `yubikeys/data/backend/{serial}/secrets`
 - Backend retrieves secrets via Vault API
 - Secrets encrypted at rest by Vault
 - Secrets encrypted in transit (RSA-OAEP) to agent
+- Every read and write writes a `piv_secrets_read` or `piv_secrets_write` audit row with the field names (never the values), the YubiKey serial, the operation ID and whether an admin acted on another user's key
+
+**No PUK** (since 2.5.0): Kleidia never stores or returns a PUK. A PUK the user sets goes to the YubiKey only; admin provisioning sets a random PUK nobody keeps. A blocked PIN with a forgotten PUK is recovered with a PIV reset (certificates revoked and reissued). At startup the backend removes the `puk` field from records written by earlier releases and destroys the older KV v2 versions that still hold it (the backend's policy needs `update` on `yubikeys/destroy/backend/*` and `read` on `yubikeys/metadata/backend/*`); a run that changed something writes one `piv_puk_escrow_scrub` audit row.
 
 ### Application Secrets
 
@@ -206,7 +208,7 @@ path "yubikeys/data/encryption-key" {
 
 ### Secret Creation
 
-1. User registers YubiKey with PIN/PUK/management key
+1. User registers YubiKey with PIN/management key (the PUK goes to the YubiKey only)
 2. Frontend sends secrets to backend
 3. Backend stores secrets in Vault: `yubikeys/data/backend/{serial}/secrets`
 4. Vault encrypts secrets at rest

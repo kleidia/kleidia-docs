@@ -10,7 +10,7 @@ The Kleidia Agent runs on user workstations to enable YubiKey management through
 
 **Download**: the agent installers (macOS `.pkg`, Windows `.msi` and `.exe`) are attached to each
 [Kleidia docs release](https://github.com/kleidia/kleidia-docs/releases/latest). Use the agent version that the
-[changelog](../CHANGELOG.md) names for your platform release (Kleidia 2.4.6: Windows 2.4.6 or later, macOS 2.4.3 or later).
+[changelog](../CHANGELOG.md) names for your platform release (Kleidia 2.5.0: agent 2.5.0 recommended on every workstation; Windows 2.4.6 or later and macOS 2.4.3 or later keep working, but their certificate imports are recorded as unverified because they cannot read the certificate back from the YubiKey).
 
 ---
 

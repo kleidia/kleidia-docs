@@ -170,6 +170,8 @@ spec:
         - containerPort: 9000
           name: health
         {{- end }}
+        - containerPort: 9100
+          name: metrics
         env:
         # Kleidia platform version — surfaced in the admin overview. Sourced from the
         # chart appVersion so the displayed version always matches the deployed release.

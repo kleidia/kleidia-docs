@@ -30,6 +30,8 @@ All operations are logged for compliance:
 - **Permission Denials**: Unauthorized access attempts
 - **Session Events**: Session creation, expiration, revocation
 - **Agent Events**: Agent registration, key rotation
+- **Secret Access** (2.5.0+): every read and write of stored PIV secrets (PIN, management key) as `piv_secrets_read` / `piv_secrets_write`, with field names only (never values) and whether an admin acted on another user's key
+- **Certificate Install** (2.5.0+): `piv_certificate_install` per slot, with the install result and the operation ID that links the browser, backend, agent and audit records of one issuance
 
 ### Audit Log Structure
 

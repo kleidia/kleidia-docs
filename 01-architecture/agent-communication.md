@@ -129,7 +129,7 @@ Ready State:
 - `POST /piv/set-puk` - Set/change PUK
 - `POST /piv/unblock-pin` - Unblock PIN using PUK
 - `POST /piv/generate-csr` - Generate Certificate Signing Request
-- `POST /piv/import-certificate` - Import certificate to YubiKey
+- `POST /piv/import-certificate` - Import certificate to YubiKey; agent 2.5.0+ reads the slot back and returns the certificate's SHA-256 fingerprint (`certificate_verify_failed` when the read-back fails or differs)
 - `POST /piv/reset` - Reset PIV application
 - `GET /piv/check-defaults?serial={serial}` - Check default credentials
 - `POST /piv/rotate-management-key` - Rotate management key

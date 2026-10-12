@@ -396,6 +396,17 @@ Enable smart card authentication via Group Policy:
    - "Interactive logon: Smart card removal behavior" = Lock Workstation
    - "Interactive logon: Require smart card" = Enabled (optional, for high-security)
 
+#### Step 4 (optional): Strong name-based mapping with issuance policy OIDs (2.5.0+)
+
+Domain controllers enforcing strong certificate mapping (KB5014754) can accept the UPN mapping
+as strong through the domain controller policy **Allow name-based strong mappings for
+certificates**, whose rules match the issuing CA thumbprint and an issuance policy OID
+(`<issuing CA thumbprint>;<OID>;UPNSuffix=<your UPN suffix>`). Set the OID(s) Kleidia stamps on
+9a certificates with `openbao.pki.pivAuth.policyIdentifiers` in the `kleidia-platform` chart
+(empty by default), then reissue existing 9a certificates. With an external Vault/OpenBao, set
+`policy_identifiers` on your `yubikey-piv-auth` role instead. Details and caveats:
+[Certificates and PKI](../02-security/certificates-and-pki.md#issuance-policy-oids-for-ad-strong-name-based-mapping-slot-9a).
+
 ### Troubleshooting On-Prem AD
 
 #### "The smart card certificate used for authentication was not trusted"

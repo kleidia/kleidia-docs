@@ -62,8 +62,33 @@ The system uses a general-purpose PKI role named `yubikey-piv`, plus slot-specif
 **Certificate Properties**:
 - **Issuer**: Kleidia Root CA
 - **Validity**: 1 year (8760h, configurable via PKI role)
-- **Key Usage**: Digital signature, key encipherment
-- **Extended Key Usage**: Client authentication, email protection
+- **Key Usage / Extended Key Usage**: set per slot by the slot's role:
+
+| Slot | Role | Key Usage | Extended Key Usage |
+|------|------|-----------|--------------------|
+| 9a (authentication) | `yubikey-piv-auth` | Digital signature, key encipherment | Client authentication, Smart Card Logon (`1.3.6.1.4.1.311.20.2.2`) |
+| 9c (digital signature) | `yubikey-piv-code-signing` | Digital signature | Code signing |
+| 9d (S/MIME signing) | `yubikey-piv-email-signing` | Digital signature | Email protection |
+
+Slot 9d is **signing only** since 2.5.0. Kleidia does not provide S/MIME encryption: the 9d key is generated on the YubiKey and cannot be archived, so mail encrypted to it would be unreadable for good after a PIV reset or a lost key. 9d certificates issued by 2.4.6 or earlier also carry key encipherment until they are reissued or expire; nothing is revoked on upgrade.
+
+### Issuance policy OIDs for AD strong name-based mapping (slot 9a)
+
+Active Directory domain controllers (Windows Server 2019 or later) can accept a name-based mapping (UPN) as a strong mapping when the certificate carries an issuance policy OID that your PKI attests to. The domain controller policy is **Allow name-based strong mappings for certificates** (Computer Configuration > Administrative Templates > System > KDC). Each rule in it is a tuple of the issuing CA thumbprint, the OID(s) and the mapping type, for example `<issuing CA thumbprint>;<OID>;UPNSuffix=<your UPN suffix>`. Microsoft recommends this only when your PKI meets its requirements for it; read Microsoft's guidance on strong name-based mapping and KB5014754 before enabling it.
+
+To stamp the OIDs on slot 9a certificates (certificate policies extension), set them in the `kleidia-platform` values:
+
+```yaml
+openbao:
+  pki:
+    pivAuth:
+      policyIdentifiers: ["1.3.6.1.4.1.<your-PEN>.1.1"]   # OIDs from your own organization's arc
+```
+
+- Empty by default: 9a certificates carry no issuance policy.
+- Each value is validated as a dotted-decimal OID when the chart renders; an invalid value fails the install or upgrade.
+- Only the `yubikey-piv-auth` (9a) role gets the OIDs. The value applies to 9a certificates issued after the next `helm upgrade`; existing 9a certificates must be reissued to carry an OID.
+- With an [external Vault](../03-deployment/external-vault.md), set `policy_identifiers` on your own `yubikey-piv-auth` role instead.
 
 ### 3. Certificate Import
 
@@ -73,14 +98,34 @@ The system uses a general-purpose PKI role named `yubikey-piv`, plus slot-specif
 2. Frontend sends certificate to agent: `POST http://127.0.0.1:56123/piv/import-certificate`
 3. Agent imports certificate to YubiKey PIV slot (9a, 9c, 9d, or 9e)
 4. Certificate stored on YubiKey hardware
+5. Agent (2.5.0+) reads the slot back and returns the SHA-256 fingerprint of the certificate now on the card
+6. Frontend reports the install result per slot to the backend
 
 **Security**: Certificate stored securely on YubiKey hardware
+
+### Certificate Install Verification
+
+Since 2.5.0 Kleidia tracks whether every issued PIV certificate actually reached the YubiKey. Each issued certificate starts as `pending`; the install report from the browser moves it to a final state:
+
+| State | Meaning | Action |
+|-------|---------|--------|
+| `installed` | The agent read the certificate back and it matches the one issued | None |
+| `unverified` | The browser reports the import, but the agent is older than 2.5.0 and cannot read it back | None |
+| `failed` | The import failed after one retry | Issued certificate revoked automatically |
+| `mismatch` | The YubiKey holds a different certificate than the one issued | Issued certificate revoked automatically |
+| `unconfirmed` | No report arrived within 15 minutes (browser closed, agent unreachable) | Never revoked; check the slot with the user |
+
+A report about a certificate that a newer issuance has already replaced is ignored and never revokes anything. Every result writes a `piv_certificate_install` audit row (slot, result, certificate serial, operation ID) and increments `kleidia_piv_certificate_install_total` (see [Monitoring and Logs](../04-operations/monitoring-and-logs.md)).
+
+### Operation ID
+
+Each issuance flow (provisioning, certificate generation, PIN/PUK/management key change, reset) gets one operation ID, generated in the browser. It travels to the backend in the `X-Kleidia-Operation-ID` header and to the agent in the request body, and appears as `op=<id>` in backend and agent logs and as `operation_id` in the audit rows of that flow. Use it to follow one issuance across browser, backend, agent and audit log.
 
 ### 4. Certificate Usage
 
 Certificates can be used for:
 - **Client Authentication**: TLS client certificates
-- **Email Signing**: S/MIME email signing
+- **Email Signing**: S/MIME email signing (slot 9d; signing only, no S/MIME encryption)
 - **Code Signing**: Application code signing
 - **Document Signing**: PDF and document signing
 
@@ -118,7 +163,10 @@ PKI is automatically configured during Helm deployment:
 5. System generates CSR on YubiKey
 6. System signs CSR via Vault PKI
 7. System imports certificate to YubiKey
-8. Certificate ready for use
+8. System verifies the certificate on the YubiKey and records the install result
+9. Certificate ready for use
+
+Self-service certificate generation is refused while the YubiKey still has the factory-default PUK, and when that check fails. YubiKeys with firmware before 5.3 cannot report their PUK state and are not checked.
 
 ### View Certificates
 

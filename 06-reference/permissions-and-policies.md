@@ -238,6 +238,10 @@ path "yubikeys/data/backend-encryption-key" {
 path "yubikeys/metadata/backend/*" {
   capabilities = ["list", "read"]
 }
+# PUK scrub (2.5.0): destroy old KV versions of backend/<serial>/secrets that still hold a PUK
+path "yubikeys/destroy/backend/*" {
+  capabilities = ["update"]
+}
 
 # System metadata
 path "yubikeys/data/system/*" {
@@ -471,7 +475,7 @@ Security policies are configured via the Admin Panel → Security Policies page 
 - **PUK Policy**: 
   - Minimum/maximum length (default: 6-8 characters)
   - Require digits only (default: true)
-  - Enforced on: YubiKey PUK updates via `UpsertYubiKeyPIVSecrets`
+  - Enforced on: PUK changes in the web interface (since 2.5.0 the PUK is never sent to the backend's secret store)
 
 - **Certificate Policy**: 
   - Allowed algorithms (default: RSA2048, ECCP384)

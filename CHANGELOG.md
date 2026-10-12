@@ -3,6 +3,83 @@
 All notable changes to Kleidia are documented here. This changelog covers the
 documented release line (2.2.x and later).
 
+## 2.5.0 — October 2026
+
+Issuance integrity and less central secret handling. Every PIV certificate is
+now checked on the card after import, one operation ID follows each issuance
+across all components, and Kleidia no longer stores PUKs. Dependencies
+unchanged (Kubernetes 1.32+, PostgreSQL 18.1 default, OpenBao 2.5.4).
+**Kleidia agent 2.5.0 is recommended** on every workstation; older agents keep
+working, but their imports are recorded as unverified.
+
+### Upgrade notes
+- **External Vault/OpenBao:** add `update` on `<kv>/destroy/backend/*` to the
+  backend's policy before upgrading (see
+  [external-vault-policy.hcl](03-deployment/external-vault-policy.hcl)). The
+  startup PUK scrub needs it. Update your 9d role to
+  `key_usage: ["DigitalSignature"]` as described in
+  [External Vault](03-deployment/external-vault.md). Bundled-OpenBao installs
+  get both on upgrade.
+- **Reload open dashboards** after upgrading, so browsers pick up the new
+  frontend.
+- **OIDC login uses PKCE (S256).** Identity providers that support PKCE
+  (Keycloak, Microsoft Entra ID, Okta and most others) need no change.
+- **Existing certificates are not touched.** 9d certificates keep encryption
+  key usage and 9a certificates carry no issuance policy OID until they are
+  reissued or expire.
+- **YubiKeys still on the factory-default PUK** can't get new self-service
+  certificates until the user changes the PUK.
+
+### Changed
+- **No PUK escrow.** The backend no longer stores or returns any PUK. Users set
+  their own PIN and PUK off the factory defaults, as before, and a PUK change
+  goes to the card only. Admin provisioning sets a random PUK that nobody
+  keeps. A blocked PIN with a forgotten PUK is recovered with a PIV reset
+  (certificates are revoked and reissued). At startup the backend removes
+  previously stored PUKs and destroys the older secret versions that held
+  them. The management key is still kept in Vault.
+- **9d is S/MIME signing only.** New 9d certificates have the Digital
+  Signature key usage only. A 9d key lives on the YubiKey and can't be
+  archived, so mail encrypted to it would be lost for good after a reset or a
+  lost key.
+- **Self-service certificate generation needs a changed PUK.** It is refused
+  while the YubiKey has the factory-default PUK, and when that check fails.
+  YubiKeys with firmware before 5.3 can't report their PUK state and are not
+  checked.
+
+### Added
+- **Certificate install verification.** Agent 2.5.0 reads each certificate
+  back from the card after import. Every issued certificate has an install
+  state: installed, unverified (older agent), failed, mismatch or unconfirmed.
+  Failed and mismatched imports are revoked automatically; imports that never
+  report back are marked unconfirmed after 15 minutes and never revoked. The
+  dashboard reports success only when no slot failed.
+- **Operation ID.** One ID per issuance flow, carried by the browser, backend
+  and agent (`X-Kleidia-Operation-ID`), and written to their logs and to the
+  audit log.
+- **Secret-access audit.** Every read and write of stored PIV secrets (PIN,
+  management key) writes an audit row with the field names, never the values.
+- **Issuance policy OIDs for 9a.** The new value
+  `openbao.pki.pivAuth.policyIdentifiers` adds certificate policy OIDs to
+  smart card logon certificates, which Active Directory strong name-based
+  certificate mapping can match on. Empty by default.
+- **Prometheus metrics.** Security event counters (issuance, attestation,
+  card install, secret access) on a separate port (9100), exposed by the
+  ClusterIP Service `backend-metrics`, with an optional ServiceMonitor and
+  PrometheusRule. See [Monitoring and logs](04-operations/monitoring-and-logs.md).
+- **OIDC PKCE.** The login flow sends an S256 code challenge.
+
+### Fixed
+- Pages that a user isn't allowed to see show a readable "not allowed"
+  message instead of the raw request error.
+- An organization manager without an organization no longer sees admin pages
+  the backend would refuse anyway.
+
+### Agent 2.5.0
+- Reads the certificate back after every import and reports its fingerprint.
+- Reports whether the YubiKey can tell its PUK state (`puk_default_known`).
+- Logs the operation ID of each request.
+
 ## 2.4.6 — October 2026
 
 Fixes Windows agents being refused by PIV attestation enforcement. Dependencies
