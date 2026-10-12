@@ -184,7 +184,11 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
 8. Backend returns signed certificate to frontend
 9. Frontend sends certificate to agent: `POST http://127.0.0.1:56123/piv/import-certificate`
 10. Agent imports certificate to YubiKey PIV slot
-11. Agent returns success to frontend
+11. Agent (2.5.0+) reads the slot back and returns the SHA-256 fingerprint of the certificate on the card
+12. Frontend reports the install result: `POST /api/yubikeys/{id}/piv/certificates/install-result` (admin flows: `POST /api/admin/yubikeys/{id}/piv/certificates/install-result`)
+13. Backend records the install state (`installed`, `unverified`, `failed`, `mismatch`) and revokes the issued certificate on `failed` or `mismatch`; a certificate with no report after 15 minutes becomes `unconfirmed` and is never revoked
+
+All calls of one flow carry the same operation ID: the `X-Kleidia-Operation-ID` header to the backend and the `operation_id` body field to the agent. It appears in backend and agent logs (`op=<id>`) and in the audit rows of the flow.
 
 **Data Transmitted**:
 - CSR (Certificate Signing Request, PEM format)
@@ -215,7 +219,7 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
 ```
 
 **Steps**:
-1. Admin registers YubiKey and provides PIN/PUK/management key
+1. Admin registers YubiKey and provides PIN/management key (the PUK goes to the YubiKey only and is never sent to the backend)
 2. Frontend sends secrets to backend: `POST /api/yubikeys/{id}/piv/upsert-secrets` (encrypted to the backend)
 3. Backend encrypts secrets (if needed) and stores in Vault
 4. Backend stores at path: `yubikeys/data/backend/{serial}/secrets`
@@ -224,8 +228,11 @@ Kleidia uses a frontend-mediated architecture where the browser orchestrates ope
 
 **Data Stored**:
 - PIN (encrypted at rest by Vault)
-- PUK (encrypted at rest by Vault)
 - Management key (encrypted at rest by Vault)
+
+Kleidia does not store PUKs (since 2.5.0). At startup the backend removes any PUK stored by an earlier release and destroys the older secret versions that still hold one.
+
+Every read and write of these secrets writes a `piv_secrets_read` or `piv_secrets_write` audit row naming the fields only, never their values.
 
 ## Security Considerations
 

@@ -22,7 +22,7 @@ YubiKey devices go through several stages:
 1. **Connect Device**: Insert YubiKey into computer
 2. **Detect Device**: System automatically detects YubiKey
 3. **Enter Information**: Provide device details and credentials
-4. **Store Secrets**: PIN/PUK/management key stored in Vault
+4. **Store Secrets**: PIN and management key stored in Vault. Kleidia does not store the PUK (since 2.5.0): change it off the factory default to a value you remember; the new PUK goes to the YubiKey only
 5. **Complete Registration**: Device appears in system
 
 ### Admin “On-Behalf-Of” Registration (Pre‑Provisioning)
@@ -35,7 +35,7 @@ Use this flow when you want IT to pre-provision YubiKeys for users (for example,
 4. **Select the connected device**: Click the detected YubiKey in the device list.
    - If the YubiKey has a **non-default PIV management key**, Kleidia will require a **PIV reset** before provisioning can continue (this wipes existing PIV keys/certificates on the device).
 5. **Register**: Click **Register YubiKey**.
-6. **Record credentials (one-time)**: The admin is shown an **Initial PIN** and **Initial PUK** once. Print or copy these into a **sealed envelope** for the user.
+6. **Record credentials (one-time)**: The admin is shown an **Initial PIN** once. Print or copy it into a **sealed envelope** for the user. The PUK is set to a random value that Kleidia does not store or show; a blocked PIN on this YubiKey is recovered with a PIV reset.
 7. **Provisioning steps** (typical):
    - Prepare the YubiKey (PIV setup) from the YubiKey details view.
    - Sign and import certificates.
@@ -54,7 +54,7 @@ Admin-provisioned devices track a provisioning lifecycle in addition to their ac
 ### Initial Configuration
 
 - **PIN Setup**: Set initial PIN (if not already set)
-- **PUK Setup**: Set initial PUK (if not already set)
+- **PUK Setup**: Change the PUK off the factory default (`12345678`). Kleidia refuses self-service certificate generation while the YubiKey still has the default PUK (firmware 5.3 and later; older firmware cannot report it). The PUK is written to the YubiKey only, never stored by Kleidia
 - **Management Key**: Generate and store management key
 - **Certificate Generation**: Generate certificates automatically (subject: `yubikey-<serial-number>`)
 
@@ -65,7 +65,7 @@ Admin-provisioned devices track a provisioning lifecycle in addition to their ac
 During active use, users can:
 
 - **Change PIN**: Update PIN as needed
-- **Change PUK**: Update PUK as needed
+- **Change PUK**: Update PUK as needed (the new PUK goes to the YubiKey only; keep it somewhere safe)
 - **Generate Certificates**: Create new certificates
 - **View Device Status**: Check device information
 - **Manage Certificates**: View and manage certificates
@@ -74,7 +74,7 @@ During active use, users can:
 
 1. **CSR Generation**: System automatically generates Certificate Signing Request on YubiKey with subject `yubikey-<serial-number>` (or custom subject via advanced CSR management)
 2. **Certificate Signing**: Backend signs CSR via OpenBao PKI
-3. **Certificate Import**: Import signed certificate to YubiKey automatically
+3. **Certificate Import**: Import signed certificate to YubiKey automatically. The agent (2.5.0+) reads the slot back and Kleidia records the install result; a certificate that failed to import, or that does not match what is on the card, is revoked automatically (see [Certificates and PKI](../02-security/certificates-and-pki.md#certificate-install-verification))
 4. **Certificate Usage**: Use certificate for authentication/signing
 5. **Certificate Renewal**: Renew before expiration
 6. **Certificate Revocation**: Administrators can revoke certificates if compromised (users cannot revoke certificates)

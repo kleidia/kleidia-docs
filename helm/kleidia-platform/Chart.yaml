@@ -1,9 +1,9 @@
 apiVersion: v2
 name: kleidia-platform
-version: 2.4.6
+version: 2.5.0
 description: Kleidia platform infrastructure (storage, OpenBao, cert-manager)
 type: application
-appVersion: "2.4.6"
+appVersion: "2.5.0"
 keywords:
   - yubikey
   - openbao

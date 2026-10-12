@@ -19,6 +19,14 @@
 - **Protocol**: HTTP
 - **Access**: Via external load balancer (port 443)
 
+### Backend Metrics Service (2.5.0+)
+
+- **Name**: `backend-metrics`
+- **Type**: ClusterIP (cluster-internal only)
+- **Port**: 9100 (`metrics`, backend `METRICS_PORT`)
+- **Protocol**: HTTP, Prometheus text format at `/metrics`, no authentication
+- **Access**: Prometheus inside the cluster. Not on the NodePort backend Service, the API ports or the ingress. See [Monitoring and Logs](../04-operations/monitoring-and-logs.md#application-metrics-prometheus)
+
 ### Frontend Service
 
 - **Type**: NodePort
@@ -94,6 +102,8 @@ Backend
   │
   ├── PostgreSQL (Port 5432, ClusterIP)
   └── OpenBao (Port 8200, ClusterIP)
+
+Prometheus ──▶ Backend metrics (Port 9100, ClusterIP backend-metrics)
 ```
 
 ### Agent Communication

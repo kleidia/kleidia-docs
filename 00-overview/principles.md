@@ -25,7 +25,7 @@ Kleidia is designed to run in Kubernetes environments.
 All secrets are stored in **OpenBao**, not in the database.
 
 ### Key Points
-- **YubiKey Secrets**: PINs, PUKs, and management keys stored in Vault KV v2 (`yubikeys/data/*`)
+- **YubiKey Secrets**: PINs and management keys stored in Vault KV v2 (`yubikeys/data/*`). Kleidia does not store PUKs (since 2.5.0): the PUK lives on the YubiKey only
 - **Application Secrets**: JWT signing keys, encryption keys, database passwords stored in Vault
 - **PKI Operations**: Certificate signing performed by Vault PKI engine
 - **No Database Secrets**: Sensitive data never stored in PostgreSQL

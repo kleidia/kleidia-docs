@@ -292,8 +292,7 @@ kubectl exec -it $VAULT_POD -n kleidia -- tail -10 /openbao/audit/audit.log
 ```bash
 # Store test secret (requires root token or appropriate AppRole)
 kubectl exec -it $VAULT_POD -n kleidia -- bao kv put yubikeys/data/test \
-    pin="123456" \
-    puk="12345678"
+    pin="123456"
 
 # Read test secret
 kubectl exec -it $VAULT_POD -n kleidia -- bao kv get yubikeys/data/test

@@ -44,7 +44,7 @@ backend:
   replicas: 2                 # Horizontal scaling for the backend API
   image:
     repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-backend)
-    tag: backend-2.4.6                    # Pinned to the 2.4.6 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
+    tag: backend-2.5.0                    # Pinned to the 2.5.0 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
   service:
     nodePort: 32570             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
   corsOrigins: ""               # CORS allowed origins (comma-separated). If empty, uses global.siteUrl
@@ -104,6 +104,33 @@ backend:
   # another key, YubiKey or slot is refused either way.
   pivAttestation:
     enforce: true               # Sets PIV_ATTESTATION_ENFORCE on the backend
+  # Prometheus metrics (docs/METRICS.md). The backend serves security event
+  # counters (PIV issuance, attestation, card install, secret access) at /metrics
+  # on its own metrics port 9100 (METRICS_PORT), never through the API port, the
+  # probe port 9000 or the ingress. Labels are bounded enums: no serials, users or
+  # other identifiers.
+  metrics:
+    # ClusterIP Service `backend-metrics` exposing port 9100 as `metrics`, so
+    # Prometheus can scrape it from inside the cluster. Cluster-internal only (the
+    # NodePort `backend` Service is not used for scraping).
+    service:
+      enabled: true
+      annotations: {}           # e.g. prometheus.io/scrape: "true" for annotation-based discovery
+    # Prometheus Operator ServiceMonitor for backend-metrics. Needs the
+    # monitoring.coreos.com CRDs in the cluster.
+    serviceMonitor:
+      enabled: false
+      labels: {}                # Extra labels your Prometheus selects on, e.g. release: kube-prometheus-stack
+      interval: 30s
+      scrapeTimeout: 10s
+    # Prometheus Operator PrometheusRule with example alerts (docs/METRICS.md):
+    # card install failed or mismatch (critical), install unconfirmed (warning),
+    # issuance failure ratio (warning), attestation refused (warning).
+    prometheusRule:
+      enabled: false
+      labels: {}                # Extra labels your Prometheus ruleSelector matches
+      issuanceFailureRatio: 0.2 # Alert when failures / (failures + issued) over 15m exceeds this
+      issuanceFailureMinCount: 3  # ...and at least this many failures happened in those 15m
   # CNPG backup S3 credentials secret name (the backend creates/patches against it).
   # Keep in sync with kleidia-data's cnpg.backup.s3CredentialsSecret if you change it.
   cnpgS3SecretName: "cnpg-backup-s3-credentials"
@@ -119,14 +146,14 @@ frontend:
   replicas: 2                 # Horizontal scaling for the frontend
   image:
     repository: therinn/kleidia  # Repository name. Use a fully-qualified repo if pulling from Docker Hub/GHCR (e.g. myorg/kleidia-frontend)
-    tag: frontend-2.4.6                   # Pinned to the 2.4.6 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
+    tag: frontend-2.5.0                   # Pinned to the 2.5.0 release. Keep in lockstep with Chart version (see AGENTS.md "Versioning").
   service:
     nodePort: 30805             # NodePort exposed to the external load balancer (must be within your cluster's NodePort range)
 
 licenseService:
   enabled: true                 # Enable the license service pod (optional, backend falls back to TRIAL if disabled)
   replicas: 2                   # Horizontal scaling for high availability
-  image: therinn/kleidia:license-2.4.6  # License service image (garble-obfuscated); pinned to the 2.4.6 release
+  image: therinn/kleidia:license-2.5.0  # License service image (garble-obfuscated); pinned to the 2.5.0 release
   imagePullPolicy: Always       # Always pull to ensure latest image
   resources:
     requests:

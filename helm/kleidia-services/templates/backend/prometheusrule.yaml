@@ -1,0 +1,101 @@
+{{- if .Values.backend.metrics.prometheusRule.enabled }}
+{{- $ns := .Values.global.namespace }}
+{{- $pr := .Values.backend.metrics.prometheusRule }}
+{{- /*
+  Counters are per backend pod and a series only appears on its first event, so
+  increase() alone misses the first event of every series (it needs two samples).
+  "new or increase": a series absent W ago counts with its full value (every event
+  it holds happened inside the window), an older one counts with increase() over W.
+*/}}
+{{- $install := printf "kleidia_piv_certificate_install_total{namespace=%q,result=~\"failed|mismatch\"}" $ns }}
+{{- $unconfirmed := printf "kleidia_piv_certificate_install_total{namespace=%q,result=\"unconfirmed\"}" $ns }}
+{{- $refused := printf "kleidia_piv_attestation_total{namespace=%q,result=\"refused\"}" $ns }}
+{{- $failures := printf "kleidia_piv_certificate_issuance_failures_total{namespace=%q}" $ns }}
+{{- $issued := printf "kleidia_piv_certificates_issued_total{namespace=%q}" $ns }}
+# Example alerts for the backend's PIV counters (docs/METRICS.md). Tune or copy
+# them into your own rules; thresholds are backend.metrics.prometheusRule.*.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backend
+  namespace: {{ $ns }}
+  labels:
+    app: backend
+    app.kubernetes.io/component: metrics
+    {{- with $pr.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+  - name: kleidia-piv-issuance
+    rules:
+    - alert: KleidiaPIVCertificateInstallFailed
+      expr: |
+        sum by (namespace, slot, result) (
+          ({{ $install }} unless {{ $install }} offset 15m)
+          or
+          increase({{ $install }}[15m])
+        ) > 0
+      labels:
+        severity: critical
+      annotations:
+        summary: PIV certificate could not be installed on a YubiKey (slot {{`{{ $labels.slot }}`}}, {{`{{ $labels.result }}`}})
+        description: >-
+          {{`{{ $value | printf "%.0f" }}`}} issued PIV certificate(s) for slot {{`{{ $labels.slot }}`}} ended
+          {{`{{ $labels.result }}`}} in the last 15 minutes: the import failed after retry or the card
+          holds a different certificate. Kleidia revoked the issued certificate; the user has no working
+          certificate in that slot until it is issued again. Check the piv_certificate_install audit rows.
+    - alert: KleidiaPIVCertificateInstallUnconfirmed
+      expr: |
+        sum by (namespace, slot) (
+          ({{ $unconfirmed }} unless {{ $unconfirmed }} offset 1h)
+          or
+          increase({{ $unconfirmed }}[1h])
+        ) > 0
+      labels:
+        severity: warning
+      annotations:
+        summary: PIV certificate install not confirmed by the browser (slot {{`{{ $labels.slot }}`}})
+        description: >-
+          {{`{{ $value | printf "%.0f" }}`}} issued PIV certificate(s) for slot {{`{{ $labels.slot }}`}} got no
+          install report within 15 minutes in the last hour (browser closed or agent unreachable). The
+          certificate stays valid; confirm the card contents with the user.
+    - alert: KleidiaPIVIssuanceFailureRatioHigh
+      expr: |
+        (
+          sum by (namespace) (rate({{ $failures }}[15m]))
+          /
+          (
+            sum by (namespace) (rate({{ $failures }}[15m]))
+            +
+            (sum by (namespace) (rate({{ $issued }}[15m])) or sum by (namespace) (rate({{ $failures }}[15m])) * 0)
+          )
+        ) > {{ $pr.issuanceFailureRatio }}
+        and
+        sum by (namespace) (increase({{ $failures }}[15m])) >= {{ $pr.issuanceFailureMinCount }}
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: High PIV certificate issuance failure ratio
+        description: >-
+          {{`{{ $value | humanizePercentage }}`}} of PIV certificate requests in the last 15 minutes were
+          refused or failed before signing. Break it down with
+          sum by (slot, reason) (increase(kleidia_piv_certificate_issuance_failures_total[15m])).
+    - alert: KleidiaPIVAttestationRefused
+      expr: |
+        sum by (namespace, slot) (
+          ({{ $refused }} unless {{ $refused }} offset 15m)
+          or
+          increase({{ $refused }}[15m])
+        ) > 0
+      labels:
+        severity: warning
+      annotations:
+        summary: PIV attestation refused (slot {{`{{ $labels.slot }}`}})
+        description: >-
+          {{`{{ $value | printf "%.0f" }}`}} PIV signing request(s) for slot {{`{{ $labels.slot }}`}} were refused
+          in the last 15 minutes because the key's attestation did not verify (missing with enforcement on,
+          or for another key, YubiKey or slot). Repeated refusals for one user can mean an old agent or a
+          key that was not generated on the card.
+{{- end }}

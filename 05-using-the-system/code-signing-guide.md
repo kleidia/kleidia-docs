@@ -73,7 +73,7 @@ User → gpg --card-edit generate → Self-signed PGP key
 | **Generation** | CSR → CA signs | Direct on device via UI | Direct on device |
 | **Revocation** | CRL from CA | Key deletion | PGP revocation cert |
 | **Enterprise Control** | Full | Full (PIN, touch, algorithms) | None |
-| **Vault Storage** | PIN, PUK, Mgmt Key | User PIN, Admin PIN | None |
+| **Vault Storage** | PIN, Mgmt Key | User PIN, Admin PIN | None |
 | **ykman commands** | `ykman piv` | `ykman openpgp` | `ykman openpgp` |
 
 ## Quick Comparison

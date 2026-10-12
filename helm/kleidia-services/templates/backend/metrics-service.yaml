@@ -1,0 +1,27 @@
+{{- if .Values.backend.metrics.service.enabled }}
+# Cluster-internal Service for the backend's metrics port (9100, METRICS_PORT),
+# which serves only the Prometheus counters at /metrics (docs/METRICS.md). It is
+# not the probe port (9000) and not on the NodePort `backend` Service, so the
+# counters are not reachable from the node network or the load balancer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-metrics
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: backend
+    app.kubernetes.io/component: metrics
+  {{- with .Values.backend.metrics.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+  - name: metrics
+    port: 9100
+    targetPort: metrics
+    protocol: TCP
+{{- end }}

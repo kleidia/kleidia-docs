@@ -264,6 +264,8 @@ OIDC is primarily configured through the **Admin UI** (settings stored in the da
 | `OIDC_CONDITIONAL_ACCESS` | Enable conditional access | `false` |
 | `OIDC_TRUST_EMAIL` | Treat the IdP's email claim as verified even without `email_verified` (Helm `backend.oidc.trustEmail`). Set only for an IdP that owns the email domain, such as Entra ID. | `false` |
 
+**PKCE** (implemented since 2.5.0). With `OIDC_PKCE_ENABLED` on (the default), the authorization request carries an S256 `code_challenge`. The verifier is kept in an HttpOnly cookie (`kleidia_oidc_pkce`, `__Host-` prefixed on HTTPS) with the same lifetime as the state cookie and is sent as `code_verifier` in the token exchange. A callback without that cookie is refused. Identity providers that support PKCE (Keycloak, Microsoft Entra ID, Okta and most others) need no change. The variable is not exposed as a Helm value.
+
 **Linking SSO to existing accounts.** An SSO login is linked to an existing
 Kleidia account with the same email (case-insensitive). Accounts without a
 local password (SCIM, Entra sync, earlier SSO logins) are linked as before. An

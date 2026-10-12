@@ -368,7 +368,8 @@ Relational database for application data, user accounts, and audit logs.
 - Timestamps and metadata
 
 ### Data NOT Stored
-- YubiKey PINs, PUKs, or management keys (stored in Vault)
+- YubiKey PINs or management keys (stored in Vault)
+- YubiKey PUKs (not stored by Kleidia at all since 2.5.0)
 - Agent private keys (never leave agent memory)
 - Plaintext passwords (only Argon2id hashes)
 
@@ -395,7 +396,7 @@ Secrets management and PKI certificate authority. Installed as CA, configurable 
 ### Responsibilities
 
 #### Secrets Management (KV v2 Engine)
-- Store YubiKey PINs, PUKs, and management keys
+- Store YubiKey PINs and management keys (no PUKs since 2.5.0)
 - Store application secrets (JWT keys, encryption keys)
 - Automatic secret rotation capabilities
 - Versioned secret storage
@@ -414,7 +415,7 @@ Secrets management and PKI certificate authority. Installed as CA, configurable 
 - **Audit Logging**: Complete audit trail of all operations
 
 ### Secret Storage Paths
-- `yubikeys/data/backend/{serial}/secrets` - YubiKey PIN/PUK/management keys
+- `yubikeys/data/backend/{serial}/secrets` - YubiKey PIN/management keys
 - `yubikeys/metadata/{serial}` - Secret metadata and versions
 
 ### PKI Configuration

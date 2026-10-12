@@ -259,15 +259,9 @@ curl -s https://kleidia.example.com/api/pki/crl/status | jq .
 
 ### Prometheus Metrics
 
-Monitor CRL endpoint with standard HTTP metrics:
+`/api/pki/crl/status` returns JSON (`cached`, `is_stale`, `age`, `expires_in`, ...), not Prometheus metrics, so don't point a Prometheus scrape job at it. Probe the CRL URL with an HTTP prober (for example the Prometheus blackbox exporter) or the checks above.
 
-```yaml
-# Example Prometheus scrape config
-- job_name: 'kleidia-pki'
-  metrics_path: /api/pki/crl/status
-  static_configs:
-    - targets: ['kleidia.example.com']
-```
+The backend's own Prometheus counters (2.5.0+) cover PIV certificate issuance, attestation, card install and secret access, not the CRL. See [Monitoring and Logs](../04-operations/monitoring-and-logs.md#application-metrics-prometheus).
 
 ## Troubleshooting
 
